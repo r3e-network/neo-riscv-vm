@@ -3,3 +3,5 @@ target/
 !crates/neo-riscv-guest-module/guest.polkavm
 BenchmarkDotNet.Artifacts/
 .claude/
+**/bin/
+**/obj/

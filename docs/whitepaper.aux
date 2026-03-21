@@ -1,0 +1,157 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{4}{section.1}\protected@file@percent }
+\newlabel{sec:introduction}{{1}{4}{Introduction}{section.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Background and Motivation}{4}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Dual-Execution Architecture}{4}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Design Principles}{4}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.4}Document Scope}{4}{subsection.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}System Architecture}{5}{section.2}\protected@file@percent }
+\newlabel{sec:architecture}{{2}{5}{System Architecture}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Layered Model}{5}{subsection.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Four-layer execution architecture with data flow}}{5}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:layers}{{1}{5}{Four-layer execution architecture with data flow}{figure.caption.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.1.1}Layer 1: Guest Programs}{5}{subsubsection.2.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.1.2}Layer 2: PolkaVM Runtime}{5}{subsubsection.2.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.1.3}Layer 3: Host Bridge}{6}{subsubsection.2.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.1.4}Layer 4: Application Engine}{6}{subsubsection.2.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Execution Flow}{6}{subsection.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Contract execution flow with nested call support}}{7}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:execution-flow}{{2}{7}{Contract execution flow with nested call support}{figure.caption.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Wire Protocol}{7}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Contract Type System}{7}{section.3}\protected@file@percent }
+\newlabel{sec:contract-type}{{3}{7}{Contract Type System}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}ContractType Enumeration}{7}{subsection.3.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}{\ignorespaces ContractType enumeration}}{7}{lstlisting.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}ContractState Extension}{8}{subsection.3.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2}{\ignorespaces ContractState with Type field}}{8}{lstlisting.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Binary Format Detection}{8}{subsection.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces PVM\textbackslash 0 magic bytes for RISC-V binary detection}}{8}{table.caption.3}\protected@file@percent }
+\newlabel{tab:magic}{{1}{8}{PVM\textbackslash 0 magic bytes for RISC-V binary detection}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Serialization}{8}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.1}StackItem Representation}{8}{subsubsection.3.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.2}Backward-Compatible Deserialization}{9}{subsubsection.3.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.3}JSON Representation}{9}{subsubsection.3.4.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {3}{\ignorespaces ContractState JSON representation}}{9}{lstlisting.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Deterministic Hash}{9}{subsection.3.5}\protected@file@percent }
+\newlabel{eq:hash}{{1}{9}{Deterministic Hash}{equation.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Deployment Model}{10}{section.4}\protected@file@percent }
+\newlabel{sec:deployment}{{4}{10}{Deployment Model}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Deploy Algorithm}{10}{subsection.4.1}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces ContractManagement.Deploy}}{10}{algorithm.1}\protected@file@percent }
+\newlabel{alg:deploy}{{1}{10}{ContractManagement.Deploy}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Update Algorithm}{10}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Manifest Format}{10}{subsection.4.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4}{\ignorespaces Contract manifest structure}}{10}{lstlisting.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Invocation Model}{11}{section.5}\protected@file@percent }
+\newlabel{sec:invocation}{{5}{11}{Invocation Model}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}System.Contract.Call Dispatch}{11}{subsection.5.1}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces CallContract}}{11}{algorithm.2}\protected@file@percent }
+\newlabel{alg:call}{{2}{11}{CallContract}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}CallFlags Enforcement}{11}{subsection.5.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces CallFlags enumeration}}{11}{table.caption.4}\protected@file@percent }
+\newlabel{tab:callflags}{{2}{11}{CallFlags enumeration}{table.caption.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Cross-Contract Calls}{11}{subsection.5.3}\protected@file@percent }
+\gdef \LT@i {\LT@entry 
+    {2}{63.48735pt}\LT@entry 
+    {2}{111.58464pt}\LT@entry 
+    {1}{162.49014pt}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Cross-contract call sequence (NeoVM $\to $ RISC-V)}}{12}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:cross-call}{{3}{12}{Cross-contract call sequence (NeoVM $\to $ RISC-V)}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}SYSCALL Interface}{12}{section.6}\protected@file@percent }
+\newlabel{sec:syscall}{{6}{12}{SYSCALL Interface}{section.6}{}}
+\newlabel{eq:syscall-hash}{{2}{12}{SYSCALL Interface}{equation.6.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}System.Runtime (19 calls)}{12}{subsection.6.1}\protected@file@percent }
+\gdef \LT@ii {\LT@entry 
+    {2}{63.48735pt}\LT@entry 
+    {2}{111.58464pt}\LT@entry 
+    {1}{162.49014pt}}
+\gdef \LT@iii {\LT@entry 
+    {2}{63.48735pt}\LT@entry 
+    {2}{125.81102pt}\LT@entry 
+    {1}{148.26378pt}}
+\gdef \LT@iv {\LT@entry 
+    {2}{63.48735pt}\LT@entry 
+    {1}{125.81102pt}\LT@entry 
+    {1}{148.26378pt}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces System.Runtime SYSCALL handlers}}{13}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}System.Storage (12 calls)}{13}{subsection.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces System.Storage SYSCALL handlers}}{13}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}System.Contract (7 calls)}{13}{subsection.6.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces System.Contract SYSCALL handlers}}{13}{table.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}System.Crypto (2 calls)}{13}{subsection.6.4}\protected@file@percent }
+\gdef \LT@v {\LT@entry 
+    {2}{63.48735pt}\LT@entry 
+    {1}{125.81102pt}\LT@entry 
+    {1}{148.26378pt}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces System.Crypto SYSCALL handlers}}{14}{table.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}System.Iterator (2 calls)}{14}{subsection.6.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces System.Iterator SYSCALL handlers}}{14}{table.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Gas Metering}{14}{section.7}\protected@file@percent }
+\newlabel{sec:gas}{{7}{14}{Gas Metering}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Opcode Pricing}{14}{subsection.7.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Opcode pricing categories}}{14}{table.caption.6}\protected@file@percent }
+\newlabel{tab:opcode-prices}{{8}{14}{Opcode pricing categories}{table.caption.6}{}}
+\newlabel{eq:gas}{{3}{14}{Opcode Pricing}{equation.7.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Datoshi Conversion}{14}{subsection.7.2}\protected@file@percent }
+\newlabel{eq:datoshi}{{4}{14}{Datoshi Conversion}{equation.7.4}{}}
+\newlabel{eq:gas-convert}{{5}{14}{Datoshi Conversion}{equation.7.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Enforcement Algorithm}{15}{subsection.7.3}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces ChargeOpcode}}{15}{algorithm.3}\protected@file@percent }
+\newlabel{alg:gas}{{3}{15}{ChargeOpcode}{algorithm.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Storage Model}{15}{section.8}\protected@file@percent }
+\newlabel{sec:storage}{{8}{15}{Storage Model}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Storage Namespace}{15}{subsection.8.1}\protected@file@percent }
+\newlabel{eq:storage-key}{{6}{15}{Storage Namespace}{equation.8.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Local Storage}{15}{subsection.8.2}\protected@file@percent }
+\newlabel{eq:local-key}{{7}{15}{Local Storage}{equation.8.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Storage Iterators}{15}{subsection.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Security Model}{15}{section.9}\protected@file@percent }
+\newlabel{sec:security}{{9}{15}{Security Model}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}Sandbox Isolation}{15}{subsection.9.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces PolkaVM sandbox properties}}{16}{table.caption.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Gas as Universal Resource Limit}{16}{subsection.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Fault Handling}{16}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10}Transaction Model Compatibility}{16}{section.10}\protected@file@percent }
+\newlabel{sec:transactions}{{10}{16}{Transaction Model Compatibility}{section.10}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {5}{\ignorespaces Neo N3 transaction structure}}{16}{lstlisting.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.1}Signers}{17}{subsection.10.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6}{\ignorespaces Signer structure (unchanged)}}{17}{lstlisting.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.2}Witness Verification}{17}{subsection.10.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {7}{\ignorespaces Witness structure (unchanged)}}{17}{lstlisting.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {11}NEF Format}{17}{section.11}\protected@file@percent }
+\newlabel{sec:nef}{{11}{17}{NEF Format}{section.11}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8}{\ignorespaces NEF file structure}}{17}{lstlisting.8}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces NEF field values by contract type}}{17}{table.caption.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {12}Native Contract Compatibility}{17}{section.12}\protected@file@percent }
+\newlabel{sec:native-contracts}{{12}{17}{Native Contract Compatibility}{section.12}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Neo N3 native contracts (all 11)}}{18}{table.caption.9}\protected@file@percent }
+\newlabel{tab:native-contracts}{{11}{18}{Neo N3 native contracts (all 11)}{table.caption.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {13}Notification and Event System}{18}{section.13}\protected@file@percent }
+\newlabel{sec:notifications}{{13}{18}{Notification and Event System}{section.13}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {9}{\ignorespaces Notification structure}}{18}{lstlisting.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {14}Implementation}{18}{section.14}\protected@file@percent }
+\newlabel{sec:implementation}{{14}{18}{Implementation}{section.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {14.1}Rust Components}{18}{subsection.14.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Rust crate structure}}{18}{table.caption.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {14.2}C\# Components}{19}{subsection.14.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces C\# component structure}}{19}{table.caption.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {14.3}Test Coverage}{19}{subsection.14.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Test coverage summary}}{19}{table.caption.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15}Backward Compatibility}{19}{section.15}\protected@file@percent }
+\newlabel{sec:compatibility}{{15}{19}{Backward Compatibility}{section.15}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces Backward compatibility matrix}}{19}{table.caption.13}\protected@file@percent }
+\newlabel{tab:compatibility}{{15}{19}{Backward compatibility matrix}{table.caption.13}{}}
+\bibcite{polkavm}{1}
+\bibcite{neon3}{2}
+\bibcite{riscv}{3}
+\bibcite{riscv-vm}{4}
+\bibcite{nep14}{5}
+\@writefile{toc}{\contentsline {section}{\numberline {16}Migration Path}{20}{section.16}\protected@file@percent }
+\newlabel{sec:migration}{{16}{20}{Migration Path}{section.16}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {17}Conclusion}{20}{section.17}\protected@file@percent }
+\newlabel{sec:conclusion}{{17}{20}{Conclusion}{section.17}{}}
+\gdef \@abspage@last{20}

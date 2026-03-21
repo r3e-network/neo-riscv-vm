@@ -1,0 +1,5 @@
+target/
+*.polkavm
+!crates/neo-riscv-guest-module/guest.polkavm
+BenchmarkDotNet.Artifacts/
+.claude/

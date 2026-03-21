@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/neo-riscv-abi",
+    "crates/neo-riscv-guest",
+    "crates/neo-riscv-guest-module",
+    "crates/neo-riscv-host",
+]
+default-members = [
+    "crates/neo-riscv-abi",
+    "crates/neo-riscv-guest",
+    "crates/neo-riscv-host",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+polkavm = "0.32.0"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"

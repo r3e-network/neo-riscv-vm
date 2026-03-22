@@ -1,0 +1,11 @@
+{
+  "state_mock": {
+    "storage": {},
+    "balances": {},
+    "contracts": {}
+  },
+  "snapshot": {
+    "initial": {},
+    "final": {}
+  }
+}

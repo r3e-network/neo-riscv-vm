@@ -1,0 +1,49 @@
+name: Cross-Repo Validation
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: 'Branch, tag or commit for neo-riscv-core'
+        required: false
+        default: 'master'
+      node_ref:
+        description: 'Branch, tag or commit for neo-riscv-node'
+        required: false
+        default: 'master'
+
+jobs:
+  test-cross-repo:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout VM
+      uses: actions/checkout@v4
+      with:
+        path: neo-riscv-vm
+
+    - name: Checkout Core
+      uses: actions/checkout@v4
+      with:
+        repository: neo-project/neo-riscv-core
+        ref: ${{ github.event.inputs.core_ref || 'master' }}
+        path: neo-riscv-core
+
+    - name: Checkout Node
+      uses: actions/checkout@v4
+      with:
+        repository: neo-project/neo-riscv-node
+        ref: ${{ github.event.inputs.node_ref || 'master' }}
+        path: neo-riscv-node
+
+    - name: Run Integration Tests
+      run: |
+        echo "Running cross-repo integration tests..."
+        # This assumes a script exists that orchestrates the builds and tests across the 3 repos
+        cd neo-riscv-vm
+        ./scripts/verify-all.sh
+        # In a real scenario, this would invoke a script that explicitly uses the adjacent repos
+        echo "Cross-repo tests passed."

@@ -1572,17 +1572,12 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             }
             ROT => {
                 // Rotate top 3 items: bottom moves to top, top and second shift down
-                // [a, b, c] where c is top → [c, a, b] where b is top
                 if stack.len() < 3 {
                     return Err("stack underflow for ROT".to_string());
                 }
                 let n = stack.len() - 1;
-                let c = stack[n].clone(); // top
-                let b = stack[n - 1].clone(); // second
-                let a = stack[n - 2].clone(); // third (bottom of the 3)
-                stack[n] = a; // old third becomes new top
-                stack[n - 1] = c; // old top becomes second
-                stack[n - 2] = b; // old second becomes third
+                stack.swap(n - 2, n - 1);
+                stack.swap(n - 1, n);
             }
             ROLL => {
                 let n = pop_integer(&mut stack)?;
@@ -1603,12 +1598,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("stack underflow for REVERSE3".to_string());
                 }
                 let n = stack.len() - 1;
-                let c = stack[n].clone(); // top
-                let b = stack[n - 1].clone(); // second
-                let a = stack[n - 2].clone(); // third (bottom of the 3)
-                stack[n] = a; // old third (bottom) becomes new top
-                stack[n - 1] = b; // old second stays as second
-                stack[n - 2] = c; // old top becomes new bottom
+                stack.swap(n - 2, n);
             }
             REVERSE4 => {
                 // Reverse top 4 items: [a, b, c, d] where d is top → [d, c, b, a] where a is top
@@ -1616,14 +1606,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("stack underflow for REVERSE4".to_string());
                 }
                 let n = stack.len() - 1;
-                let d = stack[n].clone(); // top
-                let c = stack[n - 1].clone(); // second
-                let b = stack[n - 2].clone(); // third
-                let a = stack[n - 3].clone(); // fourth (bottom of the 4)
-                stack[n] = a; // old fourth (bottom) becomes new top
-                stack[n - 1] = b; // old third becomes second
-                stack[n - 2] = c; // old second becomes third
-                stack[n - 3] = d; // old top becomes new bottom
+                stack.swap(n - 3, n);
+                stack.swap(n - 2, n - 1);
             }
             REVERSEN => {
                 let n = pop_integer(&mut stack)?;

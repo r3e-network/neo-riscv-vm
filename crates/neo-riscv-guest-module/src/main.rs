@@ -32,6 +32,7 @@ impl<const N: usize> RawBuffer<N> {
         self.0.get().cast::<u8>()
     }
 
+    #[allow(clippy::mut_from_ref)]
     unsafe fn as_mut_slice(&self, len: usize) -> &mut [u8] {
         core::slice::from_raw_parts_mut(self.as_mut_ptr(), len)
     }

@@ -623,8 +623,12 @@ pub(crate) fn stack_item_to_bytes(item: StackValue) -> Result<Vec<u8>, String> {
         StackValue::BigInteger(value) => Ok(value),
         StackValue::Boolean(value) => Ok(vec![if value { 1 } else { 0 }]),
         StackValue::Null => Ok(Vec::new()),
-        StackValue::Pointer(_) | StackValue::Array(..) | StackValue::Struct(..) | StackValue::Map(..)
-        | StackValue::Interop(_) | StackValue::Iterator(_) => {
+        StackValue::Pointer(_)
+        | StackValue::Array(..)
+        | StackValue::Struct(..)
+        | StackValue::Map(..)
+        | StackValue::Interop(_)
+        | StackValue::Iterator(_) => {
             Err("expected byte string-compatible item on stack".to_string())
         }
     }

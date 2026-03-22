@@ -329,7 +329,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let len = raw_len as usize;
                 let start = ip + 5;
-                let end = start.checked_add(len)
+                let end = start
+                    .checked_add(len)
                     .ok_or_else(|| "PUSHDATA4 length overflow".to_string())?;
                 if end > script.len() {
                     return Err("truncated PUSHDATA4 payload".to_string());
@@ -359,7 +360,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, _advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMP",
                 )?;
                 ip = compute_jump_target_offset(ip, offset, script.len(), "JMP")?;
@@ -370,7 +375,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPIF",
                 )?;
                 let condition = pop_boolean(&mut stack)?;
@@ -386,7 +395,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPEQ",
                 )?;
                 let right = pop_item(&mut stack)?;
@@ -1080,36 +1093,45 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         // Array, Struct, Buffer, ByteString: key must be integer index
                         let index = match key_or_index {
                             StackValue::Integer(v) if v >= 0 => v as usize,
-                            StackValue::Boolean(v) => if v { 1 } else { 0 },
+                            StackValue::Boolean(v) => {
+                                if v {
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
                             StackValue::Null => 0,
                             _ => {
                                 return Err(
-                                    "PICKITEM index must be a non-negative integer".to_string(),
+                                    "PICKITEM index must be a non-negative integer".to_string()
                                 )
                             }
                         };
                         match item {
                             StackValue::Array(_, items) | StackValue::Struct(_, items) => {
-                                let value = items.get(index).cloned().ok_or_else(|| {
-                                    "index out of range for PICKITEM".to_string()
-                                })?;
+                                let value = items
+                                    .get(index)
+                                    .cloned()
+                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
                                 stack.push(value);
                             }
                             StackValue::Buffer(_, bytes) => {
-                                let value = bytes.get(index).copied().ok_or_else(|| {
-                                    "index out of range for PICKITEM".to_string()
-                                })?;
+                                let value = bytes
+                                    .get(index)
+                                    .copied()
+                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
                                 stack.push(StackValue::Integer(i64::from(value)));
                             }
                             StackValue::ByteString(bytes) => {
-                                let value = bytes.get(index).copied().ok_or_else(|| {
-                                    "index out of range for PICKITEM".to_string()
-                                })?;
+                                let value = bytes
+                                    .get(index)
+                                    .copied()
+                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
                                 stack.push(StackValue::Integer(i64::from(value)));
                             }
                             _ => {
                                 return Err(
-                                    "PICKITEM expects an array, map, or byte string".to_string(),
+                                    "PICKITEM expects an array, map, or byte string".to_string()
                                 )
                             }
                         }
@@ -1501,9 +1523,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let item = pop_item(&mut stack)?;
                 // NeoVM StackItemType enum values
                 let result = match kind {
-                    0x00 => true,                                        // Any - always true
-                    0x10 => matches!(item, StackValue::Pointer(_)),     // Pointer
-                    0x20 => matches!(item, StackValue::Boolean(_)),     // Boolean
+                    0x00 => true,                                   // Any - always true
+                    0x10 => matches!(item, StackValue::Pointer(_)), // Pointer
+                    0x20 => matches!(item, StackValue::Boolean(_)), // Boolean
                     0x21 => matches!(item, StackValue::Integer(_) | StackValue::BigInteger(_)), // Integer
                     0x28 => matches!(item, StackValue::ByteString(_)), // ByteString
                     0x30 => matches!(item, StackValue::Buffer(_, _)),  // Buffer
@@ -1555,12 +1577,12 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("stack underflow for ROT".to_string());
                 }
                 let n = stack.len() - 1;
-                let c = stack[n].clone();     // top
+                let c = stack[n].clone(); // top
                 let b = stack[n - 1].clone(); // second
                 let a = stack[n - 2].clone(); // third (bottom of the 3)
-                stack[n] = a;         // old third becomes new top
-                stack[n - 1] = c;     // old top becomes second
-                stack[n - 2] = b;     // old second becomes third
+                stack[n] = a; // old third becomes new top
+                stack[n - 1] = c; // old top becomes second
+                stack[n - 2] = b; // old second becomes third
             }
             ROLL => {
                 let n = pop_integer(&mut stack)?;
@@ -1581,12 +1603,12 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("stack underflow for REVERSE3".to_string());
                 }
                 let n = stack.len() - 1;
-                let c = stack[n].clone();     // top
+                let c = stack[n].clone(); // top
                 let b = stack[n - 1].clone(); // second
                 let a = stack[n - 2].clone(); // third (bottom of the 3)
-                stack[n] = a;         // old third (bottom) becomes new top
-                stack[n - 1] = b;     // old second stays as second
-                stack[n - 2] = c;     // old top becomes new bottom
+                stack[n] = a; // old third (bottom) becomes new top
+                stack[n - 1] = b; // old second stays as second
+                stack[n - 2] = c; // old top becomes new bottom
             }
             REVERSE4 => {
                 // Reverse top 4 items: [a, b, c, d] where d is top → [d, c, b, a] where a is top
@@ -1594,14 +1616,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("stack underflow for REVERSE4".to_string());
                 }
                 let n = stack.len() - 1;
-                let d = stack[n].clone();     // top
+                let d = stack[n].clone(); // top
                 let c = stack[n - 1].clone(); // second
                 let b = stack[n - 2].clone(); // third
                 let a = stack[n - 3].clone(); // fourth (bottom of the 4)
-                stack[n] = a;         // old fourth (bottom) becomes new top
-                stack[n - 1] = b;     // old third becomes second
-                stack[n - 2] = c;     // old second becomes third
-                stack[n - 3] = d;     // old top becomes new bottom
+                stack[n] = a; // old fourth (bottom) becomes new top
+                stack[n - 1] = b; // old third becomes second
+                stack[n - 2] = c; // old second becomes third
+                stack[n - 3] = d; // old top becomes new bottom
             }
             REVERSEN => {
                 let n = pop_integer(&mut stack)?;
@@ -1683,7 +1705,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "CALL",
                 )?;
                 let return_ip = ip + advance;
@@ -1740,7 +1766,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPIFNOT",
                 )?;
                 let condition = pop_boolean(&mut stack)?;
@@ -1756,7 +1786,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPNE",
                 )?;
                 let right = pop_item(&mut stack)?;
@@ -1773,7 +1807,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPGT",
                 )?;
                 let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
@@ -1791,7 +1829,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPGE",
                 )?;
                 let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
@@ -1809,7 +1851,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPLT",
                 )?;
                 let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
@@ -1827,7 +1873,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let (offset, advance) = read_offset(
                     script,
                     ip,
-                    if is_long { &Offset::Long } else { &Offset::Short },
+                    if is_long {
+                        &Offset::Long
+                    } else {
+                        &Offset::Short
+                    },
                     "JMPLE",
                 )?;
                 let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
@@ -1908,10 +1958,18 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     pending_error = Some("truncated TRY_L operand".to_string());
                     continue;
                 }
-                let catch_offset =
-                    i32::from_le_bytes([script[ip+1], script[ip+2], script[ip+3], script[ip+4]]);
-                let finally_offset =
-                    i32::from_le_bytes([script[ip+5], script[ip+6], script[ip+7], script[ip+8]]);
+                let catch_offset = i32::from_le_bytes([
+                    script[ip + 1],
+                    script[ip + 2],
+                    script[ip + 3],
+                    script[ip + 4],
+                ]);
+                let finally_offset = i32::from_le_bytes([
+                    script[ip + 5],
+                    script[ip + 6],
+                    script[ip + 7],
+                    script[ip + 8],
+                ]);
                 let catch_ip = if catch_offset != 0 {
                     (ip as isize + catch_offset as isize) as usize
                 } else {
@@ -1941,8 +1999,12 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     pending_error = Some("truncated ENDTRY_L operand".to_string());
                     continue;
                 }
-                let offset =
-                    i32::from_le_bytes([script[ip+1], script[ip+2], script[ip+3], script[ip+4]]);
+                let offset = i32::from_le_bytes([
+                    script[ip + 1],
+                    script[ip + 2],
+                    script[ip + 3],
+                    script[ip + 4],
+                ]);
                 if let Some(frame) = try_frames.last_mut() {
                     if frame.finally_ip != 0 && !frame.in_finally {
                         frame.in_finally = true;
@@ -2008,8 +2070,15 @@ mod try_catch_tests {
 
     struct ErrorSyscall;
     impl SyscallProvider for ErrorSyscall {
-        fn on_instruction(&mut self, _opcode: u8) -> Result<(), String> { Ok(()) }
-        fn syscall(&mut self, _api: u32, _ip: usize, _stack: &mut Vec<StackValue>) -> Result<(), String> {
+        fn on_instruction(&mut self, _opcode: u8) -> Result<(), String> {
+            Ok(())
+        }
+        fn syscall(
+            &mut self,
+            _api: u32,
+            _ip: usize,
+            _stack: &mut Vec<StackValue>,
+        ) -> Result<(), String> {
             Err("error".to_string())
         }
     }
@@ -2017,15 +2086,16 @@ mod try_catch_tests {
     #[test]
     fn test_try_catch_syscall_exception() {
         let script: Vec<u8> = vec![
-            0x3b, 0x0a, 0x00,           // TRY catch_offset=10, finally_offset=0
+            0x3b, 0x0a, 0x00, // TRY catch_offset=10, finally_offset=0
             0x41, 0xde, 0xad, 0xde, 0xad, // SYSCALL
-            0x3d, 0x05,                  // ENDTRY offset=5
-            0x11,                        // PUSH1
-            0x3d, 0x02,                  // ENDTRY offset=2
-            0x12,                        // PUSH2
+            0x3d, 0x05, // ENDTRY offset=5
+            0x11, // PUSH1
+            0x3d, 0x02, // ENDTRY offset=2
+            0x12, // PUSH2
         ];
         let mut provider = ErrorSyscall;
-        let result = interpret_with_stack_and_syscalls_at(&script, Vec::new(), 0, &mut provider).unwrap();
+        let result =
+            interpret_with_stack_and_syscalls_at(&script, Vec::new(), 0, &mut provider).unwrap();
         assert_eq!(result.state, VmState::Halt);
         assert_eq!(result.stack.len(), 3);
     }

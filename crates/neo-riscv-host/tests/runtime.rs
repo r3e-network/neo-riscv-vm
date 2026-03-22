@@ -2113,12 +2113,12 @@ fn test_try_catch_syscall_exception() {
     // Script: TRY 0x0a00, SYSCALL 0xdeaddead, ENDTRY 0x05, PUSH1, ENDTRY 0x02, PUSH2
     // TRY=0x3b, SYSCALL=0x41, ENDTRY=0x3d, PUSH1=0x11, PUSH2=0x12
     let script: Vec<u8> = vec![
-        0x3b, 0x0a, 0x00,           // TRY catch_offset=10, finally_offset=0
+        0x3b, 0x0a, 0x00, // TRY catch_offset=10, finally_offset=0
         0x41, 0xde, 0xad, 0xde, 0xad, // SYSCALL 0xaddeadde (le bytes)
-        0x3d, 0x05,                  // ENDTRY offset=5
-        0x11,                        // PUSH1
-        0x3d, 0x02,                  // ENDTRY offset=2
-        0x12,                        // PUSH2
+        0x3d, 0x05, // ENDTRY offset=5
+        0x11, // PUSH1
+        0x3d, 0x02, // ENDTRY offset=2
+        0x12, // PUSH2
     ];
     let ctx = RuntimeContext {
         trigger: 0x40,
@@ -2128,9 +2128,13 @@ fn test_try_catch_syscall_exception() {
         gas_left: 0,
         exec_fee_factor_pico: 0,
     };
-    let (result, trace) = debug_execute_script_with_host_and_stack(&script, Vec::new(), ctx, |_api, _ip, _ctx, _stack| {
-        Err(format!("error"))
-    }).unwrap();
+    let (result, trace) = debug_execute_script_with_host_and_stack(
+        &script,
+        Vec::new(),
+        ctx,
+        |_api, _ip, _ctx, _stack| Err("error".to_string()),
+    )
+    .unwrap();
     eprintln!("state: {:?}", result.state);
     eprintln!("stack len: {}", result.stack.len());
     for (i, item) in result.stack.iter().enumerate() {
@@ -2146,13 +2150,13 @@ fn test_try_catch_throw_simple() {
     // TRY catch=7 finally=0, PUSH0, THROW, ENDTRY 3, PUSH1, ENDTRY 2, PUSH2
     // TRY=0x3b, PUSH0=0x10, THROW=0x3a, ENDTRY=0x3d, PUSH1=0x11, PUSH2=0x12
     let script: Vec<u8> = vec![
-        0x3b, 0x07, 0x00,  // ip=0: TRY catch_offset=7, finally_offset=0
-        0x10,               // ip=3: PUSH0
-        0x3a,               // ip=4: THROW
-        0x3d, 0x03,         // ip=5: ENDTRY offset=3
-        0x11,               // ip=7: PUSH1 (catch block)
-        0x3d, 0x02,         // ip=8: ENDTRY offset=2
-        0x12,               // ip=10: PUSH2
+        0x3b, 0x07, 0x00, // ip=0: TRY catch_offset=7, finally_offset=0
+        0x10, // ip=3: PUSH0
+        0x3a, // ip=4: THROW
+        0x3d, 0x03, // ip=5: ENDTRY offset=3
+        0x11, // ip=7: PUSH1 (catch block)
+        0x3d, 0x02, // ip=8: ENDTRY offset=2
+        0x12, // ip=10: PUSH2
     ];
     let ctx = RuntimeContext {
         trigger: 0x40,
@@ -2164,7 +2168,8 @@ fn test_try_catch_throw_simple() {
     };
     let result = execute_script_with_host(&script, ctx, |_api, _ip, _ctx, _stack| {
         Ok(HostCallbackResult { stack: Vec::new() })
-    }).unwrap();
+    })
+    .unwrap();
     eprintln!("state: {:?}", result.state);
     eprintln!("stack len: {}", result.stack.len());
     for (i, item) in result.stack.iter().enumerate() {
@@ -2270,8 +2275,5 @@ fn biginteger_through_host_callback() {
     .expect("host runtime should handle BigInteger type through callback");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(
-        result.stack,
-        vec![StackValue::BigInteger(big_value)]
-    );
+    assert_eq!(result.stack, vec![StackValue::BigInteger(big_value)]);
 }

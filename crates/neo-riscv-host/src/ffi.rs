@@ -433,7 +433,11 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
     })) {
         Ok(result) => result,
         Err(_) => {
-            write_err_result("internal panic in neo_riscv_execute_script".to_string(), 0, output);
+            write_err_result(
+                "internal panic in neo_riscv_execute_script".to_string(),
+                0,
+                output,
+            );
             true
         }
     }
@@ -528,7 +532,11 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
     })) {
         Ok(result) => result,
         Err(_) => {
-            write_err_result("internal panic in neo_riscv_execute_script_with_host".to_string(), 0, output);
+            write_err_result(
+                "internal panic in neo_riscv_execute_script_with_host".to_string(),
+                0,
+                output,
+            );
             true
         }
     }
@@ -663,7 +671,11 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
     })) {
         Ok(result) => result,
         Err(_) => {
-            write_err_result("internal panic in neo_riscv_execute_native_contract".to_string(), 0, output);
+            write_err_result(
+                "internal panic in neo_riscv_execute_native_contract".to_string(),
+                0,
+                output,
+            );
             true
         }
     }

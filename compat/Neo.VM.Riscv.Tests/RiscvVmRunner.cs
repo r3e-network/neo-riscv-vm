@@ -2,6 +2,7 @@ using Neo.VM;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
@@ -10,6 +11,8 @@ namespace Neo.Test;
 internal sealed class RiscvVmRunner : IDisposable
 {
     private const string LibraryPathEnvironmentVariable = "NEO_RISCV_HOST_LIB";
+    private const string DefaultLibraryName = "libneo_riscv_host.so";
+    private const string PreferDebugLibraryEnvironmentVariable = "NEO_RISCV_TEST_PREFER_DEBUG_LIB";
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeExecutionResult
@@ -94,9 +97,14 @@ internal sealed class RiscvVmRunner : IDisposable
     private readonly IntPtr _hostFreeCallbackPtr;
     private ulong _nextInteropHandle = 1;
     private readonly Dictionary<ulong, string> _interopTypeNames = new();
+    private readonly GCHandle _callbackStateHandle;
+    private readonly IntPtr _callbackStatePtr;
+
+    public string LibraryPath { get; }
 
     public RiscvVmRunner(string libraryPath)
     {
+        LibraryPath = libraryPath;
         _hostCallback = StaticHostCallback;
         _hostFreeCallback = StaticHostFreeCallback;
         _hostCallbackPtr = Marshal.GetFunctionPointerForDelegate(_hostCallback);
@@ -107,27 +115,144 @@ internal sealed class RiscvVmRunner : IDisposable
             NativeLibrary.GetExport(_libraryHandle, "neo_riscv_execute_script_with_host"));
         _freeExecutionResult = Marshal.GetDelegateForFunctionPointer<FreeExecutionResultDelegate>(
             NativeLibrary.GetExport(_libraryHandle, "neo_riscv_free_execution_result"));
+
+        _callbackStateHandle = GCHandle.Alloc(new CallbackState { Runner = this });
+        _callbackStatePtr = GCHandle.ToIntPtr(_callbackStateHandle);
     }
 
     public static RiscvVmRunner CreateFromEnvironment()
     {
-        var libraryPath = Environment.GetEnvironmentVariable(LibraryPathEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(libraryPath))
-            Assert.Inconclusive($"{LibraryPathEnvironmentVariable} is not set.");
+        return new RiscvVmRunner(ResolveRequiredLibraryPath());
+    }
 
-        return new RiscvVmRunner(libraryPath!);
+    internal static string ResolveRequiredLibraryPath()
+    {
+        var libraryPath = ResolveLibraryPath();
+        if (libraryPath is null)
+        {
+            Assert.Inconclusive(
+                $"{LibraryPathEnvironmentVariable} is not set and the RISC-V host library could not be located. " +
+                $"Set {LibraryPathEnvironmentVariable} explicitly, or build it with `cargo build -p neo-riscv-host --release`. " +
+                $"Tried: {string.Join(", ", CandidateLibraryPaths())}");
+        }
+
+        return libraryPath;
+    }
+
+    private static string? ResolveLibraryPath()
+    {
+        var env = Environment.GetEnvironmentVariable(LibraryPathEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(env))
+        {
+            if (File.Exists(env))
+            {
+                // Debug builds of the host library can make the corpus suite painfully slow.
+                // If a matching release library exists, prefer it unless explicitly overridden.
+                if (!PreferDebugLibrary() && TryResolveReleaseLibraryPath(env) is string releasePath)
+                {
+                    return releasePath;
+                }
+
+                return env;
+            }
+
+            Assert.Inconclusive($"{LibraryPathEnvironmentVariable} is set but the file does not exist: {env}");
+        }
+
+        foreach (var candidate in CandidateLibraryPaths())
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool PreferDebugLibrary()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable(PreferDebugLibraryEnvironmentVariable),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryResolveReleaseLibraryPath(string path)
+    {
+        var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var needle = $"{Path.DirectorySeparatorChar}debug{Path.DirectorySeparatorChar}";
+        var idx = normalized.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+        {
+            return null;
+        }
+
+        var candidate = normalized[..idx] + $"{Path.DirectorySeparatorChar}release{Path.DirectorySeparatorChar}" + normalized[(idx + needle.Length)..];
+        return File.Exists(candidate) ? candidate : null;
+    }
+
+    private static IEnumerable<string> CandidateLibraryPaths()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(baseDir))
+        {
+            yield return Path.Combine(baseDir, DefaultLibraryName);
+        }
+
+        yield return Path.Combine(Environment.CurrentDirectory, DefaultLibraryName);
+
+        // Common Rust build outputs when running `dotnet test` from the repo root.
+        foreach (var root in EnumerateCandidateRoots(Environment.CurrentDirectory))
+        {
+            yield return Path.Combine(root, "target", "release", DefaultLibraryName);
+            yield return Path.Combine(root, "target", "debug", DefaultLibraryName);
+        }
+
+        foreach (var root in EnumerateCandidateRoots(AppContext.BaseDirectory))
+        {
+            yield return Path.Combine(root, "target", "release", DefaultLibraryName);
+            yield return Path.Combine(root, "target", "debug", DefaultLibraryName);
+        }
+    }
+
+    private static IEnumerable<string> EnumerateCandidateRoots(string? startDir)
+    {
+        if (string.IsNullOrWhiteSpace(startDir))
+        {
+            yield break;
+        }
+
+        DirectoryInfo? dir;
+        try
+        {
+            dir = new DirectoryInfo(startDir);
+        }
+        catch
+        {
+            yield break;
+        }
+
+        for (var i = 0; i < 6 && dir is not null; i++)
+        {
+            yield return dir.FullName;
+            dir = dir.Parent;
+        }
     }
 
     public ExecutionOutcome Execute(byte[] script)
     {
-        var callbackState = new CallbackState { Runner = this };
-        var handle = GCHandle.Alloc(callbackState);
-        var scriptPtr = Marshal.AllocHGlobal(script.Length);
+        if (script is null) throw new ArgumentNullException(nameof(script));
+
+        _nextInteropHandle = 1;
+        _interopTypeNames.Clear();
+
+        var pinnedScript = GCHandle.Alloc(script, GCHandleType.Pinned);
         NativeExecutionResult nativeResult = default;
 
         try
         {
-            Marshal.Copy(script, 0, scriptPtr, script.Length);
+            var scriptPtr = pinnedScript.AddrOfPinnedObject();
             if (!_executeScriptWithHost(
                     scriptPtr,
                     (nuint)script.Length,
@@ -140,7 +265,7 @@ internal sealed class RiscvVmRunner : IDisposable
                     0,
                     IntPtr.Zero,
                     0,
-                    GCHandle.ToIntPtr(handle),
+                    _callbackStatePtr,
                     _hostCallbackPtr,
                     _hostFreeCallbackPtr,
                     out nativeResult))
@@ -165,17 +290,20 @@ internal sealed class RiscvVmRunner : IDisposable
                 _freeExecutionResult(ref nativeResult);
             }
 
-            if (handle.IsAllocated)
+            if (pinnedScript.IsAllocated)
             {
-                handle.Free();
+                pinnedScript.Free();
             }
-
-            Marshal.FreeHGlobal(scriptPtr);
         }
     }
 
     public void Dispose()
     {
+        if (_callbackStateHandle.IsAllocated)
+        {
+            _callbackStateHandle.Free();
+        }
+
         if (_libraryHandle != IntPtr.Zero)
         {
             NativeLibrary.Free(_libraryHandle);

@@ -401,12 +401,9 @@ where
     let module = runtime_cache::compile_native_module(binary, aux_size)?;
 
     // Link with the same host functions (host_call, host_on_instruction)
-    let mut linker =
-        polkavm::Linker::<bridge::ClosureHost, core::convert::Infallible>::new();
+    let mut linker = polkavm::Linker::<bridge::ClosureHost, core::convert::Infallible>::new();
     bridge::register_host_functions(&mut linker)?;
-    let instance_pre = linker
-        .instantiate_pre(&module)
-        .map_err(|e| e.to_string())?;
+    let instance_pre = linker.instantiate_pre(&module).map_err(|e| e.to_string())?;
     let mut instance = instance_pre.instantiate().map_err(|e| e.to_string())?;
 
     let mut host = bridge::ClosureHost::new(context, &mut callback);
@@ -430,11 +427,7 @@ where
 
     // Call the contract's execute entry point
     instance
-        .call_typed(
-            &mut host,
-            "execute",
-            (stack_ptr, stack_len),
-        )
+        .call_typed(&mut host, "execute", (stack_ptr, stack_len))
         .map_err(|e| format!("native contract execute failed: {e:?}"))?;
 
     // Read result back
@@ -450,8 +443,8 @@ where
         .read_memory_into(res_ptr, &mut res_bytes[..])
         .map_err(|e| format!("native read_memory failed: {e:?}"))?;
 
-    let mut result: Result<ExecutionResult, String> =
-        postcard::from_bytes(&res_bytes).map_err(|_| "failed to decode native result".to_string())?;
+    let mut result: Result<ExecutionResult, String> = postcard::from_bytes(&res_bytes)
+        .map_err(|_| "failed to decode native result".to_string())?;
 
     if let Ok(ref mut r) = result {
         r.fee_consumed_pico = host.fee_consumed_pico;

@@ -54,12 +54,43 @@ Rust:
 cargo test -p neo-riscv-guest -p neo-riscv-host
 ```
 
+C# compatibility corpus (copied from `neo-vm` JSON suite):
+
+```bash
+# Default: runs the full corpus when a release host library is available,
+# otherwise falls back to a small smoke subset (debug builds can be very slow).
+dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
+
+# Force smoke
+NEO_RISCV_VM_JSON_MODE=smoke dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
+
+# Full corpus
+NEO_RISCV_VM_JSON_MODE=full dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
+```
+
 C# Neo core worktree:
 
 ```bash
 NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so \
 dotnet test /home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/tests/Neo.UnitTests/Neo.UnitTests.csproj
 ```
+
+## Zero-Config Node Integration (Plugin Bundle)
+
+To run the Neo node with the RISC-V engine without setting `NEO_RISCV_HOST_LIB`, package the adapter plugin and native host library into a drop-in `Plugins` bundle:
+
+```bash
+scripts/package-adapter-plugin.sh
+```
+
+This creates:
+
+```text
+dist/Plugins/Neo.Riscv.Adapter/Neo.Riscv.Adapter.dll
+dist/Plugins/Neo.Riscv.Adapter/libneo_riscv_host.so   (Linux)
+```
+
+Copy `dist/Plugins` next to your `neo-cli` binaries (the same directory level as `config.json`). The node will auto-load the plugin at startup, and the plugin will auto-discover the native library from `Plugins/Neo.Riscv.Adapter/`.
 
 ## Guest Module Regeneration
 

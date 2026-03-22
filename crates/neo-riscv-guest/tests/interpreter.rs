@@ -1219,7 +1219,8 @@ fn stack_overflow_at_2048_items() {
     // Push 2049 items (PUSH1 = 0x11) — stack limit is 2048
     let mut script = vec![0x11; 2049];
     script.push(0x40); // RET
-    let error = interpret(&script).expect_err("pushing 2049 items should FAULT with stack overflow");
+    let error =
+        interpret(&script).expect_err("pushing 2049 items should FAULT with stack overflow");
     assert!(
         error.contains("stack overflow") || error.contains("Stack overflow"),
         "error should mention stack overflow: {error}"
@@ -1291,8 +1292,8 @@ fn call_and_ret_round_trip() {
 #[test]
 fn istype_checks_integer_type() {
     // PUSH1, ISTYPE 0x21 (Integer) → true, RET
-    let result = interpret(&[0x11, 0xd9, 0x21, 0x40])
-        .expect("guest interpreter should support ISTYPE");
+    let result =
+        interpret(&[0x11, 0xd9, 0x21, 0x40]).expect("guest interpreter should support ISTYPE");
 
     assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
 }
@@ -1348,8 +1349,7 @@ fn abs_negative_integer() {
 #[test]
 fn dec_integer() {
     // PUSH10, DEC → 9, RET
-    let result =
-        interpret(&[0x1a, 0x9d, 0x40]).expect("guest interpreter should support DEC");
+    let result = interpret(&[0x1a, 0x9d, 0x40]).expect("guest interpreter should support DEC");
 
     assert_eq!(result.stack, vec![StackValue::Integer(9)]);
 }
@@ -1433,17 +1433,13 @@ fn substr_extracts_middle() {
 fn right_extracts_suffix() {
     // PUSHDATA1 "hello", PUSH3, RIGHT → "llo"
     let result = interpret(&[
-        0x0c, 0x05, b'h', b'e', b'l', b'l', b'o',
-        0x13, // PUSH3
+        0x0c, 0x05, b'h', b'e', b'l', b'l', b'o', 0x13, // PUSH3
         0x8e, // RIGHT
         0x40,
     ])
     .expect("guest interpreter should support RIGHT");
 
-    assert_eq!(
-        result.stack,
-        vec![StackValue::ByteString(b"llo".to_vec())]
-    );
+    assert_eq!(result.stack, vec![StackValue::ByteString(b"llo".to_vec())]);
 }
 
 #[test]
@@ -1475,8 +1471,8 @@ fn pick_duplicates_nth() {
         0x00, 0x0a, // PUSHINT8 10
         0x00, 0x14, // PUSHINT8 20
         0x00, 0x1e, // PUSHINT8 30
-        0x12,       // PUSH2
-        0x4d,       // PICK
+        0x12, // PUSH2
+        0x4d, // PICK
         0x40,
     ])
     .expect("guest interpreter should support PICK");
@@ -1626,8 +1622,7 @@ fn throw_causes_fault() {
 fn abortmsg_includes_message() {
     // PUSHDATA1 "fail!", ABORTMSG → FAULT with message containing "fail!"
     let result = interpret(&[
-        0x0c, 0x05, b'f', b'a', b'i', b'l', b'!',
-        0xe0, // ABORTMSG
+        0x0c, 0x05, b'f', b'a', b'i', b'l', b'!', 0xe0, // ABORTMSG
     ]);
 
     match result {
@@ -1655,10 +1650,10 @@ fn ldarg_starg_round_trip() {
     let initial_stack = vec![StackValue::Integer(20), StackValue::Integer(10)];
     let script = &[
         0x57, 0x02, 0x02, // INITSLOT 2 locals, 2 args
-        0x78,             // LDARG0 → push arg0 (10)
-        0x00, 0x63,       // PUSHINT8 99
-        0x81,             // STARG1 → write 99 into arg1
-        0x79,             // LDARG1 → push arg1 (99)
+        0x78, // LDARG0 → push arg0 (10)
+        0x00, 0x63, // PUSHINT8 99
+        0x81, // STARG1 → write 99 into arg1
+        0x79, // LDARG1 → push arg1 (99)
         0x40,
     ];
     let result = interpret_with_stack_and_syscalls(script, initial_stack, &mut host)
@@ -1685,10 +1680,7 @@ fn pushint256_large_value() {
 
     assert_eq!(result.state, VmState::Halt);
     // PUSHINT256 produces a BigInteger; the value bytes are [0x01, 0x02] (trimmed)
-    assert_eq!(
-        result.stack,
-        vec![StackValue::BigInteger(vec![0x01, 0x02])]
-    );
+    assert_eq!(result.stack, vec![StackValue::BigInteger(vec![0x01, 0x02])]);
 }
 
 #[test]
@@ -1699,9 +1691,7 @@ fn gas_exhaustion_faults() {
     // Since the guest interpreter has no gas concept, we test stack overflow as the
     // proxy for resource exhaustion.
     let mut script = Vec::new();
-    for _ in 0..2049 {
-        script.push(0x11); // PUSH1
-    }
+    script.extend(std::iter::repeat_n(0x11, 2049)); // PUSH1
     script.push(0x40);
     let error = interpret(&script).expect_err("should fault on resource exhaustion");
     assert!(
@@ -1740,11 +1730,11 @@ fn try_catch_catches_throw() {
     //   8: RET
     let script: &[u8] = &[
         0x3b, 0x05, 0x00, // TRY catch=+5, finally=0
-        0x11,             // PUSH1 (value to throw)
-        0x3a,             // THROW
-        0x12,             // PUSH2 (catch handler)
-        0x3d, 0x02,       // ENDTRY +2 → ip 8
-        0x40,             // RET
+        0x11, // PUSH1 (value to throw)
+        0x3a, // THROW
+        0x12, // PUSH2 (catch handler)
+        0x3d, 0x02, // ENDTRY +2 → ip 8
+        0x40, // RET
     ];
     let result = interpret(script).expect("try-catch should not error");
     assert_eq!(result.state, VmState::Halt);
@@ -1752,7 +1742,7 @@ fn try_catch_catches_throw() {
     // THROW pops the value and pushes an error string onto the stack when caught
     // Then PUSH2 is executed in catch. We expect PUSH2's value on top.
     assert!(
-        result.stack.iter().any(|v| *v == StackValue::Integer(2)),
+        result.stack.contains(&StackValue::Integer(2)),
         "catch handler should have executed, stack: {:?}",
         result.stack
     );
@@ -1771,11 +1761,11 @@ fn try_finally_executes_on_normal() {
     //   8: RET
     let script: &[u8] = &[
         0x3b, 0x00, 0x06, // TRY catch=0, finally=+6
-        0x11,             // PUSH1
-        0x3d, 0x04,       // ENDTRY +4 → ip 8 (but first runs finally at ip=6)
-        0x13,             // PUSH3 (finally handler)
-        0x3f,             // ENDFINALLY
-        0x40,             // RET
+        0x11, // PUSH1
+        0x3d, 0x04, // ENDTRY +4 → ip 8 (but first runs finally at ip=6)
+        0x13, // PUSH3 (finally handler)
+        0x3f, // ENDFINALLY
+        0x40, // RET
     ];
     let result = interpret(script).expect("try-finally should not error");
     assert_eq!(result.state, VmState::Halt);
@@ -1858,7 +1848,7 @@ fn popitem_removes_last_from_array() {
     assert_eq!(result.state, VmState::Halt);
     // After POPITEM: stack has [Array[3,2], Integer(1)]
     assert!(
-        result.stack.iter().any(|v| *v == StackValue::Integer(1)),
+        result.stack.contains(&StackValue::Integer(1)),
         "popped item should be 1, stack: {:?}",
         result.stack
     );
@@ -1873,14 +1863,14 @@ fn memcpy_copies_bytes() {
     // PUSH0 (di=0), swap to get right order, etc.
     // Simpler: push dst, push di=0, push src, push si=0, push count=2, MEMCPY
     let script: &[u8] = &[
-        0x14,                   // PUSH4
-        0x88,                   // NEWBUFFER (4 zero bytes)
-        0x10,                   // PUSH0 (di)
+        0x14, // PUSH4
+        0x88, // NEWBUFFER (4 zero bytes)
+        0x10, // PUSH0 (di)
         0x0c, 0x02, 0xAA, 0xBB, // PUSHDATA1 [0xAA, 0xBB] (src)
-        0x10,                   // PUSH0 (si)
-        0x12,                   // PUSH2 (count)
-        0x89,                   // MEMCPY
-        0x40,                   // RET
+        0x10, // PUSH0 (si)
+        0x12, // PUSH2 (count)
+        0x89, // MEMCPY
+        0x40, // RET
     ];
     let result = interpret(script).expect("MEMCPY should succeed");
     assert_eq!(result.state, VmState::Halt);
@@ -1978,9 +1968,9 @@ fn reversen_reverses_n_items() {
 fn pusha_pushes_address() {
     // PUSHA(0x0a) with offset +5 → target = 0 + 5 = 5 (points to RET)
     let script: &[u8] = &[
-        0x0a,                   // PUSHA
+        0x0a, // PUSHA
         0x05, 0x00, 0x00, 0x00, // i32 offset = +5
-        0x40,                   // RET
+        0x40, // RET
     ];
     let result = interpret(script).expect("PUSHA should push a Pointer onto the stack");
     assert_eq!(result.state, VmState::Halt);
@@ -2074,11 +2064,11 @@ fn jmp_l_long_jump() {
     // JMP_L(0x23) with 4-byte i32 offset, jumping over ABORT
     // ip=0:JMP_L, ip=1-4:offset(+6)→target=6, ip=5:ABORT, ip=6:PUSH1, ip=7:RET
     let script: &[u8] = &[
-        0x23,                   // JMP_L
+        0x23, // JMP_L
         0x06, 0x00, 0x00, 0x00, // i32 offset = +6 → target ip=0+6=6
-        0x38,                   // ABORT (skipped)
-        0x11,                   // PUSH1
-        0x40,                   // RET
+        0x38, // ABORT (skipped)
+        0x11, // PUSH1
+        0x40, // RET
     ];
     let result = interpret(script).expect("JMP_L should long-jump forward over ABORT");
     assert_eq!(result.state, VmState::Halt);
@@ -2090,12 +2080,12 @@ fn call_l_long_call() {
     // CALL_L(0x35) with 4-byte offset to subroutine
     // ip=0:CALL_L, ip=1-4:offset(+7)→target=7, ip=5:PUSH1, ip=6:RET, ip=7:PUSH5, ip=8:RET
     let script: &[u8] = &[
-        0x35,                   // CALL_L
+        0x35, // CALL_L
         0x07, 0x00, 0x00, 0x00, // i32 offset = +7 → target ip=0+7=7
-        0x11,                   // PUSH1 (after return)
-        0x40,                   // RET
-        0x15,                   // PUSH5 (subroutine)
-        0x40,                   // RET (returns to ip=5)
+        0x11, // PUSH1 (after return)
+        0x40, // RET
+        0x15, // PUSH5 (subroutine)
+        0x40, // RET (returns to ip=5)
     ];
     let result = interpret(script).expect("CALL_L should call subroutine and return");
     assert_eq!(result.state, VmState::Halt);
@@ -2111,13 +2101,13 @@ fn calla_calls_address() {
     // ip=0:PUSHA, ip=1-4:offset(+8)→Pointer(8), ip=5:CALLA, ip=6:PUSH1, ip=7:RET
     // ip=8:PUSH5, ip=9:RET
     let script: &[u8] = &[
-        0x0a,                   // PUSHA
+        0x0a, // PUSHA
         0x08, 0x00, 0x00, 0x00, // i32 offset = +8 → Pointer(8)
-        0x36,                   // CALLA
-        0x11,                   // PUSH1 (after return)
-        0x40,                   // RET
-        0x15,                   // PUSH5 (subroutine)
-        0x40,                   // RET
+        0x36, // CALLA
+        0x11, // PUSH1 (after return)
+        0x40, // RET
+        0x15, // PUSH5 (subroutine)
+        0x40, // RET
     ];
     let result = interpret(script).expect("CALLA should call through pointer and return");
     assert_eq!(result.state, VmState::Halt);
@@ -2137,8 +2127,7 @@ fn toaltstack_fromaltstack_round_trip() {
         0x07, // FROMALTSTACK
         0x40, // RET
     ];
-    let result =
-        interpret(script).expect("TOALTSTACK/FROMALTSTACK should round-trip values");
+    let result = interpret(script).expect("TOALTSTACK/FROMALTSTACK should round-trip values");
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(
         result.stack,
@@ -2150,11 +2139,11 @@ fn toaltstack_fromaltstack_round_trip() {
 fn assertmsg_true_passes() {
     // PUSHT, PUSHDATA1 "ok", ASSERTMSG → continues, PUSH1, RET
     let script: &[u8] = &[
-        0x08,                     // PUSHT
-        0x0c, 0x02, b'o', b'k',  // PUSHDATA1 "ok"
-        0xe1,                     // ASSERTMSG
-        0x11,                     // PUSH1
-        0x40,                     // RET
+        0x08, // PUSHT
+        0x0c, 0x02, b'o', b'k', // PUSHDATA1 "ok"
+        0xe1, // ASSERTMSG
+        0x11, // PUSH1
+        0x40, // RET
     ];
     let result = interpret(script).expect("ASSERTMSG with true should continue normally");
     assert_eq!(result.state, VmState::Halt);
@@ -2165,9 +2154,9 @@ fn assertmsg_true_passes() {
 fn assertmsg_false_faults_with_message() {
     // PUSHF, PUSHDATA1 "bad", ASSERTMSG → FAULT with "bad"
     let script: &[u8] = &[
-        0x09,                             // PUSHF
-        0x0c, 0x03, b'b', b'a', b'd',    // PUSHDATA1 "bad"
-        0xe1,                             // ASSERTMSG
+        0x09, // PUSHF
+        0x0c, 0x03, b'b', b'a', b'd', // PUSHDATA1 "bad"
+        0xe1, // ASSERTMSG
     ];
     let result = interpret(script);
     match result {
@@ -2198,19 +2187,19 @@ fn try_l_long_form_catch() {
     // ip=12: ENDTRY +2 → ip=14
     // ip=14: RET
     let script: &[u8] = &[
-        0x3c,                         // TRY_L
-        0x0b, 0x00, 0x00, 0x00,       // catch_offset = +11
-        0x00, 0x00, 0x00, 0x00,       // finally_offset = 0
-        0x11,                         // PUSH1
-        0x3a,                         // THROW
-        0x12,                         // PUSH2 (catch handler)
-        0x3d, 0x02,                   // ENDTRY +2 → ip=14
-        0x40,                         // RET
+        0x3c, // TRY_L
+        0x0b, 0x00, 0x00, 0x00, // catch_offset = +11
+        0x00, 0x00, 0x00, 0x00, // finally_offset = 0
+        0x11, // PUSH1
+        0x3a, // THROW
+        0x12, // PUSH2 (catch handler)
+        0x3d, 0x02, // ENDTRY +2 → ip=14
+        0x40, // RET
     ];
     let result = interpret(script).expect("TRY_L catch should handle THROW");
     assert_eq!(result.state, VmState::Halt);
     assert!(
-        result.stack.iter().any(|v| *v == StackValue::Integer(2)),
+        result.stack.contains(&StackValue::Integer(2)),
         "catch handler should have executed, stack: {:?}",
         result.stack
     );
@@ -2226,12 +2215,12 @@ fn endtry_l_long_form() {
     // ip=9: ABORT (catch handler, should not execute)
     // ip=10: RET
     let script: &[u8] = &[
-        0x3b, 0x09, 0x00,             // TRY catch=+9, finally=0
-        0x11,                         // PUSH1
-        0x3e,                         // ENDTRY_L
-        0x06, 0x00, 0x00, 0x00,       // i32 offset = +6 → target ip=4+6=10
-        0x38,                         // ABORT (catch — skipped)
-        0x40,                         // RET
+        0x3b, 0x09, 0x00, // TRY catch=+9, finally=0
+        0x11, // PUSH1
+        0x3e, // ENDTRY_L
+        0x06, 0x00, 0x00, 0x00, // i32 offset = +6 → target ip=4+6=10
+        0x38, // ABORT (catch — skipped)
+        0x40, // RET
     ];
     let result = interpret(script).expect("ENDTRY_L should skip over catch block");
     assert_eq!(result.state, VmState::Halt);
@@ -2246,10 +2235,10 @@ fn endtry_l_long_form() {
 fn pushdata4_with_valid_payload() {
     // PUSHDATA4(0x0e) with 4-byte LE length (5) + "hello" payload
     let script: &[u8] = &[
-        0x0e,                         // PUSHDATA4
-        0x05, 0x00, 0x00, 0x00,       // length = 5 (LE u32)
+        0x0e, // PUSHDATA4
+        0x05, 0x00, 0x00, 0x00, // length = 5 (LE u32)
         b'h', b'e', b'l', b'l', b'o', // payload
-        0x40,                         // RET
+        0x40, // RET
     ];
     let result = interpret(script).expect("PUSHDATA4 should decode 4-byte-length payload");
     assert_eq!(result.state, VmState::Halt);
@@ -2271,12 +2260,7 @@ impl SyscallProvider for CalltHost {
         Err(format!("unexpected syscall 0x{api:08x}"))
     }
 
-    fn callt(
-        &mut self,
-        token: u16,
-        _ip: usize,
-        stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
+    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
         assert_eq!(token, 0, "expected CALLT token 0");
         // Pop one integer, add 100, push result
         let val = match stack.pop() {
@@ -2292,10 +2276,10 @@ impl SyscallProvider for CalltHost {
 fn callt_invokes_host() {
     // PUSH1, CALLT token=0x0000, RET → host adds 100 → 101
     let script: &[u8] = &[
-        0x11,       // PUSH1
-        0x37,       // CALLT
+        0x11, // PUSH1
+        0x37, // CALLT
         0x00, 0x00, // token = 0 (LE u16)
-        0x40,       // RET
+        0x40, // RET
     ];
     let mut host = CalltHost;
     let result = interpret_with_syscalls(script, &mut host)
@@ -2318,8 +2302,8 @@ fn syscall_invokes_host_provider() {
         ((syscall >> 24) & 0xFF) as u8,
         0x40, // RET
     ];
-    let result = interpret_with_syscalls(script, &mut host)
-        .expect("SYSCALL should invoke host provider");
+    let result =
+        interpret_with_syscalls(script, &mut host).expect("SYSCALL should invoke host provider");
     assert_eq!(result.state, VmState::Halt);
     // Stack has PUSH1's value (1) then Platform's result ("NEO") on top
     assert!(
@@ -2335,13 +2319,13 @@ fn syscall_invokes_host_provider() {
 fn slot_ldloc6_stloc6() {
     // INITSLOT 7 locals 0 args, PUSHINT8 42, STLOC6, LDLOC6 → 42
     let script: &[u8] = &[
-        0x57,       // INITSLOT
-        0x07,       // 7 locals
-        0x00,       // 0 args
+        0x57, // INITSLOT
+        0x07, // 7 locals
+        0x00, // 0 args
         0x00, 0x2a, // PUSHINT8(0x00) 42
-        0x76,       // STLOC6
-        0x6e,       // LDLOC6
-        0x40,       // RET
+        0x76, // STLOC6
+        0x6e, // LDLOC6
+        0x40, // RET
     ];
     let result = interpret(script).expect("STLOC6/LDLOC6 should round-trip");
     assert_eq!(result.state, VmState::Halt);
@@ -2352,12 +2336,12 @@ fn slot_ldloc6_stloc6() {
 fn slot_ldsfld6_stsfld6() {
     // INITSSLOT 7, PUSHINT8 42, STSFLD6, LDSFLD6 → 42
     let script: &[u8] = &[
-        0x56,       // INITSSLOT
-        0x07,       // 7 static fields
+        0x56, // INITSSLOT
+        0x07, // 7 static fields
         0x00, 0x2a, // PUSHINT8(0x00) 42
-        0x66,       // STSFLD6
-        0x5e,       // LDSFLD6
-        0x40,       // RET
+        0x66, // STSFLD6
+        0x5e, // LDSFLD6
+        0x40, // RET
     ];
     let result = interpret(script).expect("STSFLD6/LDSFLD6 should round-trip");
     assert_eq!(result.state, VmState::Halt);
@@ -2378,14 +2362,14 @@ fn slot_ldarg6_starg6() {
         0x00, 0x32, // PUSHINT8 50
         0x00, 0x3c, // PUSHINT8 60
         0x00, 0x46, // PUSHINT8 70
-        0x57,       // INITSLOT
-        0x00,       // 0 locals
-        0x07,       // 7 args
-        0x7e,       // LDARG6 → locals[6] = 10
+        0x57, // INITSLOT
+        0x00, // 0 locals
+        0x07, // 7 args
+        0x7e, // LDARG6 → locals[6] = 10
         0x00, 0x63, // PUSHINT8 99
-        0x80,       // STARG0 → locals[0] = 99
-        0x78,       // LDARG0 → 99
-        0x40,       // RET
+        0x80, // STARG0 → locals[0] = 99
+        0x78, // LDARG0 → 99
+        0x40, // RET
     ];
     let result = interpret(script).expect("LDARG6/STARG0 slot operations should work");
     assert_eq!(result.state, VmState::Halt);
@@ -2399,12 +2383,12 @@ fn slot_ldarg6_starg6() {
 fn jmpif_l_long_form() {
     // PUSHT, JMPIF_L offset=+6 → target ip=7, skip ABORT, PUSH1, RET
     let script: &[u8] = &[
-        0x08,                         // PUSHT
-        0x25,                         // JMPIF_L
-        0x06, 0x00, 0x00, 0x00,       // i32 offset = +6 → target ip=1+6=7
-        0x38,                         // ABORT (skipped)
-        0x11,                         // PUSH1
-        0x40,                         // RET
+        0x08, // PUSHT
+        0x25, // JMPIF_L
+        0x06, 0x00, 0x00, 0x00, // i32 offset = +6 → target ip=1+6=7
+        0x38, // ABORT (skipped)
+        0x11, // PUSH1
+        0x40, // RET
     ];
     let result = interpret(script).expect("JMPIF_L should jump on true");
     assert_eq!(result.state, VmState::Halt);
@@ -2415,12 +2399,12 @@ fn jmpif_l_long_form() {
 fn jmpifnot_l_long_form() {
     // PUSHF, JMPIFNOT_L offset=+6 → target ip=7, skip ABORT, PUSH1, RET
     let script: &[u8] = &[
-        0x09,                         // PUSHF
-        0x27,                         // JMPIFNOT_L
-        0x06, 0x00, 0x00, 0x00,       // i32 offset = +6 → target ip=1+6=7
-        0x38,                         // ABORT (skipped)
-        0x11,                         // PUSH1
-        0x40,                         // RET
+        0x09, // PUSHF
+        0x27, // JMPIFNOT_L
+        0x06, 0x00, 0x00, 0x00, // i32 offset = +6 → target ip=1+6=7
+        0x38, // ABORT (skipped)
+        0x11, // PUSH1
+        0x40, // RET
     ];
     let result = interpret(script).expect("JMPIFNOT_L should jump on false");
     assert_eq!(result.state, VmState::Halt);

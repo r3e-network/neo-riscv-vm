@@ -4,7 +4,7 @@ The Neo RISC-V VM has validation infrastructure in place but requires systematic
 
 ## What Changes
 
-- Implement all placeholder tests with actual execution logic
+- Implement all validation tests with actual execution logic
 - Add comprehensive error handling and recovery mechanisms
 - Complete missing documentation and API references
 - Validate performance meets production thresholds (within 2x of native NeoVM)
@@ -34,7 +34,7 @@ The Neo RISC-V VM has validation infrastructure in place but requires systematic
 
 - All 4 Rust crates: guest interpreter, host runtime, ABI, guest-module
 - C# adapter (Neo.Riscv.Adapter): error handling, logging, monitoring
-- Test infrastructure: convert placeholders to actual implementations
+- Test infrastructure: convert validation stubs to actual implementations
 - Documentation: README, API docs, architecture guides, runbooks
 - Build system: add production build profiles, optimization flags
 

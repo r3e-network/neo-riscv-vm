@@ -1,6 +1,6 @@
+use crate::{api_ids, ffi};
 use alloc::{vec, vec::Vec};
 use neo_riscv_abi::StackValue;
-use crate::{api_ids, ffi};
 
 pub const CALL_FLAGS_ALL: u8 = 0x0f;
 

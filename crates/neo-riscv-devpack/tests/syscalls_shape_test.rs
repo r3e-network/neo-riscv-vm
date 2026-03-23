@@ -5,12 +5,7 @@ use neo_riscv_devpack::syscalls::{build_contract_call_stack, CALL_FLAGS_ALL};
 fn build_contract_call_stack_matches_bridge_tail_order() {
     let args = [StackValue::Integer(7), StackValue::Boolean(true)];
 
-    let stack = build_contract_call_stack(
-        &[0x55; 20],
-        "transfer",
-        CALL_FLAGS_ALL,
-        &args,
-    );
+    let stack = build_contract_call_stack(&[0x55; 20], "transfer", CALL_FLAGS_ALL, &args);
 
     assert_eq!(
         stack,

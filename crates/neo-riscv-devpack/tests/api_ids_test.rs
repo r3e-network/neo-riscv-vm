@@ -12,7 +12,10 @@ fn api_ids_match_interop_hashes() {
         (api_ids::CONTRACT_UPDATE, "System.Contract.Update"),
         (api_ids::RUNTIME_NOTIFY, "System.Runtime.Notify"),
         (api_ids::RUNTIME_LOG, "System.Runtime.Log"),
-        (api_ids::RUNTIME_CHECK_WITNESS, "System.Runtime.CheckWitness"),
+        (
+            api_ids::RUNTIME_CHECK_WITNESS,
+            "System.Runtime.CheckWitness",
+        ),
         (api_ids::CRYPTO_VERIFY_SIGNATURE, "System.Crypto.CheckSig"),
     ];
 

@@ -5,6 +5,14 @@ members = [
     "crates/neo-riscv-guest",
     "crates/neo-riscv-guest-module",
     "crates/neo-riscv-host",
+    "crates/neo-riscv-devpack",
+]
+exclude = [
+    "examples/counter",
+    "examples/storage",
+    "examples/hello-world",
+    "examples/nep17-token",
+    "examples/devpack-test",
 ]
 default-members = [
     "crates/neo-riscv-abi",
@@ -19,7 +27,12 @@ license = "MIT"
 
 [workspace.dependencies]
 polkavm = "0.32.0"
+criterion = "0.5"
+proptest = "1.0"
 
 [profile.release]
 panic = "abort"
 opt-level = "s"
+
+[profile.dev]
+panic = "abort"

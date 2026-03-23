@@ -1,0 +1,9 @@
+[package]
+name = "neo-riscv-devpack"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+neo-riscv-abi = { path = "../neo-riscv-abi" }
+
+[lib]

@@ -1,0 +1,33 @@
+## Why
+
+Previous validation infrastructure created placeholder implementations for tests, benchmarks, and monitoring. Production deployment requires actual implementations with real contract execution, performance baselines, and operational observability.
+
+## What Changes
+
+- Convert placeholder opcode tests to real NeoVM script execution tests
+- Implement actual performance benchmarks with baseline measurements against native NeoVM
+- Add production monitoring with Prometheus metrics and structured logging
+- Write essential API documentation (rustdoc + XML docs)
+- Create deployment runbook with troubleshooting guides
+
+## Capabilities
+
+### New Capabilities
+
+- `opcode-execution-tests`: Comprehensive opcode validation with real NeoVM scripts
+- `performance-benchmarks`: Criterion benchmarks with 2x native NeoVM threshold validation
+- `production-monitoring`: Prometheus metrics, structured logging, health checks
+- `api-documentation`: Complete rustdoc and C# XML documentation
+- `deployment-operations`: Runbooks, troubleshooting guides, configuration templates
+
+### Modified Capabilities
+
+<!-- No existing spec requirements are changing -->
+
+## Impact
+
+- **Rust crates**: All 4 workspace crates (abi, guest, guest-module, host)
+- **C# adapter**: Neo.Riscv.Adapter plugin
+- **Test infrastructure**: tests/opcode_matrix/, benches/
+- **Documentation**: README.md, rustdoc comments, C# XML docs
+- **Operations**: New monitoring endpoints, logging configuration

@@ -23,9 +23,15 @@ pub mod runtime {
 
 ```rust
 pub fn contract_call(hash: &[u8], method: &str, args: &[StackValue]) -> StackValue
+pub fn contract_call_with_flags(
+    hash: &[u8],
+    method: &str,
+    call_flags: u8,
+    args: &[StackValue],
+) -> StackValue
 ```
 
-High-level Rust helper for calling another contract. The current helper surface does **not** expose a `CallFlags` argument directly.
+High-level Rust helpers for calling another contract. `contract_call()` defaults to `CallFlags::All (0x0f)`, while `contract_call_with_flags()` lets callers select a narrower flag mask explicitly.
 
 Underlying Neo syscall semantics are still:
 

@@ -2,6 +2,41 @@
 
 Rust-side RISC-V / PolkaVM runtime for Neo N3 `master-n3`, paired with a C# Neo core worktree that executes contracts through the Rust host instead of the legacy NeoVM execution loop.
 
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Neo N3 Blockchain (C#)                                  │
+│  ├─ ApplicationEngine                                   │
+│  └─ Neo.Riscv.Adapter Plugin ──────────────────┐        │
+└────────────────────────────────────────────────┼────────┘
+                                                 │ P/Invoke
+                                                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ neo-riscv-host (Rust)                                   │
+│  ├─ FFI Layer (libneo_riscv_host.so)                   │
+│  ├─ PolkaVM Runtime                                     │
+│  └─ Host Callbacks ◄──────────────────┐                │
+└────────────────────────────────────────┼────────────────┘
+                                         │ Syscalls
+                                         ▼
+┌─────────────────────────────────────────────────────────┐
+│ neo-riscv-guest (RISC-V no_std)                        │
+│  ├─ NeoVM Opcode Interpreter                           │
+│  ├─ Stack & Execution Context                          │
+│  └─ guest.polkavm (compiled blob)                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Data Flow:**
+
+1. C# receives contract execution request
+2. Adapter calls Rust host via FFI
+3. Host loads guest.polkavm and executes
+4. Guest interprets NeoVM opcodes
+5. Syscalls bridge back to C# for native contracts
+6. Result returns through FFI to C#
+
 ## What This Repository Contains
 
 - `crates/neo-riscv-abi`

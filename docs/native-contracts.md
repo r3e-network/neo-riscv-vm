@@ -1,6 +1,6 @@
 # Neo N3 Native Contracts Support
 
-⚠️ **ARCHITECTURE NOTE**: Native contract semantics remain defined and executed by the Neo N3 C# engine. The Rust devpack only provides thin bindings (via FFI) and does **not** reimplement native contract logic in Rust.
+⚠️ **ARCHITECTURE NOTE**: Native contract semantics remain defined and executed by the Neo N3 C# engine. The Rust devpack provides thin wrappers that route through `System.Contract.Call` via the guest/host FFI bridge; it does **not** reimplement native contract logic in Rust.
 
 ## Coverage
 
@@ -8,21 +8,21 @@ Neo N3 has 11 native contracts. The devpack intends to provide one Rust module p
 
 | Native contract | Rust module | Status |
 | --- | --- | --- |
-| ContractManagement | `native::contract_management` | Exposed (currently stubbed) |
-| StdLib | `native::std_lib` | Exposed (currently stubbed) |
-| CryptoLib | `native::crypto_lib` | Exposed (currently stubbed) |
-| LedgerContract | `native::ledger` | Exposed (currently stubbed) |
-| NeoToken | `native::neo_token` | Exposed (currently stubbed) |
-| GasToken | `native::gas_token` | Exposed (currently stubbed) |
-| PolicyContract | `native::policy` | Exposed (currently stubbed) |
-| RoleManagement | `native::role_management` | Exposed (currently stubbed) |
-| OracleContract | `native::oracle` | Exposed (currently stubbed) |
-| Notary | (planned) | Not yet exposed |
-| Treasury | (planned) | Not yet exposed |
+| ContractManagement | `native::contract_management` | Exposed |
+| StdLib | `native::std_lib` | Exposed |
+| CryptoLib | `native::crypto_lib` | Exposed |
+| LedgerContract | `native::ledger` | Exposed |
+| NeoToken | `native::neo_token` | Exposed |
+| GasToken | `native::gas_token` | Exposed |
+| PolicyContract | `native::policy` | Exposed |
+| RoleManagement | `native::role_management` | Exposed |
+| OracleContract | `native::oracle` | Exposed |
+| Notary | `native::notary` | Exposed |
+| Treasury | `native::treasury` | Exposed |
 
 ## Rust Surface (Current)
 
-The following lists the current Rust-facing names in `crates/neo-riscv-devpack/src/native/*`. These bindings are currently stubbed/scaffolding and will be wired to `System.Contract.Call`/`System.Contract.CallNative` in the C# engine.
+The following lists the current Rust-facing names in `crates/neo-riscv-devpack/src/native/*`. These bindings call native contracts through `System.Contract.Call` using the canonical Neo native hashes.
 
 ### NeoToken
 
@@ -104,8 +104,18 @@ The following lists the current Rust-facing names in `crates/neo-riscv-devpack/s
 
 ### Notary
 
-Not yet exposed in the Rust devpack.
+- `NOTARY_HASH`
+- `notary_balance_of`
+- `notary_expiration_of`
+- `notary_get_max_not_valid_before_delta`
+- `notary_lock_deposit_until`
+- `notary_withdraw`
+- `notary_verify`
+- `notary_set_max_not_valid_before_delta`
 
 ### Treasury
 
-Not yet exposed in the Rust devpack.
+- `TREASURY_HASH`
+- `treasury_verify`
+- `treasury_on_nep17_payment`
+- `treasury_on_nep11_payment`

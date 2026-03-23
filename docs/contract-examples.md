@@ -27,11 +27,11 @@
 
 - `runtime_notify` - Emit event
 - `runtime_log` - Write log
-- `runtime_check_witness` - Verify signature
+- `runtime_check_witness` - Verify witness
 
 ### System.Crypto
 
-- `crypto_verify_signature` - Verify ECDSA signature
+- `crypto_verify_signature` - Verify signature
 
 ## Build & Test
 

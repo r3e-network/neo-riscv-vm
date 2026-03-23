@@ -7,6 +7,7 @@ Constraints:
 - Must produce PolkaVM-compatible RISC-V binaries
 - Must integrate with existing Neo N3 manifest and deployment flow
 - Must provide familiar developer experience (similar to neo-devpack-dotnet)
+- Must reuse the existing C# Neo syscall and native-contract implementations as the source of truth
 
 ## Goals / Non-Goals
 
@@ -23,6 +24,8 @@ Constraints:
 - IDE integration (future work)
 - Contract debugging tools (future work)
 - Migration tools from NeoVM to RISC-V (future work)
+- Reimplementing Neo syscalls in Rust/RISC-V
+- Reimplementing Neo native contracts in Rust/RISC-V
 
 ## Decisions
 
@@ -47,8 +50,14 @@ Constraints:
 ### Decision 4: Syscall ABI
 
 **Choice:** Use PolkaVM syscall mechanism for Neo N3 interop
-**Rationale:** Already implemented in neo-riscv-guest
+**Rationale:** Already implemented in neo-riscv-guest, and it lets the existing C# Neo engine stay the only implementation of syscall semantics
 **Alternative:** Custom FFI → rejected, duplicates work
+
+### Decision 5: Native Contract Strategy
+
+**Choice:** Route native contract access back into the existing C# Neo system
+**Rationale:** Native contract behavior already exists there, is battle-tested there, and must remain the single source of truth
+**Alternative:** Reimplement native contracts in Rust → rejected, duplicates core logic and creates parity risk
 
 ## Risks / Trade-offs
 

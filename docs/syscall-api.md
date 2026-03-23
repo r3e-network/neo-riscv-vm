@@ -1,6 +1,8 @@
 # Syscall API Reference
 
-⚠️ **ARCHITECTURE NOTE**: These are Rust bindings that forward into the Neo N3 C# engine via FFI. Syscall semantics, permission checks, and native execution remain defined by C#.
+⚠️ **ARCHITECTURE NOTE**: These are Rust bindings that forward into the existing Neo N3 C# engine via FFI. Syscall semantics, permission checks, gas rules, and native execution remain defined by C#.
+
+The devpack is intentionally a binding layer, not a second implementation. We do **not** create a separate RISC-V version of the Neo syscall system; we reuse the existing C# syscall system as-is and keep that layer as the source of truth.
 
 ## Rust Devpack Surface
 

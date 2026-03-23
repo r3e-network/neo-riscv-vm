@@ -1,6 +1,13 @@
 # Neo N3 Native Contracts Support
 
-⚠️ **ARCHITECTURE NOTE**: Native contract semantics remain defined and executed by the Neo N3 C# engine. The Rust devpack provides thin wrappers that route through `System.Contract.Call` via the guest/host FFI bridge; it does **not** reimplement native contract logic in Rust.
+⚠️ **ARCHITECTURE NOTE**: Native contract semantics remain defined and executed by the existing Neo N3 C# engine. The Rust devpack provides thin wrappers that route through `System.Contract.Call` via the guest/host FFI bridge; it does **not** reimplement native contract logic in Rust.
+
+This is a hard architectural rule for the project:
+
+- Native contracts continue to live in the existing C# system.
+- The RISC-V/devpack layer only calls into that existing system.
+- We do **not** maintain a parallel RISC-V-native implementation of Neo native contracts.
+- When in doubt, prefer reusing the existing Neo C# implementation over adding Rust-side behavior.
 
 ## Coverage
 

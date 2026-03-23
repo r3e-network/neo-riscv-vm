@@ -4,6 +4,14 @@
 
 **We reuse existing C# syscalls and native contracts from neo-riscv-core.**
 
+This is an explicit architecture constraint, not an implementation detail:
+
+- The C# Neo engine remains the only source of truth for syscall behavior.
+- The C# Neo engine remains the only source of truth for native contract behavior.
+- The Rust/RISC-V side only forwards requests and adapts data at the FFI boundary.
+- We do **not** build a second RISC-V implementation of syscalls or native contracts.
+- We prefer reusing the existing Neo system wherever possible instead of duplicating it in Rust.
+
 The RISC-V VM does NOT reimplement syscalls or native contracts. Instead:
 
 1. **RISC-V contracts call host via FFI**

@@ -1129,16 +1129,13 @@ namespace Neo.SmartContract.RiscV
 
             var pushed = method.Descriptor.ReturnType != ContractParameterType.Void
                 ? request.Engine.Convert(returnValue)
-                : null;
-            var next = new StackItem[inputStack.Length - parameterCount - 1 + (pushed is null ? 0 : 1)];
+                : StackItem.Null;
+            var next = new StackItem[inputStack.Length - parameterCount - 1 + 1];
             if (inputStack.Length > parameterCount + 1)
             {
                 System.Array.Copy(inputStack, next, inputStack.Length - parameterCount - 1);
             }
-            if (pushed is not null)
-            {
-                next[^1] = pushed;
-            }
+            next[^1] = pushed;
             return next;
         }
 
@@ -1363,17 +1360,14 @@ namespace Neo.SmartContract.RiscV
 
             var pushed = method.Descriptor.ReturnType != ContractParameterType.Void
                 ? request.Engine.Convert(returnValue)
-                : null;
+                : StackItem.Null;
 
-            var next = new StackItem[inputStack.Length - 4 + (pushed is null ? 0 : 1)];
+            var next = new StackItem[inputStack.Length - 4 + 1];
             if (inputStack.Length > 4)
             {
                 System.Array.Copy(inputStack, next, inputStack.Length - 4);
             }
-            if (pushed is not null)
-            {
-                next[^1] = pushed;
-            }
+            next[^1] = pushed;
             return next;
         }
 

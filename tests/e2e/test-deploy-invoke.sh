@@ -13,11 +13,11 @@ echo "Generating manifest..."
 echo "Packaging contract..."
 ./scripts/package-contract.sh "$BINARY" manifest.json contract.nef
 
-# 3. Deploy (mock)
+# 3. Build deployment request
 echo "Deploying to testnet..."
 ./scripts/deploy-contract.sh contract.nef testnet
 
-# 4. Invoke (mock)
+# 4. Build invocation request
 echo "Invoking contract..."
 ./scripts/invoke-contract.sh 0x123 increment
 

@@ -1,16 +1,18 @@
-#!/bin/bash
-# Plugin loading validation test
+#!/usr/bin/env bash
+set -euo pipefail
 
-CORE_DIR="${CORE_DIR:-$HOME/git/neo-riscv-core}"
-ADAPTER_DIR="$CORE_DIR/../neo-riscv-vm/compat/Neo.Riscv.Adapter"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_DIR="${ROOT_DIR}/dist/Plugins/Neo.Riscv.Adapter"
 
-echo "Testing plugin loading..."
+echo "Testing plugin loading package..."
 
-# Check adapter builds
-cd "$ADAPTER_DIR"
-dotnet build -c Release
+dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+"${ROOT_DIR}/scripts/package-adapter-plugin.sh"
 
-# Check plugin can be discovered
-# TODO: Add actual plugin loading test with Neo.CLI
+test -f "${PLUGIN_DIR}/Neo.Riscv.Adapter.dll"
 
-echo "✓ Plugin loading validation placeholder"
+if [[ "$(uname -s)" == "Linux" ]]; then
+  test -f "${PLUGIN_DIR}/libneo_riscv_host.so"
+fi
+
+echo "✓ Plugin package built and validated"

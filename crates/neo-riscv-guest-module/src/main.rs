@@ -1,5 +1,5 @@
-#![no_std]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(target_arch = "riscv32", no_std)]
+#![cfg_attr(target_arch = "riscv32", no_main)]
 
 extern crate alloc;
 
@@ -171,7 +171,7 @@ unsafe impl GlobalAlloc for ResettableBumpAllocator {
 
 /// Capture panic message into PANIC_BUF for host-side diagnostics.
 /// No heap allocation: writes directly into the static buffer.
-#[cfg(not(test))]
+#[cfg(target_arch = "riscv32")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     struct BufWriter {
@@ -201,13 +201,16 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-#[cfg(not(test))]
+#[cfg(target_arch = "riscv32")]
 #[no_mangle]
 pub extern "C" fn _start() {}
 
-#[cfg(not(test))]
+#[cfg(target_arch = "riscv32")]
 #[no_mangle]
 pub extern "C" fn main() {}
+
+#[cfg(not(target_arch = "riscv32"))]
+fn main() {}
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]

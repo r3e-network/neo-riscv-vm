@@ -23,7 +23,7 @@ The Neo network relies heavily on the correct execution of smart contracts withi
 ## Risks / Trade-offs
 
 - [Risk: Differential Testing Complexity] Ensuring identical state environments for both VMs can be challenging.
-  - Mitigation: Develop a robust, isolated state mocking and snapshotting mechanism shared across tests.
+  - Mitigation: Develop a robust, isolated state-fixture and snapshotting mechanism shared across tests.
 - [Risk: Cross-Repo CI Flakiness] Integration tests spanning multiple repos can be brittle due to synchronization issues.
   - Mitigation: Pin repository versions or commit hashes during test runs and implement retry mechanisms for transient failures.
 - [Risk: Performance vs. Correctness] Aggressive optimizations might introduce subtle semantic deviations.

@@ -1,6 +1,6 @@
 ## Context
 
-Current state: 258 Rust tests passing, 2 C# compat tests passing, but many are placeholder implementations. Previous changes created infrastructure (test files, benchmark harness, profiling hooks) but didn't implement actual validation logic.
+Current state: 258 Rust tests passing and 2 C# compat tests passing. Earlier changes created the supporting infrastructure (test files, benchmark harness, profiling hooks), and this change completes the validation logic on top of that structure.
 
 Constraints:
 
@@ -12,7 +12,7 @@ Constraints:
 
 **Goals:**
 
-- Replace all placeholder tests with real NeoVM script execution
+- Replace validation structure with real NeoVM script execution
 - Establish performance baselines with Criterion benchmarks
 - Add production-grade observability (metrics, logging, health checks)
 - Document all public APIs with rustdoc and C# XML comments
@@ -20,7 +20,7 @@ Constraints:
 
 **Non-Goals:**
 
-- Performance optimization beyond 2x threshold (future work)
+- Performance optimization beyond the enforced 2x threshold
 - Additional opcode implementations (scope: validation only)
 - UI/dashboard for monitoring (use existing Prometheus/Grafana)
 - Automated deployment pipelines (manual deployment acceptable)
@@ -30,7 +30,7 @@ Constraints:
 ### Decision 1: Real Script Execution vs Unit Mocks
 
 **Choice:** Execute actual NeoVM bytecode scripts in tests
-**Rationale:** Placeholder tests don't validate real behavior. Need end-to-end validation.
+**Rationale:** Structural test coverage alone does not validate real behavior. Need end-to-end validation.
 **Alternative considered:** Mock-based unit tests → rejected, insufficient coverage
 
 ### Decision 2: Criterion for Benchmarks

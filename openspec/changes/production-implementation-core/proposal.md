@@ -1,10 +1,10 @@
 ## Why
 
-Previous validation infrastructure created placeholder implementations for tests, benchmarks, and monitoring. Production deployment requires actual implementations with real contract execution, performance baselines, and operational observability.
+Previous validation infrastructure established the shape of tests, benchmarks, and monitoring. Production deployment requires full execution validation, performance baselines, and operational observability.
 
 ## What Changes
 
-- Convert placeholder opcode tests to real NeoVM script execution tests
+- Convert opcode validation structure into real NeoVM script execution tests
 - Implement actual performance benchmarks with baseline measurements against native NeoVM
 - Add production monitoring with Prometheus metrics and structured logging
 - Write essential API documentation (rustdoc + XML docs)

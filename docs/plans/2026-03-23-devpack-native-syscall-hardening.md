@@ -171,7 +171,7 @@ Verify naming, module exports, docs, and tests are mutually consistent.
 
 **Step 2: Remove dead code/imports**
 
-Eliminate stale imports and placeholder comments that no longer match behavior.
+Eliminate stale imports and outdated comments that no longer match behavior.
 
 **Step 3: Final status report**
 

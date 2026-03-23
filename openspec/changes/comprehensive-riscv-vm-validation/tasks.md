@@ -14,7 +14,7 @@
 
 ## 3. Parity Validation Setup
 
-- [x] 3.1 Integrate state mocking and snapshotting for differential testing
+- [x] 3.1 Integrate state fixtures and snapshotting for differential testing
 - [x] 3.2 Implement state equality assertions (storage, return values, events)
 - [x] 3.3 Implement gas consumption parity checking or establish bounds
 - [x] 3.4 Execute comprehensive test suite with NeoVM baseline and investigate failures

@@ -21,9 +21,9 @@ Constraints:
 **Non-Goals:**
 
 - C# language support (use existing neo-devpack-dotnet for NeoVM)
-- IDE integration (future work)
-- Contract debugging tools (future work)
-- Migration tools from NeoVM to RISC-V (future work)
+- IDE integration in this change set
+- Contract debugging tools in this change set
+- Migration tools from NeoVM to RISC-V in this change set
 - Reimplementing Neo syscalls in Rust/RISC-V
 - Reimplementing Neo native contracts in Rust/RISC-V
 
@@ -68,7 +68,7 @@ Constraints:
 → **Mitigation:** Use release builds with LTO, document size limits
 
 **Risk:** Debugging harder than C# contracts
-→ **Accepted:** Future work, use logging for now
+→ **Accepted:** Use logging and diagnostics for this change set
 
 **Trade-off:** Rust-only initially (no C# support)
 → **Accepted:** Focus on one language, expand later

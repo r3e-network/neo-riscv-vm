@@ -108,7 +108,7 @@ pub fn runtime_log(message: &str)
 pub fn runtime_check_witness(hash: &[u8]) -> bool
 ```
 
-There is also a separate placeholder module:
+There is also a convenience wrapper module:
 
 ```rust
 pub mod events {

@@ -1,0 +1,8 @@
+{
+  "mainnet": {
+    "rpc": "http://seed1.neo.org:10332"
+  },
+  "testnet": {
+    "rpc": "http://seed1t5.neo.org:20332"
+  }
+}

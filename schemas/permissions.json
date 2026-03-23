@@ -1,0 +1,9 @@
+{
+  "permissions": [
+    {
+      "contract": "*",
+      "methods": "*"
+    }
+  ],
+  "trusts": []
+}

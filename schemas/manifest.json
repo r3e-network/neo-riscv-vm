@@ -1,0 +1,13 @@
+{
+  "name": "ContractName",
+  "groups": [],
+  "features": {},
+  "supportedstandards": [],
+  "abi": {
+    "methods": [],
+    "events": []
+  },
+  "permissions": [],
+  "trusts": [],
+  "extra": null
+}

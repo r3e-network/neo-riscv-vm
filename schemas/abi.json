@@ -1,0 +1,17 @@
+{
+  "methods": [
+    {
+      "name": "methodName",
+      "parameters": [],
+      "returntype": "Integer",
+      "offset": 0,
+      "safe": false
+    }
+  ],
+  "events": [
+    {
+      "name": "eventName",
+      "parameters": []
+    }
+  ]
+}

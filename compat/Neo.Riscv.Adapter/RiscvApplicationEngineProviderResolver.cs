@@ -8,7 +8,6 @@
 
 using System;
 using System.IO;
-using Neo.Plugins;
 
 namespace Neo.SmartContract.RiscV
 {
@@ -61,14 +60,13 @@ namespace Neo.SmartContract.RiscV
         private static string[] GetDefaultCandidates()
         {
             var fileName = GetPlatformFileName();
-            var pluginRoot = Path.Combine(
-                Plugin.PluginsDirectory,
-                typeof(RiscvAdapterPlugin).Assembly.GetName().Name ?? "Neo.Riscv.Adapter");
+            var assemblyName = typeof(RiscvAdapterPlugin).Assembly.GetName().Name ?? "Neo.Riscv.Adapter";
             return
             [
                 // Preferred: ship the native library inside the adapter plugin folder.
                 // This enables a "drop-in" Plugins bundle with no environment variables.
-                Path.Combine(pluginRoot, fileName),
+                Path.Combine(AppContext.BaseDirectory, "Plugins", assemblyName, fileName),
+                Path.Combine(Environment.CurrentDirectory, "Plugins", assemblyName, fileName),
                 Path.Combine(AppContext.BaseDirectory, fileName),
                 Path.Combine(Environment.CurrentDirectory, fileName),
             ];

@@ -1,5 +1,4 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Neo.Plugins;
 using Neo.SmartContract.RiscV;
 using System;
 using System.IO;
@@ -19,7 +18,7 @@ public class UT_RiscvApplicationEngineProviderResolver
             RiscvApplicationEngineProviderResolver.ResetForTesting();
 
             var fileName = GetPlatformFileName();
-            var pluginRoot = Path.Combine(Plugin.PluginsDirectory, "Neo.Riscv.Adapter");
+            var pluginRoot = Path.Combine(AppContext.BaseDirectory, "Plugins", "Neo.Riscv.Adapter");
             Directory.CreateDirectory(pluginRoot);
             var expected = Path.Combine(pluginRoot, fileName);
 
@@ -50,4 +49,3 @@ public class UT_RiscvApplicationEngineProviderResolver
         return "libneo_riscv_host.so";
     }
 }
-

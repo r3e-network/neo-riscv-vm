@@ -13,6 +13,8 @@ Key facts:
 - Existing C# syscalls and native contracts remain the source of truth.
 - The RISC-V bridge/provider code now lives in `neo-riscv-vm/compat/Neo.Riscv.Adapter`, not in `neo-riscv-core`.
 - Full integrated validation passed across `neo-riscv-vm`, `neo-riscv-core`, and `neo-riscv-node`.
+- Core test compilation no longer depends on a direct sibling adapter project reference.
+- Plugin startup no longer aborts the process when a config watcher cannot be allocated.
 
 ## Verification Evidence
 

@@ -12,6 +12,7 @@ The current committed implementation is a validated three-repo workspace integra
 - `neo-riscv-node` is validated against the packaged adapter bundle, including CLI smoke coverage.
 - Existing C# syscall and native-contract implementations remain the only source of truth.
 - `neo-riscv-core` test compilation no longer requires a direct sibling `ProjectReference` to the adapter project.
+- repeated plugin initialization no longer hard-fails when a `FileSystemWatcher` cannot be created.
 
 ## Architecture Reality
 
@@ -19,6 +20,7 @@ The current committed implementation is a validated three-repo workspace integra
 
 - NeoVM compatibility is provided by the Rust guest interpreter running on top of PolkaVM.
 - The adapter plugin registers `ApplicationEngine.Provider` and resolves the native host library.
+- Adapter library lookup now resolves from straightforward published/plugin filesystem locations rather than depending on `Neo.Plugins.Plugin` static initialization.
 - Core is generic and now expects provider injection instead of auto-resolving an in-core RISC-V engine.
 - Native contract execution and syscall behavior are still executed and charged in C#.
 

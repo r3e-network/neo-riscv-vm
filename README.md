@@ -12,6 +12,7 @@ The current committed implementation is a plugin-first, cross-repo integration:
 - `neo-riscv-core` now stays generic and no longer carries an in-core `Neo.SmartContract.RiscV` bridge implementation.
 - `neo-riscv-node` is validated with the packaged adapter bundle and CLI smoke coverage.
 - Existing C# syscall and native-contract logic remains the source of truth.
+- core test compilation no longer depends on a direct sibling adapter project reference.
 
 This preserves contract compatibility while avoiding a second Rust/RISC-V implementation of syscalls or native contracts.
 
@@ -61,6 +62,7 @@ Key architectural rules:
 - C# remains the syscall and native-contract source of truth.
 - The adapter package owns the RISC-V bridge/provider implementation.
 - Core is now generic: no in-core `Neo.SmartContract.RiscV` subtree remains.
+- Repeated plugin/test startup no longer hard-fails when a filesystem watcher cannot be allocated.
 - The current validation/deployment model is a packaged plugin bundle, not a zero-diff upstream drop-in.
 
 ## Quick Start

@@ -1,0 +1,60 @@
+[package]
+name = "neo-riscv-fuzz"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+neo-riscv-guest = { path = "../crates/neo-riscv-guest" }
+neo-riscv-abi = { path = "../crates/neo-riscv-abi" }
+libfuzzer-sys = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "opcode_seq"
+path = "src/opcode_seq.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "type_convert"
+path = "src/type_convert.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stack_ops"
+path = "src/stack_ops.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exception_handling"
+path = "src/exception_handling.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "syscall_fuzz"
+path = "src/syscall_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mem_op"
+path = "src/mem_op.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

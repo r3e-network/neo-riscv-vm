@@ -1,0 +1,46 @@
+# Seed corpus for opcode_seq fuzzer
+# Format: Each line is a hex-encoded script
+
+# Simple push+ret
+11 40
+
+# Addition
+11 12 9e 40
+
+# Stack operations
+11 11 4a 40
+11 45 40
+11 11 50 40
+
+# Jumps
+22 05 11 40
+28 05 11 40 40
+
+# Exception handling
+3b 05 0d 11 3d 40
+3a 40
+
+# Type conversions
+11 d9 10 40
+11 db 10 40
+
+# Compound types
+11 c2 40
+11 c8 40
+
+# Bitwise
+11 12 91 40
+11 12 92 40
+
+# Arithmetic
+11 12 9e 40
+11 12 9f 40
+11 12 a0 40
+11 12 a1 40
+11 12 a2 40
+
+# Syscall
+41 f6fc79b2 40
+
+# PUSHDATA
+0c 05 68656c6c 6f 40

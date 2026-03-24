@@ -7,8 +7,13 @@ use alloc::{
 
 use crate::StackValue;
 
+#[inline]
 pub fn encode_stack_result(result: &Result<Vec<StackValue>, String>) -> Vec<u8> {
-    let mut out = Vec::new();
+    let capacity = match result {
+        Ok(stack) => 1 + 4 + stack.len() * 16,
+        Err(msg) => 1 + 4 + msg.len(),
+    };
+    let mut out = Vec::with_capacity(capacity);
     match result {
         Ok(stack) => {
             out.push(0);
@@ -75,11 +80,14 @@ pub fn decode_stack_result(bytes: &[u8]) -> Result<Result<Vec<StackValue>, Strin
     Ok(value)
 }
 
+#[inline]
 fn encode_stack_value(value: &StackValue, out: &mut Vec<u8>) {
     match value {
         StackValue::Integer(value) => {
             out.push(0);
-            out.extend_from_slice(&value.to_le_bytes());
+            let mut buf = [0u8; 8];
+            buf.copy_from_slice(&value.to_le_bytes());
+            out.extend_from_slice(&buf);
         }
         StackValue::BigInteger(bytes) => {
             out.push(1);
@@ -117,20 +125,27 @@ fn encode_stack_value(value: &StackValue, out: &mut Vec<u8>) {
         }
         StackValue::Interop(handle) => {
             out.push(7);
-            out.extend_from_slice(&handle.to_le_bytes());
+            let mut buf = [0u8; 8];
+            buf.copy_from_slice(&handle.to_le_bytes());
+            out.extend_from_slice(&buf);
         }
         StackValue::Iterator(handle) => {
             out.push(8);
-            out.extend_from_slice(&handle.to_le_bytes());
+            let mut buf = [0u8; 8];
+            buf.copy_from_slice(&handle.to_le_bytes());
+            out.extend_from_slice(&buf);
         }
         StackValue::Null => out.push(9),
         StackValue::Pointer(value) => {
             out.push(10);
-            out.extend_from_slice(&value.to_le_bytes());
+            let mut buf = [0u8; 8];
+            buf.copy_from_slice(&value.to_le_bytes());
+            out.extend_from_slice(&buf);
         }
     }
 }
 
+#[inline]
 fn decode_stack_value(cursor: &mut Cursor<'_>) -> Result<StackValue, String> {
     match cursor.read_u8()? {
         0 => Ok(StackValue::Integer(cursor.read_i64()?)),
@@ -171,12 +186,18 @@ fn decode_stack_value(cursor: &mut Cursor<'_>) -> Result<StackValue, String> {
     }
 }
 
+#[inline]
 fn encode_u32(value: u32, out: &mut Vec<u8>) {
-    out.extend_from_slice(&value.to_le_bytes());
+    let mut buf = [0u8; 4];
+    buf.copy_from_slice(&value.to_le_bytes());
+    out.extend_from_slice(&buf);
 }
 
+#[inline]
 fn encode_bytes(bytes: &[u8], out: &mut Vec<u8>) {
-    encode_u32(bytes.len() as u32, out);
+    let mut len_buf = [0u8; 4];
+    len_buf.copy_from_slice(&(bytes.len() as u32).to_le_bytes());
+    out.extend_from_slice(&len_buf);
     out.extend_from_slice(bytes);
 }
 

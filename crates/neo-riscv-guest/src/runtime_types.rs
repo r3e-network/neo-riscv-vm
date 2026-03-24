@@ -91,24 +91,27 @@ impl CompoundIds {
             AbiStackValue::Boolean(value) => StackValue::Boolean(value),
             AbiStackValue::Pointer(value) => StackValue::Pointer(value as usize),
             AbiStackValue::Array(items) => {
-                let imported = items
-                    .into_iter()
-                    .map(|item| self.import_abi(item))
-                    .collect();
+                let len = items.len();
+                let mut imported = Vec::with_capacity(len);
+                for item in items {
+                    imported.push(self.import_abi(item));
+                }
                 self.array(imported)
             }
             AbiStackValue::Struct(items) => {
-                let imported = items
-                    .into_iter()
-                    .map(|item| self.import_abi(item))
-                    .collect();
+                let len = items.len();
+                let mut imported = Vec::with_capacity(len);
+                for item in items {
+                    imported.push(self.import_abi(item));
+                }
                 self.r#struct(imported)
             }
             AbiStackValue::Map(items) => {
-                let imported = items
-                    .into_iter()
-                    .map(|(key, value)| (self.import_abi(key), self.import_abi(value)))
-                    .collect();
+                let len = items.len();
+                let mut imported = Vec::with_capacity(len);
+                for (key, value) in items {
+                    imported.push((self.import_abi(key), self.import_abi(value)));
+                }
                 self.map(imported)
             }
             AbiStackValue::Interop(handle) => StackValue::Interop(handle),
@@ -118,6 +121,7 @@ impl CompoundIds {
     }
 }
 
+#[inline]
 pub(crate) fn to_abi_stack(stack: &[StackValue]) -> Vec<AbiStackValue> {
     let mut abi = Vec::with_capacity(stack.len().max(8));
     for item in stack {
@@ -126,6 +130,7 @@ pub(crate) fn to_abi_stack(stack: &[StackValue]) -> Vec<AbiStackValue> {
     abi
 }
 
+#[inline]
 pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
     match value {
         StackValue::Integer(value) => AbiStackValue::Integer(*value),
@@ -161,6 +166,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
     }
 }
 
+#[inline]
 fn clone_bytes(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     out.extend_from_slice(bytes);

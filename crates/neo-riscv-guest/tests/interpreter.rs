@@ -2119,7 +2119,7 @@ fn calla_calls_address() {
 
 #[test]
 fn toaltstack_fromaltstack_round_trip() {
-    // PUSH5, TOALTSTACK, PUSH3, FROMALTSTACK → stack [3, 5]
+    // PUSH5, TOALTSTACK, PUSH3, FROMALTSTACK -> stack [3, 5]
     let script: &[u8] = &[
         0x15, // PUSH5
         0x06, // TOALTSTACK

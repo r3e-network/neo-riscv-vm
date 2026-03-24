@@ -147,17 +147,17 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         .map(|item| ids.import_abi(item))
         .collect::<Vec<_>>();
     let mut ip = initial_ip;
-    let mut locals: Vec<StackValue> = Vec::new();
-    let mut static_fields: Vec<StackValue> = Vec::new();
+    let mut locals: Vec<StackValue> = Vec::with_capacity(16);
+    let mut static_fields: Vec<StackValue> = Vec::with_capacity(16);
     let mut locals_initialized = false;
     let mut static_fields_initialized = false;
-    let mut alt_stack: Vec<StackValue> = Vec::new();
+    let mut alt_stack: Vec<StackValue> = Vec::with_capacity(16);
     let mut try_frames = TryStack::new();
-    let mut call_stack: Vec<usize> = Vec::new();
+    let mut call_stack: Vec<usize> = Vec::with_capacity(16);
     let mut pending_error: Option<String> = None;
 
     'main_loop: loop {
-        if let Some(ref err_msg) = pending_error {
+        if pending_error.is_some() {
             // Find the topmost un-caught frame
             if let Some(frame) = try_frames.find_uncaught_mut() {
                 frame.caught = true;
@@ -167,29 +167,26 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 // TryFrame backing buffer.  Copying into stack locals avoids the stale read.
                 let saved_catch_ip = frame.catch_ip;
                 let saved_finally_ip = frame.finally_ip;
-                let error_msg = err_msg.clone();
                 // NeoVM: error goes to catch first, then finally
                 if saved_catch_ip != 0 {
-                    stack.push(StackValue::ByteString(err_msg.as_bytes().to_vec()));
-                    pending_error = None;
+                    let msg = pending_error.take().unwrap();
+                    stack.push(StackValue::ByteString(msg.into_bytes()));
                     ip = saved_catch_ip;
                 } else if saved_finally_ip != 0 {
-                    // Finally-only: save error for re-throw after ENDFINALLY
                     frame.in_finally = true;
                     ip = saved_finally_ip;
-                    pending_error = Some(error_msg);
+                    // Keep pending_error for re-throw after ENDFINALLY
                 } else {
                     pending_error = None;
                     continue;
                 }
                 continue;
             } else {
-                return Err(err_msg.clone());
+                return Err(pending_error.take().unwrap());
             }
         }
 
         // Stack overflow check: NeoVM faults when stack exceeds 2048 items.
-        // Checked here (top of loop) so it fires AFTER the previous instruction pushed.
         if stack.len() > 2048 {
             return Err("stack overflow".to_string());
         }
@@ -258,8 +255,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if ip + 17 > script.len() {
                     return Err("truncated PUSHINT128 operand".to_string());
                 }
-                stack.push(StackValue::BigInteger(trim_le_bytes(
-                    script[ip + 1..ip + 17].to_vec(),
+                stack.push(StackValue::BigInteger(trim_le_bytes_slice(
+                    &script[ip + 1..ip + 17],
                 )));
                 ip += 17;
                 continue;
@@ -268,8 +265,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if ip + 33 > script.len() {
                     return Err("truncated PUSHINT256 operand".to_string());
                 }
-                stack.push(StackValue::BigInteger(trim_le_bytes(
-                    script[ip + 1..ip + 33].to_vec(),
+                stack.push(StackValue::BigInteger(trim_le_bytes_slice(
+                    &script[ip + 1..ip + 33],
                 )));
                 ip += 33;
                 continue;

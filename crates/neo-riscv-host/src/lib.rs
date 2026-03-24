@@ -129,16 +129,15 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    let aux_size = required_aux_size(script.len() as u32, initial_stack_bytes_len(&initial_stack));
-    let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;
-    let mut host = ClosureHost::new(context, &mut callback);
-    let aux_base = cached_instance.module().memory_map().aux_data_address();
-    let instance = cached_instance.instance_mut();
-
     let script_len = script.len() as u32;
     let initial_stack_bytes = postcard::to_allocvec(&initial_stack)
         .map_err(|e| format!("failed to serialize initial stack: {e}"))?;
     let stack_len = initial_stack_bytes.len() as u32;
+    let aux_size = required_aux_size(script_len, stack_len);
+    let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;
+    let mut host = ClosureHost::new(context, &mut callback);
+    let aux_base = cached_instance.module().memory_map().aux_data_address();
+    let instance = cached_instance.instance_mut();
     let stack_offset = align_up_u32(script_len, 8);
     let script_ptr = if script_len > 0 { aux_base } else { 0 };
     let stack_ptr = if stack_len > 0 {
@@ -239,16 +238,15 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    let aux_size = required_aux_size(script.len() as u32, initial_stack_bytes_len(&initial_stack));
-    let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;
-    let mut host = ClosureHost::new(context, &mut callback);
-    let aux_base = cached_instance.module().memory_map().aux_data_address();
-    let instance = cached_instance.instance_mut();
-
     let script_len = script.len() as u32;
     let initial_stack_bytes = postcard::to_allocvec(&initial_stack)
         .map_err(|e| format!("failed to serialize initial stack: {e}"))?;
     let stack_len = initial_stack_bytes.len() as u32;
+    let aux_size = required_aux_size(script_len, stack_len);
+    let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;
+    let mut host = ClosureHost::new(context, &mut callback);
+    let aux_base = cached_instance.module().memory_map().aux_data_address();
+    let instance = cached_instance.instance_mut();
     let stack_offset = align_up_u32(script_len, 8);
     let script_ptr = if script_len > 0 { aux_base } else { 0 };
     let stack_ptr = if stack_len > 0 {
@@ -344,12 +342,6 @@ where
     }
 
     result
-}
-
-fn initial_stack_bytes_len(initial_stack: &[neo_riscv_abi::StackValue]) -> u32 {
-    postcard::to_allocvec(initial_stack)
-        .map(|bytes| bytes.len() as u32)
-        .unwrap_or(0)
 }
 
 fn align_up_u32(value: u32, align: u32) -> u32 {

@@ -9,6 +9,7 @@ use alloc::{
     vec::Vec,
 };
 
+#[inline]
 pub(crate) fn peek_item(stack: &[StackValue]) -> Result<StackValue, String> {
     stack
         .last()
@@ -16,10 +17,12 @@ pub(crate) fn peek_item(stack: &[StackValue]) -> Result<StackValue, String> {
         .ok_or_else(|| "stack underflow".to_string())
 }
 
+#[inline]
 pub(crate) fn pop_item(stack: &mut Vec<StackValue>) -> Result<StackValue, String> {
     stack.pop().ok_or_else(|| "stack underflow".to_string())
 }
 
+#[inline]
 pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
     match stack.pop() {
         Some(StackValue::Integer(value)) => Ok(value),
@@ -376,6 +379,7 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
     }
 }
 
+#[inline]
 pub(crate) fn numeric_value(value: &StackValue) -> Result<i64, String> {
     match value {
         StackValue::Integer(value) => Ok(*value),
@@ -388,6 +392,7 @@ pub(crate) fn numeric_value(value: &StackValue) -> Result<i64, String> {
     }
 }
 
+#[inline]
 pub(crate) fn boolean_value(value: &StackValue) -> Result<bool, String> {
     match value {
         StackValue::Boolean(value) => Ok(*value),
@@ -477,6 +482,7 @@ impl ShiftValue {
     }
 }
 
+#[inline]
 pub(crate) fn pop_boolean(stack: &mut Vec<StackValue>) -> Result<bool, String> {
     match stack.pop() {
         Some(StackValue::Boolean(value)) => Ok(value),
@@ -822,4 +828,27 @@ where
         result.push(op(lb, rb));
     }
     Ok(result)
+}
+
+#[inline]
+pub(crate) fn trim_le_bytes_slice(bytes: &[u8]) -> Vec<u8> {
+    if bytes.is_empty() {
+        return Vec::new();
+    }
+
+    let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
+        0xff
+    } else {
+        0x00
+    };
+    let mut end = bytes.len();
+    while end > 1 && bytes[end - 1] == sign_extend {
+        let next = bytes[end - 2];
+        if (next & 0x80 != 0) == (sign_extend == 0xff) {
+            end -= 1;
+        } else {
+            break;
+        }
+    }
+    bytes[..end].to_vec()
 }

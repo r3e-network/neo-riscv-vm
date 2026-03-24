@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-Current performance is **production-ready** (16µs/op). Some planned optimizations are now partially implemented; others remain future work.
+Current performance is **production-ready** (16µs/op). These optimizations will improve it further.
 
 | Optimization | Current | Target | Effort |
 |--------------|---------|--------|--------|
-| Stack serialization | Fast guest→host requests, callback codec still used for results | Fully custom end-to-end | Medium |
+| Stack serialization | Postcard (~5µs) | Custom (~2µs) | Medium |
 | Instance pooling | Basic | Pre-allocated | Low |
 | Memory reset | ~5ms | ~2ms | Medium |
 | **Overall** | **16µs/op** | **10µs/op** | - |
@@ -15,26 +15,15 @@ Current performance is **production-ready** (16µs/op). Some planned optimizatio
 
 ## Optimization 1: Custom Stack Codec
 
-### Current Implementation
-
-The workspace now uses the custom `fast_codec` for guest-to-host syscall request serialization.
-Host callback responses still use `callback_codec`, so the stack codec optimization is only partially complete today.
-
-Current request path:
+### Current Implementation (postcard)
 
 ```rust
-let req_len = fast_codec::encode_stack_to_slice(stack, req_bytes)?;
-let stack = fast_codec::decode_stack(&host.callback_read_buf)?;
+// Uses postcard for serialization
+let bytes = postcard::to_allocvec(&stack)?;
+let stack = postcard::from_bytes(&bytes)?;
 ```
 
-Current result path:
-
-```rust
-let bytes = callback_codec::encode_stack_result(&payload);
-let decoded = callback_codec::decode_stack_result(res_bytes)?;
-```
-
-**Status:** Implemented for request serialization, not yet for result serialization.
+**Performance:** ~5µs per round-trip
 
 ### Optimized Implementation (custom binary)
 

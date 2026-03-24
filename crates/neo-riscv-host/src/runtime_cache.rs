@@ -51,36 +51,9 @@ impl Drop for CachedExecutionInstance {
     }
 }
 
-/// Pre-allocated pool configurations: (aux_size, instance_count)
-const PREALLOCATED_POOLS: [(u32, usize); 3] = [
-    (0, 5),                 // No aux data (most common)
-    (65536, 3),            // 64KB aux (medium contracts)
-    (1048576, 2),          // 1MB aux (large contracts)
-];
-
 pub(crate) fn ensure_runtime_ready() -> Result<(), String> {
     let _ = cached_engine()?;
     let _ = guest_blob()?;
-    preallocate_pools()?;
-    Ok(())
-}
-
-/// Pre-allocate execution instances for common aux sizes
-fn preallocate_pools() -> Result<(), String> {
-    for (aux_size, count) in PREALLOCATED_POOLS {
-        let instance_pre = cached_instance_pre(aux_size)?;
-        let pool = EXECUTION_INSTANCES.get_or_init(|| Mutex::new(HashMap::new()));
-        
-        let instances: Result<Vec<_>, _> = (0..count)
-            .map(|_| instance_pre.instantiate().map_err(|e| e.to_string()))
-            .collect();
-        
-        if let Ok(instances) = instances {
-            if let Ok(mut guard) = pool.lock() {
-                guard.entry(aux_size).or_default().extend(instances);
-            }
-        }
-    }
     Ok(())
 }
 

@@ -1,5 +1,4 @@
 use neo_riscv_abi::callback_codec::{decode_stack_result, encode_stack_result};
-use neo_riscv_abi::fast_codec::{decode_stack, encode_stack, encode_stack_to_slice};
 use neo_riscv_abi::{interop_hash, StackValue};
 
 // ---------------------------------------------------------------------------
@@ -17,12 +16,6 @@ fn round_trip_stack(stack: Vec<StackValue>) {
     let bytes = encode_stack_result(&original);
     let decoded = decode_stack_result(&bytes).expect("decode failed");
     assert_eq!(original, Ok(decoded.unwrap()));
-}
-
-fn round_trip_fast_stack(stack: Vec<StackValue>) {
-    let bytes = encode_stack(&stack);
-    let decoded = decode_stack(&bytes).expect("fast decode failed");
-    assert_eq!(stack, decoded);
 }
 
 // ===========================================================================
@@ -266,60 +259,6 @@ fn multi_item_stack_round_trip() {
         StackValue::Boolean(true),
         StackValue::ByteString(b"end".to_vec()),
     ]);
-}
-
-#[test]
-fn fast_codec_round_trip_with_mixed_stack() {
-    round_trip_fast_stack(vec![
-        StackValue::Integer(7),
-        StackValue::Boolean(true),
-        StackValue::Null,
-        StackValue::ByteString(b"neo".to_vec()),
-        StackValue::BigInteger(vec![0xaa, 0xbb, 0xcc]),
-        StackValue::Array(vec![StackValue::Integer(1), StackValue::Null]),
-        StackValue::Struct(vec![StackValue::Boolean(false)]),
-        StackValue::Map(vec![(StackValue::Integer(1), StackValue::ByteString(b"x".to_vec()))]),
-        StackValue::Interop(9),
-        StackValue::Iterator(11),
-        StackValue::Pointer(-3),
-    ]);
-}
-
-#[test]
-fn fast_codec_slice_encoding_matches_owned_encoding() {
-    let stack = vec![
-        StackValue::Integer(42),
-        StackValue::ByteString(b"buffer".to_vec()),
-        StackValue::Array(vec![StackValue::Boolean(true), StackValue::Null]),
-    ];
-
-    let encoded = encode_stack(&stack);
-    let mut buf = vec![0u8; encoded.len()];
-    let written = encode_stack_to_slice(&stack, &mut buf).expect("fast slice encode failed");
-
-    assert_eq!(written, encoded.len());
-    assert_eq!(&buf[..written], encoded.as_slice());
-}
-
-#[test]
-fn fast_codec_slice_encoding_overflow_returns_error() {
-    let stack = vec![
-        StackValue::ByteString(vec![1, 2, 3, 4]),
-        StackValue::Integer(99),
-    ];
-    let mut buf = [0u8; 4];
-
-    let result = encode_stack_to_slice(&stack, &mut buf);
-
-    assert!(result.is_err(), "small output buffer must return an error");
-}
-
-#[test]
-fn fast_codec_truncated_input_returns_error() {
-    let bytes = [0x02, 0x00, 0x00];
-    let result = decode_stack(&bytes);
-
-    assert!(result.is_err(), "truncated fast-codec input must return an error");
 }
 
 #[test]

@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
 use core::ptr::NonNull;
-use neo_riscv_abi::{callback_codec, fast_codec, ExecutionResult, StackValue};
+use neo_riscv_abi::{callback_codec, ExecutionResult, StackValue};
 use neo_riscv_guest::SyscallProvider;
 
 const ARENA_SIZE: usize = 256 * 1024 * 1024;
@@ -260,9 +260,8 @@ impl SyscallProvider for PolkaVmSyscallProvider {
         }
         let req_bytes = unsafe { REQ_BUF.as_mut_slice(REQ_BUF.len()) };
         req_bytes.fill(0);
-        let req_len = fast_codec::encode_stack_to_slice(stack, req_bytes)
-            .map_err(|_| "failed to serialize stack")?;
-        let req_bytes = &req_bytes[..req_len];
+        let req_bytes =
+            postcard::to_slice(stack, req_bytes).map_err(|_| "failed to serialize stack")?;
         unsafe {
             TRACE_SYSCALL_STAGE = 2;
             TRACE_REQ_LEN = req_bytes.len().min(u32::MAX as usize) as u32;

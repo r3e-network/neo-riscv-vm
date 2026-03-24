@@ -54,7 +54,7 @@ Fresh committed-state verification passed with:
 
 - `./scripts/verify-all.sh`
   - full NeoVM JSON corpus runner (`161` copied corpus files)
-  - adapter tests (`7`)
+  - adapter tests (`10`)
 - `./tests/e2e/run-all.sh`
 - `./scripts/test-ffi-resolution.sh`
 - `dotnet build src/Neo/Neo.csproj` in `neo-riscv-core`

@@ -36,7 +36,7 @@ The canonical full validation command is:
 ### Compatibility / adapter
 
 - copied NeoVM JSON corpus files: `161`
-- adapter tests: `7`
+- adapter tests: `10`
 
 ### Core matrix
 

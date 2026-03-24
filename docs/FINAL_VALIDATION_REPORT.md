@@ -41,7 +41,7 @@ Additional VM-local checks that passed:
 - full JSON corpus mode enabled
 - `161` copied NeoVM JSON corpus files available under `compat/Neo.VM.Riscv.Tests/Corpus/Tests`
 - compatibility runner tests passing
-- adapter tests passing (`7`)
+- adapter tests passing (`10`)
 
 ### Core verification
 

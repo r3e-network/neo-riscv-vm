@@ -26,16 +26,16 @@ public class VMUTExecutionContextState
     // Stacks
 
     [JsonProperty]
-    public VMUTStackItem[] EvaluationStack { get; set; }
+    public VMUTStackItem[] EvaluationStack { get; set; } = System.Array.Empty<VMUTStackItem>();
 
     // Slots
 
     [JsonProperty]
-    public VMUTStackItem[] StaticFields { get; set; }
+    public VMUTStackItem[] StaticFields { get; set; } = System.Array.Empty<VMUTStackItem>();
 
     [JsonProperty]
-    public VMUTStackItem[] Arguments { get; set; }
+    public VMUTStackItem[] Arguments { get; set; } = System.Array.Empty<VMUTStackItem>();
 
     [JsonProperty]
-    public VMUTStackItem[] LocalVariables { get; set; }
+    public VMUTStackItem[] LocalVariables { get; set; } = System.Array.Empty<VMUTStackItem>();
 }

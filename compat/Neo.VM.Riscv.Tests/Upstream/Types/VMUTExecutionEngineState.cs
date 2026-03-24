@@ -21,11 +21,11 @@ public class VMUTExecutionEngineState
     public VMState State { get; set; }
 
     [JsonProperty]
-    public VMUTStackItem[] ResultStack { get; set; }
+    public VMUTStackItem[] ResultStack { get; set; } = System.Array.Empty<VMUTStackItem>();
 
     [JsonProperty]
-    public VMUTExecutionContextState[] InvocationStack { get; set; }
+    public VMUTExecutionContextState[] InvocationStack { get; set; } = System.Array.Empty<VMUTExecutionContextState>();
 
     [JsonProperty]
-    public string ExceptionMessage { get; set; }
+    public string? ExceptionMessage { get; set; }
 }

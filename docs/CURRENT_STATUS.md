@@ -65,7 +65,6 @@ Fresh committed-state verification passed with:
 
 - The current `neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj` references the sibling `neo-riscv-vm/compat/Neo.Riscv.Adapter` project directly.
 - That makes the current integration workspace-valid, but not yet a standalone-upstream-clean core repo shape.
-- The compatibility test project still emits warning-only diagnostics (`NU1900`, nullable warnings, MSTest analyzer warnings) during the full matrix run. They do not currently fail verification.
 
 ## Canonical Commands
 

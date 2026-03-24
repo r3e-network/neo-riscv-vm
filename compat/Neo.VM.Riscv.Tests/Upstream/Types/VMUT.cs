@@ -16,11 +16,11 @@ namespace Neo.Test.Types;
 public class VMUT
 {
     [JsonProperty]
-    public string Category { get; set; }
+    public string Category { get; set; } = string.Empty;
 
     [JsonProperty]
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     [JsonProperty]
-    public VMUTEntry[] Tests { get; set; }
+    public VMUTEntry[] Tests { get; set; } = System.Array.Empty<VMUTEntry>();
 }

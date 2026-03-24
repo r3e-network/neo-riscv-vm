@@ -21,13 +21,23 @@ internal class UppercaseEnum : JsonConverter
         return objectType.IsEnum;
     }
 
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+    public override object ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
     {
-        return Enum.Parse(objectType, reader.Value.ToString(), true);
+        var raw = reader.Value?.ToString()
+            ?? throw new JsonSerializationException($"Enum value for {objectType.Name} cannot be null.");
+        return Enum.Parse(objectType, raw, true);
     }
 
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
     {
-        writer.WriteValue(value.ToString().ToUpperInvariant());
+        if (value is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var text = value.ToString()
+            ?? throw new JsonSerializationException($"Unable to serialize enum value for {value.GetType().Name}.");
+        writer.WriteValue(text.ToUpperInvariant());
     }
 }

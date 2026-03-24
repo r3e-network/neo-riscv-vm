@@ -42,7 +42,8 @@ public static class JsonExtensions
     /// <returns>Unit test</returns>
     public static T DeserializeJson<T>(this string input)
     {
-        return JsonConvert.DeserializeObject<T>(input, _settings);
+        return JsonConvert.DeserializeObject<T>(input, _settings)
+            ?? throw new JsonSerializationException($"Failed to deserialize JSON into {typeof(T).Name}.");
     }
 
     /// <summary>

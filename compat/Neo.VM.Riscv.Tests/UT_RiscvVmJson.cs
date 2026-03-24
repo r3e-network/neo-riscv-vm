@@ -45,7 +45,7 @@ public class UT_RiscvVmJson
         var outcome = runner.Execute(script.ToArray());
 
         Assert.AreEqual(VMState.HALT, outcome.State);
-        Assert.AreEqual(1, outcome.ResultStack.Count);
+        Assert.HasCount(1, outcome.ResultStack);
         Assert.AreEqual("1", outcome.ResultStack[0]["value"]!.Value<string>());
     }
 
@@ -208,7 +208,7 @@ public class UT_RiscvVmJson
                 $"Skipped BREAK-only cases: {skippedBreak}.{Environment.NewLine}{string.Join(Environment.NewLine, sample)}");
         }
 
-        Assert.IsTrue(executed > 0, "No copied NeoVM JSON cases were executed.");
+        Assert.IsGreaterThan(0, executed, "No copied NeoVM JSON cases were executed.");
     }
 
     private static string[] SelectCorpusFiles(string root, string? filter, bool smokeOnly)
@@ -304,7 +304,7 @@ public class UT_RiscvVmJson
 
     private static void AssertStacksMatch(IReadOnlyList<VMUTStackItem> expected, IReadOnlyList<JObject> actual, string file, string testName)
     {
-        Assert.AreEqual(expected.Count, actual.Count, $"{file}::{testName} result stack length mismatch.");
+        Assert.HasCount(expected.Count, actual, $"{file}::{testName} result stack length mismatch.");
 
         for (var i = 0; i < expected.Count; i++)
         {

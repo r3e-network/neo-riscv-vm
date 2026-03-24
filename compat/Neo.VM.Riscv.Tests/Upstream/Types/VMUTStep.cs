@@ -16,11 +16,11 @@ namespace Neo.Test.Types;
 public class VMUTStep
 {
     [JsonProperty]
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     [JsonProperty]
-    public VMUTActionType[] Actions { get; set; }
+    public VMUTActionType[] Actions { get; set; } = System.Array.Empty<VMUTActionType>();
 
     [JsonProperty]
-    public VMUTExecutionEngineState Result { get; set; }
+    public VMUTExecutionEngineState Result { get; set; } = new();
 }

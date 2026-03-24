@@ -26,7 +26,7 @@ internal class ScriptConverter : JsonConverter
         return objectType == typeof(byte[]) || objectType == typeof(string);
     }
 
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+    public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
     {
         switch (reader.TokenType)
         {
@@ -51,7 +51,8 @@ internal class ScriptConverter : JsonConverter
                     foreach (var entry in JArray.Load(reader))
                     {
                         var mul = 1;
-                        var value = entry.Value<string>();
+                        var value = entry.Value<string>()
+                            ?? throw new FormatException("Script array entry must be a string.");
 
                         if (Enum.IsDefined(typeof(OpCode), value) && Enum.TryParse<OpCode>(value, out var opCode))
                         {
@@ -77,7 +78,7 @@ internal class ScriptConverter : JsonConverter
         throw new FormatException();
     }
 
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
     {
         throw new NotSupportedException("The copied RISC-V compatibility suite only uses ScriptConverter for reading.");
     }

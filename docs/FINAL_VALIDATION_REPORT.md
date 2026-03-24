@@ -96,7 +96,6 @@ It should **not** be described as a literal zero-change upstream drop-in anymore
 ## Residual Risk / Known Caveats
 
 - `neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj` currently references the sibling adapter project in `neo-riscv-vm`, so the current shape is workspace-coupled.
-- The compatibility test project still emits warning-only diagnostics (`NU1900`, nullable warnings, MSTest analyzer suggestions) during the full matrix run. These warnings do not currently fail validation.
 
 ## Canonical Command
 

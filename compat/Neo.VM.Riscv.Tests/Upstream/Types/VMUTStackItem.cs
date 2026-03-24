@@ -20,5 +20,5 @@ public class VMUTStackItem
     public VMUTStackItemType Type { get; set; }
 
     [JsonProperty]
-    public JToken Value { get; set; }
+    public JToken Value { get; set; } = JValue.CreateNull();
 }

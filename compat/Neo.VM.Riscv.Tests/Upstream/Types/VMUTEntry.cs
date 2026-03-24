@@ -17,11 +17,11 @@ namespace Neo.Test.Types;
 public class VMUTEntry
 {
     [JsonProperty(Order = 1)]
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     [JsonProperty(Order = 2), JsonConverter(typeof(ScriptConverter))]
-    public byte[] Script { get; set; }
+    public byte[] Script { get; set; } = System.Array.Empty<byte>();
 
     [JsonProperty(Order = 3)]
-    public VMUTStep[] Steps { get; set; }
+    public VMUTStep[] Steps { get; set; } = System.Array.Empty<VMUTStep>();
 }

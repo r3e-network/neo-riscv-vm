@@ -39,7 +39,7 @@ Additional VM-local checks that passed:
 - full JSON corpus mode enabled
 - `161` copied NeoVM JSON corpus files available under `compat/Neo.VM.Riscv.Tests/Corpus/Tests`
 - compatibility runner tests passing
-- adapter tests passing
+- adapter tests passing (`7`)
 
 ### Core verification
 
@@ -47,9 +47,9 @@ Additional VM-local checks that passed:
 
 - `Neo.Extensions.Tests`: `89`
 - `Neo.Json.UnitTests`: `92`
-- `Neo.UnitTests`: `998`
+- `Neo.UnitTests`: `990`
 
-Core total: `1179`
+Core total: `1171`
 
 Additional focused verification:
 
@@ -95,7 +95,8 @@ It should **not** be described as a literal zero-change upstream drop-in anymore
 
 ## Residual Risk / Known Caveats
 
-- `neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj` currently references the sibling adapter project in `neo-riscv-vm`, so the current shape is workspace-coupled.
+- `neo-riscv-core` test compilation no longer requires the sibling adapter project directly.
+- The integrated RISC-V bridge tests still rely on the adapter assembly being staged at runtime, so the current validation story remains intentionally cross-repo rather than fully standalone.
 
 ## Canonical Command
 

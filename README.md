@@ -33,8 +33,8 @@ Latest committed verification passed with:
 |------|----------|
 | VM workspace tests | `cargo test --workspace --all-targets` passed (`311` Rust/devpack tests) |
 | JSON compatibility | full corpus runner passed over `161` copied NeoVM JSON files |
-| Adapter tests | `dotnet test compat/Neo.Riscv.Adapter.Tests/...` passed |
-| Core matrix | `1179` tests passed across `Neo.Extensions.Tests`, `Neo.Json.UnitTests`, and `Neo.UnitTests` |
+| Adapter tests | `dotnet test compat/Neo.Riscv.Adapter.Tests/...` passed (`7` tests) |
+| Core matrix | `1171` tests passed across `Neo.Extensions.Tests`, `Neo.Json.UnitTests`, and `Neo.UnitTests` |
 | Node matrix | `477` tests passed across `13` node/plugin test projects |
 | Smoke coverage | VM E2E, FFI resolution, and `neo-cli` smoke all passed |
 

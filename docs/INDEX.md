@@ -53,7 +53,7 @@ These are retained for context, not as the exact current implementation narrativ
 
 - VM workspace tests: `311`
 - JSON compatibility corpus: `161` files
-- Core matrix: `1179`
+- Core matrix: `1171`
 - Node matrix: `477`
 - Extra smoke: VM E2E, FFI resolution, `neo-cli` smoke
 

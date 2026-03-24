@@ -11,6 +11,7 @@ The current committed implementation is a validated three-repo workspace integra
 - `neo-riscv-core` no longer contains its own `Neo.SmartContract.RiscV` bridge layer. That code now lives in `neo-riscv-vm/compat/Neo.Riscv.Adapter`.
 - `neo-riscv-node` is validated against the packaged adapter bundle, including CLI smoke coverage.
 - Existing C# syscall and native-contract implementations remain the only source of truth.
+- `neo-riscv-core` test compilation no longer requires a direct sibling `ProjectReference` to the adapter project.
 
 ## Architecture Reality
 
@@ -51,20 +52,20 @@ Fresh committed-state verification passed with:
 
 - `./scripts/verify-all.sh`
   - full NeoVM JSON corpus runner (`161` copied corpus files)
-  - adapter tests
+  - adapter tests (`7`)
 - `./tests/e2e/run-all.sh`
 - `./scripts/test-ffi-resolution.sh`
 - `dotnet build src/Neo/Neo.csproj` in `neo-riscv-core`
 - targeted core extraction/provider slice: `82/82` tests passed
 - `./scripts/cross-repo-test.sh`
-  - core matrix: `1179` tests passed
+  - core matrix: `1171` tests passed
   - node matrix: `477` tests passed
   - `neo-cli` smoke passed
 
 ## Known Coupling / Residual Risk
 
-- The current `neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj` references the sibling `neo-riscv-vm/compat/Neo.Riscv.Adapter` project directly.
-- That makes the current integration workspace-valid, but not yet a standalone-upstream-clean core repo shape.
+- Integrated adapter coverage still depends on a staged plugin bundle or explicit adapter assembly path when running the core-side RISC-V bridge tests.
+- The compile-time sibling-project coupling has been removed, but the runtime-integrated validation path remains intentionally cross-repo.
 
 ## Canonical Commands
 

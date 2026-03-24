@@ -36,14 +36,14 @@ The canonical full validation command is:
 ### Compatibility / adapter
 
 - copied NeoVM JSON corpus files: `161`
-- adapter tests: `1`
+- adapter tests: `7`
 
 ### Core matrix
 
 - `Neo.Extensions.Tests`: `89`
 - `Neo.Json.UnitTests`: `92`
-- `Neo.UnitTests`: `998`
-- core total: `1179`
+- `Neo.UnitTests`: `990`
+- core total: `1171`
 
 ### Node matrix
 
@@ -88,4 +88,5 @@ cargo test --workspace --all-targets
 
 - `scripts/verify-all.sh` runs the full copied NeoVM corpus in `NEO_RISCV_VM_JSON_MODE=full`.
 - `scripts/cross-repo-test.sh` is the authoritative integration proof because it packages the adapter, runs VM checks, runs core tests, runs node tests, and finishes with the `neo-cli` smoke flow.
-- The current core integration is workspace-scoped: `neo-riscv-core` test wiring references the sibling adapter project in `neo-riscv-vm`.
+- The current core integration no longer requires a direct sibling adapter `ProjectReference` to compile.
+- RISC-V bridge coverage on the core side still requires the adapter assembly to be available at runtime through the staged plugin bundle or an explicit adapter path.

@@ -31,3 +31,7 @@ Previous validation infrastructure established the shape of tests, benchmarks, a
 - **Test infrastructure**: tests/opcode_matrix/, benches/
 - **Documentation**: README.md, rustdoc comments, C# XML docs
 - **Operations**: New monitoring endpoints, logging configuration
+
+## Implementation Status Note (2026-03-24)
+
+The final committed workspace externalized the `Neo.SmartContract.RiscV` bridge/provider code into `neo-riscv-vm/compat/Neo.Riscv.Adapter`. The current implementation is validated and production-ready for the integrated three-repo workspace, but it is no longer a literal zero-change core/node shape.

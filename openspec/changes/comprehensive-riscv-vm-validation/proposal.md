@@ -24,3 +24,7 @@ The current RISC-V VM needs to be efficient, well-designed, correctly and comple
 - `neo-riscv-vm` repository (core VM implementation, tests, and adapter).
 - Cross-repository testing pipelines in `neo-riscv-core` and `neo-riscv-node`.
 - Potential updates to adapter plugins and integration layers to support full compatibility.
+
+## Implementation Status Note (2026-03-24)
+
+The canonical validation artifact is now `scripts/cross-repo-test.sh`, which packages the adapter plugin and validates the committed `neo-riscv-vm`, `neo-riscv-core`, and `neo-riscv-node` workspaces together.

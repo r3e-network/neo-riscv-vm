@@ -64,3 +64,9 @@ Constraints:
 
 **Trade-off:** Comprehensive tests increase CI time
 → **Accepted:** Quality over speed, parallelize where possible
+
+## Implementation Status Note (2026-03-24)
+
+- The committed implementation removed the in-core `Neo.SmartContract.RiscV` subtree from `neo-riscv-core`.
+- `ApplicationEngine.Provider` is now expected to be supplied explicitly by the adapter plugin or tests.
+- The current validation target is the integrated workspace using `scripts/cross-repo-test.sh`, not a standalone zero-diff core repo.

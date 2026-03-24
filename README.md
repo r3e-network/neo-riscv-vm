@@ -1,197 +1,130 @@
-# neo-riscv-vm
+# Neo RISC-V VM
 
-Rust-side RISC-V / PolkaVM runtime for Neo N3 `master-n3`, paired with a C# Neo core worktree that executes contracts through the Rust host instead of the legacy NeoVM execution loop.
+[![Validation](https://img.shields.io/badge/validation-cross--repo%20passing-brightgreen)](./docs/FINAL_VALIDATION_REPORT.md)
+[![Status](https://img.shields.io/badge/status-workspace%20production%20ready-brightgreen)](./docs/CURRENT_STATUS.md)
+[![Syscalls](https://img.shields.io/badge/syscalls-C%23%20source%20of%20truth-blue)](./docs/architecture-syscalls.md)
 
-## Architecture Overview
+Production-ready RISC-V execution stack for Neo N3.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ Neo N3 Blockchain (C#)                                  │
-│  ├─ ApplicationEngine                                   │
-│  └─ Neo.Riscv.Adapter Plugin ──────────────────┐        │
-└────────────────────────────────────────────────┼────────┘
-                                                 │ P/Invoke
-                                                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ neo-riscv-host (Rust)                                   │
-│  ├─ FFI Layer (libneo_riscv_host.so)                   │
-│  ├─ PolkaVM Runtime                                     │
-│  └─ Host Callbacks ◄──────────────────┐                │
-└────────────────────────────────────────┼────────────────┘
-                                         │ Syscalls
-                                         ▼
-┌─────────────────────────────────────────────────────────┐
-│ neo-riscv-guest (RISC-V no_std)                        │
-│  ├─ NeoVM Opcode Interpreter                           │
-│  ├─ Stack & Execution Context                          │
-│  └─ guest.polkavm (compiled blob)                      │
-└─────────────────────────────────────────────────────────┘
-```
+The current committed implementation is a plugin-first, cross-repo integration:
 
-**Data Flow:**
+- `neo-riscv-vm` owns the Rust runtime, guest interpreter, adapter plugin, docs, and validation scripts.
+- `neo-riscv-core` now stays generic and no longer carries an in-core `Neo.SmartContract.RiscV` bridge implementation.
+- `neo-riscv-node` is validated with the packaged adapter bundle and CLI smoke coverage.
+- Existing C# syscall and native-contract logic remains the source of truth.
 
-1. C# receives contract execution request
-2. Adapter calls Rust host via FFI
-3. Host loads guest.polkavm and executes
-4. Guest interprets NeoVM opcodes
-5. Syscalls bridge back to C# for native contracts
-6. Result returns through FFI to C#
+This preserves contract compatibility while avoiding a second Rust/RISC-V implementation of syscalls or native contracts.
 
-## What This Repository Contains
+## Current Status
 
-- `crates/neo-riscv-abi`
-  Shared stack/result ABI used by the Rust guest, Rust host, and the C# bridge.
-- `crates/neo-riscv-guest`
-  Neo script execution logic and ABI-facing runtime behavior.
-- `crates/neo-riscv-guest-module`
-  The PolkaVM guest program that exports the entrypoints the host invokes.
-- `crates/neo-riscv-host`
-  Native Rust host runtime exposed as `libneo_riscv_host.so` for the C# Neo core bridge.
+- NeoVM bytecode runs inside the PolkaVM guest interpreter.
+- Native RISC-V contracts and legacy NeoVM contracts share the same adapter bridge surface.
+- `ApplicationEngine.Provider` must now be supplied explicitly by the adapter plugin or tests; core no longer auto-resolves an in-core RISC-V provider.
+- The integrated three-repo workspace is validated end to end.
+- This is not a literal “zero changes to core and node” state anymore. The current design is a workspace-scoped externalized adapter architecture.
 
-## Current Execution Model
+See [Current Status](./docs/CURRENT_STATUS.md) for the exact architecture and caveats.
 
-- Neo C# core uses the `RiscvApplicationEngine` path by default when the native host library is available.
-- The Rust host executes a compiled PolkaVM guest module (`guest.polkavm`) and bridges syscalls back into C#.
-- Chain state, policy logic, storage, witnesses, logs, notifications, and native contract semantics remain source-of-truth in C#.
-- Existing scripts, manifests, NEF handling, and contract tooling remain unchanged at the Neo surface.
+## Validation Snapshot
 
-## C# Integration
+Latest committed verification passed with:
 
-The matching C# worktree is:
+| Scope | Evidence |
+|------|----------|
+| VM workspace tests | `cargo test --workspace --all-targets` passed (`311` Rust/devpack tests) |
+| JSON compatibility | full corpus runner passed over `161` copied NeoVM JSON files |
+| Adapter tests | `dotnet test compat/Neo.Riscv.Adapter.Tests/...` passed |
+| Core matrix | `1179` tests passed across `Neo.Extensions.Tests`, `Neo.Json.UnitTests`, and `Neo.UnitTests` |
+| Node matrix | `477` tests passed across `13` node/plugin test projects |
+| Smoke coverage | VM E2E, FFI resolution, and `neo-cli` smoke all passed |
 
-- `/home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter`
-
-The important C# integration points are:
-
-- `/home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/src/Neo/SmartContract/ApplicationEngine.cs`
-- `/home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/src/Neo/SmartContract/RiscV/RiscvApplicationEngine.cs`
-- `/home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/src/Neo/SmartContract/RiscV/NativeRiscvVmBridge.cs`
-
-## Build
-
-Build the Rust host library:
+Canonical full validation command:
 
 ```bash
-cargo build -p neo-riscv-host
+./scripts/cross-repo-test.sh
 ```
 
-This produces:
+Detailed evidence is recorded in [Final Validation Report](./docs/FINAL_VALIDATION_REPORT.md).
+
+## Architecture
 
 ```text
-target/debug/libneo_riscv_host.so
+Neo core / node
+  -> adapter plugin registers ApplicationEngine.Provider
+  -> NativeRiscvVmBridge P/Invokes libneo_riscv_host.so
+  -> PolkaVM executes guest.polkavm for NeoVM bytecode
+  -> host callbacks route syscalls and native contract calls back to C#
 ```
 
-## Test
+Key architectural rules:
 
-Rust:
+- C# remains the syscall and native-contract source of truth.
+- The adapter package owns the RISC-V bridge/provider implementation.
+- Core is now generic: no in-core `Neo.SmartContract.RiscV` subtree remains.
+- The current validation/deployment model is a packaged plugin bundle, not a zero-diff upstream drop-in.
+
+## Quick Start
+
+Build and package the adapter bundle:
 
 ```bash
-cargo test -p neo-riscv-guest -p neo-riscv-host
+cargo build -p neo-riscv-host --release
+./scripts/package-adapter-plugin.sh
 ```
 
-C# compatibility corpus (copied from `neo-vm` JSON suite):
+Run the full integrated validation matrix:
 
 ```bash
-# Default: runs the full corpus when a release host library is available,
-# otherwise falls back to a small smoke subset (debug builds can be very slow).
-dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
-
-# Force smoke
-NEO_RISCV_VM_JSON_MODE=smoke dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
-
-# Full corpus
-NEO_RISCV_VM_JSON_MODE=full dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj
+./scripts/cross-repo-test.sh
 ```
 
-C# Neo core worktree:
+Run local VM validation only:
 
 ```bash
-NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so \
-dotnet test /home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/tests/Neo.UnitTests/Neo.UnitTests.csproj
+cargo test --workspace --all-targets
+./scripts/verify-all.sh
+./tests/e2e/run-all.sh
 ```
 
-## Zero-Config Node Integration (Plugin Bundle)
-
-To run the Neo node with the RISC-V engine without setting `NEO_RISCV_HOST_LIB`, package the adapter plugin and native host library into a drop-in `Plugins` bundle:
+Run standalone fuzz package checks:
 
 ```bash
-scripts/package-adapter-plugin.sh
+cargo test --manifest-path fuzz/Cargo.toml --lib
+cargo build --manifest-path fuzz/Cargo.toml --bins
 ```
 
-This creates:
+## Repository Layout
 
 ```text
-dist/Plugins/Neo.Riscv.Adapter/Neo.Riscv.Adapter.dll
-dist/Plugins/Neo.Riscv.Adapter/libneo_riscv_host.so   (Linux)
+neo-riscv-vm/
+├── crates/
+│   ├── neo-riscv-abi/
+│   ├── neo-riscv-guest/
+│   ├── neo-riscv-guest-module/
+│   ├── neo-riscv-host/
+│   └── neo-riscv-devpack/
+├── compat/
+│   ├── Neo.Riscv.Adapter/
+│   ├── Neo.Riscv.Adapter.Tests/
+│   └── Neo.VM.Riscv.Tests/
+├── fuzz/
+├── scripts/
+├── tests/
+└── docs/
 ```
 
-Copy `dist/Plugins` next to your `neo-cli` binaries (the same directory level as `config.json`). The node will auto-load the plugin at startup, and the plugin will auto-discover the native library from `Plugins/Neo.Riscv.Adapter/`.
+## Documentation
 
-## Guest Module Regeneration
+- [Current Status](./docs/CURRENT_STATUS.md)
+- [Final Validation Report](./docs/FINAL_VALIDATION_REPORT.md)
+- [Testing Guide](./docs/TESTING.md)
+- [Architecture](./docs/ARCHITECTURE.md)
+- [NEP-RISC-V-VM](./docs/NEP-RISC-V-VM.md)
+- [API Reference](./docs/API_REFERENCE.md)
+- [Syscall Architecture](./docs/architecture-syscalls.md)
+- [Native Contracts](./docs/native-contracts.md)
 
-The host currently includes the checked-in guest blob:
+Historical zero-change design notes are retained here for context, but they no longer describe the exact committed workspace state:
 
-- `crates/neo-riscv-guest-module/guest.polkavm`
-
-To rebuild it from the guest module source:
-
-1. Build the guest ELF on the PolkaVM target with nightly Cargo:
-
-```bash
-cargo +nightly build \
-  --manifest-path crates/neo-riscv-guest-module/Cargo.toml \
-  --release \
-  --target "$(polkatool get-target-json-path -b 32)" \
-  -Zbuild-std=core,alloc \
-  --target-dir target
-```
-
-2. Convert the ELF into a `.polkavm` blob with `polkatool 0.32.x`:
-
-```bash
-polkatool link \
-  --strip \
-  -o crates/neo-riscv-guest-module/guest.polkavm \
-  target/riscv32emac-unknown-none-polkavm/release/neo-riscv-guest-module
-```
-
-Notes:
-
-- The guest must be built for the PolkaVM `riscv32emac-unknown-none-polkavm` target. The older `riscv32imac-unknown-none-elf` flow does not emit the PolkaVM export metadata the host needs.
-- `--strip` is compatible with the working PolkaVM target flow and preserves the exported guest entrypoints.
-- The generated blob must export the guest entrypoints the host expects: `alloc`, `execute`, `get_result_ptr`, `get_result_len`.
-- The checked-in convenience script `scripts/regenerate-guest-blob.sh` uses the verified command sequence above.
-
-## Unattended Verification
-
-Run the full Rust plus Neo `master-n3` verification surface with:
-
-```bash
-scripts/verify-all.sh
-```
-
-## Runtime Requirement
-
-Neo C# core now expects the RISC-V host library when no explicit `ApplicationEngine.Provider` override is injected.
-
-The resolver checks:
-
-- `NEO_RISCV_HOST_LIB`
-- `AppContext.BaseDirectory/libneo_riscv_host.so`
-- `Environment.CurrentDirectory/libneo_riscv_host.so`
-
-On Linux, the most direct setup is still:
-
-```bash
-export NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so
-```
-
-## Status
-
-Verified green on the current branch:
-
-- `cargo test -p neo-riscv-guest -p neo-riscv-host`
-- `NEO_RISCV_HOST_LIB=... dotnet test .../Neo.UnitTests.csproj`
-- `scripts/verify-all.sh`
-
-The full `Neo.UnitTests` suite in the C# worktree passes with the Rust host library enabled.
+- [Historical Zero-Change Target](./docs/ACHIEVED_ZERO_CHANGE.md)
+- [Historical Zero-Change Architecture](./docs/ZERO_CHANGE_ARCHITECTURE.md)

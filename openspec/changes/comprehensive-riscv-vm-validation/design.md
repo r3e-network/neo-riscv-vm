@@ -28,3 +28,9 @@ The Neo network relies heavily on the correct execution of smart contracts withi
   - Mitigation: Pin repository versions or commit hashes during test runs and implement retry mechanisms for transient failures.
 - [Risk: Performance vs. Correctness] Aggressive optimizations might introduce subtle semantic deviations.
   - Mitigation: The parity verification suite must run strictly on all optimized builds before they are considered valid.
+
+## Implementation Status Note (2026-03-24)
+
+- Cross-repo validation is now exercised through `scripts/cross-repo-test.sh`.
+- The validated workspace includes targeted integration changes in both `neo-riscv-core` and `neo-riscv-node`.
+- Current validation proves workspace correctness, but not an upstream-zero-diff packaging story.

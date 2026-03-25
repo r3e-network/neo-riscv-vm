@@ -9,7 +9,7 @@ mod runtime_types;
 use crate::helpers::*;
 
 use crate::opcodes::*;
-use crate::runtime_types::{propagate_update, to_abi_stack, CompoundIds, StackValue};
+use crate::runtime_types::{find_affected_indices, propagate_update, to_abi_stack, CompoundIds, StackValue};
 
 #[derive(Debug, Clone)]
 struct TryFrame {
@@ -1062,12 +1062,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Struct(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     _ => return Err("APPEND expects an array or struct".to_string()),
                 }
@@ -1157,7 +1159,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         };
                         bytes[index as usize] = byte;
                         let updated = StackValue::Buffer(id, bytes);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Array(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1166,7 +1169,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Struct(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1175,7 +1179,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Map(id, mut items) => {
                         validate_map_key(&key)?;
@@ -1188,7 +1193,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             items.push((key, ids.clone_struct_for_storage(&value)));
                         }
                         let updated = StackValue::Map(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     _ => return Err("SETITEM expects an array, buffer, or map".to_string()),
                 }
@@ -1204,7 +1210,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Struct(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1213,7 +1220,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     StackValue::Map(id, mut items) => {
                         validate_map_key(&key)?;
@@ -1223,7 +1231,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .ok_or_else(|| "key not found for REMOVE".to_string())?;
                         items.remove(index);
                         let updated = StackValue::Map(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        let affected = find_affected_indices(id, &stack);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
                     }
                     _ => return Err("REMOVE expects an array, struct, or map".to_string()),
                 }
@@ -1233,19 +1242,19 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 match item {
                     StackValue::Array(id, _) => {
                         let updated = StackValue::Array(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     StackValue::Struct(id, _) => {
                         let updated = StackValue::Struct(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     StackValue::Map(id, _) => {
                         let updated = StackValue::Map(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     StackValue::Buffer(id, _) => {
                         let updated = StackValue::Buffer(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     _ => return Err("CLEARITEMS expects a compound value".to_string()),
                 }
@@ -1258,7 +1267,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty array".to_string())?;
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                         stack.push(updated);
                         stack.push(popped);
                     }
@@ -1267,7 +1276,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty struct".to_string())?;
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                         stack.push(updated);
                         stack.push(popped);
                     }
@@ -1276,7 +1285,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty map".to_string())?;
                         let updated = StackValue::Map(id, entries);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                         stack.push(updated);
                         stack.push(key);
                         stack.push(value);
@@ -1286,7 +1295,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty buffer".to_string())?;
                         let updated = StackValue::Buffer(id, bytes);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                         stack.push(updated);
                         stack.push(StackValue::Integer(byte as i64));
                     }
@@ -1310,17 +1319,17 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     StackValue::Struct(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     StackValue::Buffer(id, mut bytes) => {
                         bytes.reverse();
                         let updated = StackValue::Buffer(id, bytes);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
                     }
                     _ => return Err("REVERSEITEMS expects an array, struct, or buffer".to_string()),
                 }
@@ -1489,7 +1498,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 dst_bytes[di..di + count].copy_from_slice(&src_bytes[si..si + count]);
                 let updated = StackValue::Buffer(dst_id, dst_bytes);
-                propagate_update(&updated, &mut stack, &mut locals, &mut static_fields);
+                propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
             }
             PUSHA => {
                 if ip + 5 > script.len() {

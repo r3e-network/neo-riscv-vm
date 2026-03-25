@@ -22,3 +22,7 @@ path = "src/lib.rs"
 [[bench]]
 name = "benchmark_harness"
 harness = false
+
+[[bench]]
+name = "propagate_update_bench"
+harness = false

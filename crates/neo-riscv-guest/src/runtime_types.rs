@@ -87,7 +87,7 @@ impl CompoundIds {
         match value {
             AbiStackValue::Integer(value) => StackValue::Integer(value),
             AbiStackValue::BigInteger(value) => StackValue::BigInteger(value),
-            AbiStackValue::ByteString(value) => StackValue::ByteString(value),
+            AbiStackValue::ByteString(value) => StackValue::ByteString(value.to_vec()),
             AbiStackValue::Boolean(value) => StackValue::Boolean(value),
             AbiStackValue::Pointer(value) => StackValue::Pointer(value as usize),
             AbiStackValue::Array(items) => {
@@ -135,7 +135,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
     match value {
         StackValue::Integer(value) => AbiStackValue::Integer(*value),
         StackValue::BigInteger(value) => AbiStackValue::BigInteger(clone_bytes(value)),
-        StackValue::ByteString(value) => AbiStackValue::ByteString(clone_bytes(value)),
+        StackValue::ByteString(value) => AbiStackValue::ByteString(clone_bytes(value).into()),
         StackValue::Boolean(value) => AbiStackValue::Boolean(*value),
         StackValue::Pointer(value) => AbiStackValue::Pointer(*value as i64),
         StackValue::Array(_, items) => {
@@ -159,7 +159,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
             }
             AbiStackValue::Map(converted)
         }
-        StackValue::Buffer(_, bytes) => AbiStackValue::ByteString(clone_bytes(bytes)),
+        StackValue::Buffer(_, bytes) => AbiStackValue::ByteString(clone_bytes(bytes).into()),
         StackValue::Interop(handle) => AbiStackValue::Interop(*handle),
         StackValue::Iterator(handle) => AbiStackValue::Iterator(*handle),
         StackValue::Null => AbiStackValue::Null,
@@ -183,14 +183,54 @@ fn compound_id(value: &StackValue) -> Option<u64> {
     }
 }
 
+pub(crate) fn find_affected_indices(
+    target_id: u64,
+    stack: &[StackValue],
+) -> Vec<usize> {
+    let mut indices = Vec::new();
+    for (idx, value) in stack.iter().enumerate() {
+        if contains_compound_id(value, target_id) {
+            indices.push(idx);
+        }
+    }
+    indices
+}
+
+fn contains_compound_id(value: &StackValue, target_id: u64) -> bool {
+    if compound_id(value) == Some(target_id) {
+        return true;
+    }
+    match value {
+        StackValue::Array(_, items) | StackValue::Struct(_, items) => {
+            items.iter().any(|item| contains_compound_id(item, target_id))
+        }
+        StackValue::Map(_, items) => items
+            .iter()
+            .any(|(k, v)| contains_compound_id(k, target_id) || contains_compound_id(v, target_id)),
+        _ => false,
+    }
+}
+
 pub(crate) fn propagate_update(
     updated: &StackValue,
     stack: &mut [StackValue],
     locals: &mut [StackValue],
     static_fields: &mut [StackValue],
+    affected_stack_indices: Option<&[usize]>,
 ) {
-    for value in stack {
-        replace_alias(value, updated);
+    match affected_stack_indices {
+        Some(indices) => {
+            for &idx in indices {
+                if idx < stack.len() {
+                    replace_alias(&mut stack[idx], updated);
+                }
+            }
+        }
+        None => {
+            for value in stack {
+                replace_alias(value, updated);
+            }
+        }
     }
     for value in locals {
         replace_alias(value, updated);

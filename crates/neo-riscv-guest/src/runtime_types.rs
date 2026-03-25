@@ -226,12 +226,15 @@ pub(crate) fn propagate_update(
     affected_stack_indices: Option<&[usize]>,
 ) {
     match affected_stack_indices {
-        Some(indices) => {
+        Some(indices) if !indices.is_empty() => {
             for &idx in indices {
                 if idx < stack.len() {
                     replace_alias(&mut stack[idx], updated);
                 }
             }
+        }
+        Some(_) => {
+            // Empty indices - skip stack iteration
         }
         None => {
             for value in stack {

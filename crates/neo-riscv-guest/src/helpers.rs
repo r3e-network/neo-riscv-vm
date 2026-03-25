@@ -329,10 +329,11 @@ pub(crate) fn apply_abi_stack(
     abi_stack: Vec<neo_riscv_abi::StackValue>,
     ids: &mut CompoundIds,
 ) {
-    let imported = abi_stack
-        .into_iter()
-        .map(|item| ids.import_abi(item))
-        .collect::<Vec<_>>();
+    let len = abi_stack.len();
+    let mut imported = Vec::with_capacity(len);
+    for item in abi_stack {
+        imported.push(ids.import_abi(item));
+    }
     let retired = core::mem::replace(stack, imported);
     core::mem::forget(retired);
 }

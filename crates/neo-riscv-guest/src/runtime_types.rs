@@ -187,7 +187,7 @@ pub(crate) fn find_affected_indices(
     target_id: u64,
     stack: &[StackValue],
 ) -> Vec<usize> {
-    let mut indices = Vec::new();
+    let mut indices = Vec::with_capacity(stack.len().min(8));
     for (idx, value) in stack.iter().enumerate() {
         if contains_compound_id(value, target_id) {
             indices.push(idx);

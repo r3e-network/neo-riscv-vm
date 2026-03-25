@@ -1030,7 +1030,12 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let item = pop_item(&mut stack)?;
                 match item {
                     StackValue::Map(_, items) => {
-                        let keys = items.into_iter().map(|(key, _)| key).collect::<Vec<_>>();
+                        let len = items.len();
+                        let keys: Vec<_> = {
+                            let mut v = Vec::with_capacity(len);
+                            v.extend(items.into_iter().map(|(key, _)| key));
+                            v
+                        };
                         stack.push(ids.array(keys));
                     }
                     _ => return Err("KEYS expects a map".to_string()),

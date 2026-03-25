@@ -54,6 +54,29 @@ impl Drop for CachedExecutionInstance {
 pub(crate) fn ensure_runtime_ready() -> Result<(), String> {
     let _ = cached_engine()?;
     let _ = guest_blob()?;
+    preallocate_common_instances()?;
+    Ok(())
+}
+
+fn preallocate_common_instances() -> Result<(), String> {
+    const COMMON_SIZES: [(u32, usize); 3] = [
+        (0, 3),      // No aux (most common)
+        (65536, 2),  // 64KB aux
+        (131072, 1), // 128KB aux
+    ];
+
+    let pool = EXECUTION_INSTANCES.get_or_init(|| Mutex::new(HashMap::new()));
+
+    for (aux_size, count) in COMMON_SIZES {
+        let instance_pre = cached_instance_pre(aux_size)?;
+        let mut guard = pool.lock().map_err(|_| "pool poisoned".to_string())?;
+        let instances = guard.entry(aux_size).or_default();
+
+        for _ in 0..count {
+            instances.push(instance_pre.instantiate().map_err(|e| e.to_string())?);
+        }
+    }
+
     Ok(())
 }
 

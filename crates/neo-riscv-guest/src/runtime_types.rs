@@ -141,7 +141,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
     match value {
         StackValue::Integer(value) => AbiStackValue::Integer(*value),
         StackValue::BigInteger(value) => AbiStackValue::BigInteger(clone_bytes(value)),
-        StackValue::ByteString(value) => AbiStackValue::ByteString(clone_bytes(value).into()),
+        StackValue::ByteString(value) => AbiStackValue::ByteString(clone_bytes(value)),
         StackValue::Boolean(value) => AbiStackValue::Boolean(*value),
         StackValue::Pointer(value) => AbiStackValue::Pointer(*value as i64),
         StackValue::Array(_, items) => {
@@ -165,7 +165,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
             }
             AbiStackValue::Map(converted)
         }
-        StackValue::Buffer(_, bytes) => AbiStackValue::ByteString(clone_bytes(bytes).into()),
+        StackValue::Buffer(_, bytes) => AbiStackValue::ByteString(clone_bytes(bytes)),
         StackValue::Interop(handle) => AbiStackValue::Interop(*handle),
         StackValue::Iterator(handle) => AbiStackValue::Iterator(*handle),
         StackValue::Null => AbiStackValue::Null,

@@ -130,8 +130,7 @@ where
     ) -> Result<HostCallbackResult, String>,
 {
     let script_len = script.len() as u32;
-    let initial_stack_bytes = postcard::to_allocvec(&initial_stack)
-        .map_err(|e| format!("failed to serialize initial stack: {e}"))?;
+    let initial_stack_bytes = neo_riscv_abi::fast_codec::encode_stack(&initial_stack);
     let stack_len = initial_stack_bytes.len() as u32;
     let aux_size = required_aux_size(script_len, stack_len);
     let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;
@@ -239,8 +238,7 @@ where
     ) -> Result<HostCallbackResult, String>,
 {
     let script_len = script.len() as u32;
-    let initial_stack_bytes = postcard::to_allocvec(&initial_stack)
-        .map_err(|e| format!("failed to serialize initial stack: {e}"))?;
+    let initial_stack_bytes = neo_riscv_abi::fast_codec::encode_stack(&initial_stack);
     let stack_len = initial_stack_bytes.len() as u32;
     let aux_size = required_aux_size(script_len, stack_len);
     let mut cached_instance = runtime_cache::cached_execution_instance(aux_size)?;

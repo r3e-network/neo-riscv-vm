@@ -63,9 +63,7 @@ fn host_call_import(
     }
 
     host.last_host_call_stage = 2;
-    let stack: Result<Vec<neo_riscv_abi::StackValue>, _> =
-        postcard::from_bytes(&host.callback_read_buf);
-    let stack = match stack {
+    let stack = match neo_riscv_abi::fast_codec::decode_stack(&host.callback_read_buf) {
         Ok(s) => s,
         Err(_) => return 0,
     };

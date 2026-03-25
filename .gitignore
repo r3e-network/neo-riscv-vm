@@ -10,3 +10,4 @@ fuzz/Cargo.lock
 dist/
 **/bin/
 **/obj/
+.venv/

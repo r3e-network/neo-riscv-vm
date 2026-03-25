@@ -29,6 +29,7 @@ struct TryStack {
 }
 
 impl TryStack {
+    #[inline]
     fn new() -> Self {
         Self {
             // Safety: MaybeUninit does not require initialization
@@ -37,10 +38,12 @@ impl TryStack {
         }
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         self.len == 0
     }
 
+    #[inline]
     fn push(&mut self, frame: TryFrame) -> Result<(), String> {
         if self.len >= MAX_TRY_NESTING {
             return Err("TRY nesting exceeds maximum depth".to_string());
@@ -50,6 +53,7 @@ impl TryStack {
         Ok(())
     }
 
+    #[inline]
     fn pop(&mut self) -> Option<TryFrame> {
         if self.len == 0 {
             return None;
@@ -59,6 +63,7 @@ impl TryStack {
         Some(unsafe { self.frames[self.len].assume_init_read() })
     }
 
+    #[inline]
     fn last_mut(&mut self) -> Option<&mut TryFrame> {
         if self.len == 0 {
             return None;

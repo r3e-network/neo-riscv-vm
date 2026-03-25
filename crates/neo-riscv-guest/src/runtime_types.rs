@@ -173,6 +173,7 @@ fn clone_bytes(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
+#[inline]
 fn compound_id(value: &StackValue) -> Option<u64> {
     match value {
         StackValue::Array(id, _)

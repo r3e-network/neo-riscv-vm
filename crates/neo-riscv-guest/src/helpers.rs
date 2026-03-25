@@ -32,6 +32,7 @@ pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
     }
 }
 
+#[inline]
 pub(crate) fn pop_integer_pair_allowing_null_false(
     stack: &mut Vec<StackValue>,
 ) -> Result<Option<(i64, i64)>, String> {
@@ -139,6 +140,7 @@ pub(crate) fn integer_value_for_equality(value: &StackValue) -> Result<i64, Stri
     }
 }
 
+#[inline]
 pub(crate) fn integer_value_for_collection_index(value: &StackValue) -> Result<i64, String> {
     match value {
         StackValue::Integer(value) => Ok(*value),
@@ -150,6 +152,7 @@ pub(crate) fn integer_value_for_collection_index(value: &StackValue) -> Result<i
     }
 }
 
+#[inline]
 pub(crate) fn validate_map_key(key: &StackValue) -> Result<(), String> {
     match key {
         StackValue::Integer(_) | StackValue::Boolean(_) | StackValue::Null => Ok(()),

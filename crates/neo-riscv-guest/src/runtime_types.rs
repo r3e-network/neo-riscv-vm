@@ -62,18 +62,24 @@ impl CompoundIds {
             StackValue::Boolean(value) => StackValue::Boolean(*value),
             StackValue::Pointer(value) => StackValue::Pointer(*value),
             StackValue::Array(_, items) => {
-                let cloned = items.iter().map(|item| self.deep_clone(item)).collect();
+                let mut cloned = Vec::with_capacity(items.len());
+                for item in items {
+                    cloned.push(self.deep_clone(item));
+                }
                 self.array(cloned)
             }
             StackValue::Struct(_, items) => {
-                let cloned = items.iter().map(|item| self.deep_clone(item)).collect();
+                let mut cloned = Vec::with_capacity(items.len());
+                for item in items {
+                    cloned.push(self.deep_clone(item));
+                }
                 self.r#struct(cloned)
             }
             StackValue::Map(_, items) => {
-                let cloned = items
-                    .iter()
-                    .map(|(key, value)| (self.deep_clone(key), self.deep_clone(value)))
-                    .collect();
+                let mut cloned = Vec::with_capacity(items.len());
+                for (key, value) in items {
+                    cloned.push((self.deep_clone(key), self.deep_clone(value)));
+                }
                 self.map(cloned)
             }
             StackValue::Buffer(_, bytes) => self.buffer(bytes.clone()),

@@ -1,7 +1,7 @@
 # Validation Complete
 
-**Date:** 2026-03-24  
-**Status:** Cross-repo validation passing
+**Date:** 2026-03-26
+**Status:** Cross-repo validation passing (production-hardened)
 
 ## Summary
 
@@ -22,18 +22,30 @@ The current state is:
 
 | Scope | Result |
 |------|--------|
-| VM Rust/devpack workspace tests | ✅ `311` tests passed |
+| VM Rust/devpack workspace tests | ✅ `376` tests passed |
 | Full JSON corpus compatibility | ✅ `161` corpus files validated |
-| Core matrix | ✅ `1179` tests passed |
+| Core matrix | ✅ `1,169` tests passed (89 + 92 + 988) |
 | Node matrix | ✅ `477` tests passed |
 | VM E2E + FFI smoke | ✅ passed |
 | `neo-cli` smoke | ✅ passed |
+| **Total** | **2,022 tests passing cross-repo** |
 
 Canonical validation command:
 
 ```bash
 ./scripts/cross-repo-test.sh
 ```
+
+## Production Hardening Validation
+
+As of 2026-03-26, the implementation has undergone 8 review cycles with 34 fixes applied:
+
+- Interpreter correctness fixes (XDROP, ENDTRY, CALL/RET, JMPEQ)
+- Security hardening (codec limits, OOM guards)
+- C# adapter and bridge fixes
+- Reliability improvements and expanded test coverage
+
+All fixes are covered by the test counts above.
 
 ## Important Clarification
 

@@ -1,6 +1,6 @@
 # Production Readiness Hardening Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Drive the remaining RISC-V integration failures to zero while keeping the adapter and compatibility logic isolated inside `neo-riscv-vm`.
 

@@ -9,7 +9,9 @@ mod runtime_types;
 use crate::helpers::*;
 
 use crate::opcodes::*;
-use crate::runtime_types::{find_affected_indices, propagate_update, to_abi_stack, CompoundIds, StackValue};
+use crate::runtime_types::{
+    find_affected_indices, propagate_update, to_abi_stack, CompoundIds, StackValue,
+};
 
 #[derive(Debug, Clone)]
 struct TryFrame {
@@ -17,6 +19,7 @@ struct TryFrame {
     finally_ip: usize,
     caught: bool,
     in_finally: bool,
+    end_ip: usize,
 }
 
 /// Fixed-capacity stack for TryFrames — avoids heap allocation to prevent
@@ -110,17 +113,25 @@ pub trait SyscallProvider {
         stack: &mut Vec<AbiStackValue>,
     ) -> Result<(), String>;
 
+    /// Handle CALLT opcode. The default encodes the token with a distinctive
+    /// marker so the host can distinguish CALLT from regular SYSCALL.
     fn callt(
         &mut self,
         token: u16,
         ip: usize,
         stack: &mut Vec<AbiStackValue>,
     ) -> Result<(), String> {
-        // Default: treat CALLT token as a SYSCALL-style call with token as api.
-        // Host implementations should override to resolve the token properly.
-        self.syscall(token as u32, ip, stack)
+        // Encode: CALLT_MARKER_HI in upper 16 bits + token in low 16 bits.
+        // Host checks (api >> 16) == CALLT_MARKER_HI to detect CALLT calls.
+        self.syscall(CALLT_MARKER | token as u32, ip, stack)
     }
 }
+
+/// Marker for CALLT tokens sent through the syscall channel.
+/// Upper 16 bits = 0x4354 ("CT"), lower 16 bits = token_id.
+/// This pattern is checked via (api >> 16) == 0x4354.
+pub const CALLT_MARKER: u32 = 0x4354_0000;
+pub const CALLT_MARKER_HI: u16 = 0x4354;
 
 pub fn interpret_with_syscalls<H: SyscallProvider>(
     script: &[u8],
@@ -158,7 +169,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
     let mut static_fields_initialized = false;
     let mut alt_stack: Vec<StackValue> = Vec::with_capacity(16);
     let mut try_frames = TryStack::new();
-    let mut call_stack: Vec<usize> = Vec::with_capacity(16);
+    let mut call_stack: Vec<(usize, Vec<StackValue>, bool)> = Vec::with_capacity(16);
     let mut pending_error: Option<String> = None;
 
     'main_loop: loop {
@@ -406,7 +417,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 )?;
                 let right = pop_item(&mut stack)?;
                 let left = pop_item(&mut stack)?;
-                if left == right {
+                if vm_equal(&left, &right) {
                     ip = compute_jump_target_offset(ip, offset, script.len(), "JMPEQ")?;
                     continue;
                 }
@@ -1073,13 +1084,25 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Array(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Struct(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Struct(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     _ => return Err("APPEND expects an array or struct".to_string()),
                 }
@@ -1170,7 +1193,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         bytes[index as usize] = byte;
                         let updated = StackValue::Buffer(id, bytes);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Array(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1180,7 +1209,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Array(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Struct(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1190,7 +1225,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Struct(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Map(id, mut items) => {
                         validate_map_key(&key)?;
@@ -1204,7 +1245,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         let updated = StackValue::Map(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     _ => return Err("SETITEM expects an array, buffer, or map".to_string()),
                 }
@@ -1221,7 +1268,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items.remove(index as usize);
                         let updated = StackValue::Array(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Struct(id, mut items) => {
                         let index = integer_value_for_collection_index(&key)?;
@@ -1231,7 +1284,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items.remove(index as usize);
                         let updated = StackValue::Struct(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     StackValue::Map(id, mut items) => {
                         validate_map_key(&key)?;
@@ -1242,7 +1301,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         items.remove(index);
                         let updated = StackValue::Map(id, items);
                         let affected = find_affected_indices(id, &stack);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, Some(&affected));
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            Some(&affected),
+                        );
                     }
                     _ => return Err("REMOVE expects an array, struct, or map".to_string()),
                 }
@@ -1252,19 +1317,43 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 match item {
                     StackValue::Array(id, _) => {
                         let updated = StackValue::Array(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     StackValue::Struct(id, _) => {
                         let updated = StackValue::Struct(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     StackValue::Map(id, _) => {
                         let updated = StackValue::Map(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     StackValue::Buffer(id, _) => {
                         let updated = StackValue::Buffer(id, Vec::new());
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     _ => return Err("CLEARITEMS expects a compound value".to_string()),
                 }
@@ -1277,7 +1366,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty array".to_string())?;
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                         stack.push(updated);
                         stack.push(popped);
                     }
@@ -1286,7 +1381,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty struct".to_string())?;
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                         stack.push(updated);
                         stack.push(popped);
                     }
@@ -1295,7 +1396,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty map".to_string())?;
                         let updated = StackValue::Map(id, entries);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                         stack.push(updated);
                         stack.push(key);
                         stack.push(value);
@@ -1305,7 +1412,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty buffer".to_string())?;
                         let updated = StackValue::Buffer(id, bytes);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                         stack.push(updated);
                         stack.push(StackValue::Integer(byte as i64));
                     }
@@ -1329,17 +1442,35 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Array(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     StackValue::Struct(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Struct(id, items);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     StackValue::Buffer(id, mut bytes) => {
                         bytes.reverse();
                         let updated = StackValue::Buffer(id, bytes);
-                        propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                        propagate_update(
+                            &updated,
+                            &mut stack,
+                            &mut locals,
+                            &mut static_fields,
+                            None,
+                        );
                     }
                     _ => return Err("REVERSEITEMS expects an array, struct, or buffer".to_string()),
                 }
@@ -1653,7 +1784,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if n >= stack.len() {
                     return Err("XDROP index out of range".to_string());
                 }
-                stack.remove(n);
+                let idx = stack.len() - 1 - n;
+                stack.remove(idx);
             }
             LDARG0..=LDARG6 => {
                 let index = (opcode - LDARG0) as usize;
@@ -1713,7 +1845,10 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     "CALL",
                 )?;
                 let return_ip = ip + advance;
-                call_stack.push(return_ip);
+                let saved_locals = core::mem::replace(&mut locals, Vec::with_capacity(16));
+                let saved_init = locals_initialized;
+                call_stack.push((return_ip, saved_locals, saved_init));
+                locals_initialized = false;
                 ip = compute_jump_target_offset(ip, offset, script.len(), "CALL")?;
                 continue;
             }
@@ -1724,7 +1859,10 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     _ => return Err("CALLA expects a pointer".to_string()),
                 };
                 let return_ip = ip + 1;
-                call_stack.push(return_ip);
+                let saved_locals = core::mem::replace(&mut locals, Vec::with_capacity(16));
+                let saved_init = locals_initialized;
+                call_stack.push((return_ip, saved_locals, saved_init));
+                locals_initialized = false;
                 if offset > script.len() {
                     return Err("CALLA target out of bounds".to_string());
                 }
@@ -1795,7 +1933,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 )?;
                 let right = pop_item(&mut stack)?;
                 let left = pop_item(&mut stack)?;
-                if left != right {
+                if !vm_equal(&left, &right) {
                     ip = compute_jump_target_offset(ip, offset, script.len(), "JMPNE")?;
                     continue;
                 }
@@ -1891,7 +2029,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 continue;
             }
             RET => {
-                if let Some(return_ip) = call_stack.pop() {
+                if let Some((return_ip, saved_locals, saved_init)) = call_stack.pop() {
+                    locals = saved_locals;
+                    locals_initialized = saved_init;
                     ip = return_ip;
                     continue;
                 }
@@ -1924,6 +2064,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     finally_ip,
                     caught: false,
                     in_finally: false,
+                    end_ip: 0,
                 })?;
                 ip += 3;
                 continue;
@@ -1935,9 +2076,15 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     continue;
                 }
                 let offset = script[ip + 1] as i8;
+                let target_ip = if offset != 0 {
+                    (ip as isize + offset as isize) as usize
+                } else {
+                    ip + 2
+                };
                 if let Some(frame) = try_frames.last_mut() {
                     if frame.finally_ip != 0 && !frame.in_finally {
-                        // Jump to finally block, keep frame
+                        // Save continuation IP for ENDFINALLY to use
+                        frame.end_ip = target_ip;
                         frame.in_finally = true;
                         ip = frame.finally_ip;
                         continue;
@@ -1945,11 +2092,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 // No finally or already in finally — pop frame and jump
                 try_frames.pop();
-                if offset != 0 {
-                    ip = (ip as isize + offset as isize) as usize;
-                    continue;
-                }
-                ip += 2;
+                ip = target_ip;
                 continue;
             }
             TRY_L => {
@@ -1989,6 +2132,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     finally_ip,
                     caught: false,
                     in_finally: false,
+                    end_ip: 0,
                 })?;
                 ip += 9;
                 continue;
@@ -2005,31 +2149,37 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     script[ip + 3],
                     script[ip + 4],
                 ]);
+                let target_ip = if offset != 0 {
+                    (ip as isize + offset as isize) as usize
+                } else {
+                    ip + 5
+                };
                 if let Some(frame) = try_frames.last_mut() {
                     if frame.finally_ip != 0 && !frame.in_finally {
+                        frame.end_ip = target_ip;
                         frame.in_finally = true;
                         ip = frame.finally_ip;
                         continue;
                     }
                 }
                 try_frames.pop();
-                if offset != 0 {
-                    ip = (ip as isize + offset as isize) as usize;
-                    continue;
-                }
-                ip += 5;
+                ip = target_ip;
                 continue;
             }
             ENDFINALLY => {
                 // ENDFINALLY must be reached via the finally path
                 let in_finally = try_frames.last_mut().is_some_and(|f| f.in_finally);
                 if in_finally {
-                    let _frame = try_frames.pop().unwrap();
+                    let frame = try_frames.pop().unwrap();
                     if pending_error.is_some() {
                         // Re-throw: pending_error will be processed at top of loop
                         continue;
                     }
-                    // Normal completion after finally
+                    // Normal completion after finally — jump to saved end_ip
+                    if frame.end_ip != 0 {
+                        ip = frame.end_ip;
+                        continue;
+                    }
                 } else {
                     // ENDFINALLY without being in finally state = FAULT
                     return Err("ENDFINALLY without matching finally context".to_string());

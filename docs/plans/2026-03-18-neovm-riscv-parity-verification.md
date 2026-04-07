@@ -1,6 +1,6 @@
 # NeoVM RISC-V Parity Verification Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Ensure the NeoVM-on-RISC-V path matches existing NeoVM behavior closely enough to pass the existing Neo VM unit tests and the broader `Neo.UnitTests` suite on Neo `master-n3`.
 

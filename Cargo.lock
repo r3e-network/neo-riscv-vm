@@ -519,6 +519,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "neo-riscv-contract-harness"
+version = "0.1.0"
+dependencies = [
+ "neo-riscv-abi",
+ "neo-riscv-rt",
+ "polkavm-derive",
+ "postcard",
+]
+
+[[package]]
 name = "neo-riscv-devpack"
 version = "0.1.0"
 dependencies = [
@@ -555,6 +565,13 @@ dependencies = [
  "postcard",
  "proptest",
  "tracing",
+]
+
+[[package]]
+name = "neo-riscv-rt"
+version = "0.1.0"
+dependencies = [
+ "neo-riscv-abi",
 ]
 
 [[package]]

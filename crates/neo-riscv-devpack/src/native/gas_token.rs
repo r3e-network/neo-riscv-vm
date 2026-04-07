@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use neo_riscv_abi::StackValue;
 
 use super::{
@@ -33,15 +35,11 @@ pub fn gas_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
         .unwrap_or(false)
 }
 
-pub fn gas_symbol() -> &'static str {
-    // The symbol is stable. Keep the `&'static str` API, but validate via native call when possible.
+pub fn gas_symbol() -> String {
     const DEFAULT: &str = "GAS";
-    let actual = call_native_read_only(&GAS_TOKEN_HASH, "symbol", &[])
-        .and_then(|v| stack_item_as_string(&v));
-    match actual.as_deref() {
-        Some("GAS") => DEFAULT,
-        _ => DEFAULT,
-    }
+    call_native_read_only(&GAS_TOKEN_HASH, "symbol", &[])
+        .and_then(|v| stack_item_as_string(&v))
+        .unwrap_or_else(|| String::from(DEFAULT))
 }
 
 pub fn gas_decimals() -> u8 {

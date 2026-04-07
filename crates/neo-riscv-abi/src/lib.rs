@@ -39,8 +39,10 @@ pub enum StackValue {
     Integer(i64),
     /// Arbitrary-precision integer (little-endian bytes).
     BigInteger(Vec<u8>),
-    /// Byte array.
+    /// Byte array (immutable).
     ByteString(Vec<u8>),
+    /// Mutable byte buffer (distinct from ByteString in NeoVM).
+    Buffer(Vec<u8>),
     /// Boolean value.
     Boolean(bool),
     /// Array of stack values.
@@ -74,6 +76,61 @@ pub struct ExecutionResult {
     /// When present, this is the user-facing error string without internal trace.
     #[serde(default)]
     pub fault_message: Option<String>,
+}
+
+/// Returns the number of stack arguments consumed by a NeoVM syscall.
+///
+/// For known syscalls, returns the exact argument count so the guest can pass
+/// only the needed items instead of the entire evaluation stack. This avoids
+/// encoding/decoding thousands of items through the host boundary when only
+/// a few are needed (e.g., `System.Contract.Call` needs 4 items, not 1,230).
+///
+/// Returns `usize::MAX` for unknown syscalls (full stack passthrough).
+#[must_use]
+pub fn syscall_arg_count(api: u32) -> usize {
+    match api {
+        // System.Contract
+        0x525b_7d62 => 4, // System.Contract.Call
+        0x852c_35ce => 2, // System.Contract.Create
+        0x1d33_c631 => 2, // System.Contract.Update
+        0x93bc_db2e => 0, // System.Contract.NativeOnPersist
+        0x165d_a144 => 0, // System.Contract.NativePostPersist
+        0x813a_da95 => 0, // System.Contract.GetCallFlags
+        0x0287_99cf => 1, // System.Contract.CreateStandardAccount
+        0x09e9_336a => 2, // System.Contract.CreateMultisigAccount
+        // System.Runtime (with args)
+        0x8cec_27f8 => 1, // System.Runtime.CheckWitness
+        0x616f_0195 => 2, // System.Runtime.Notify
+        0x9647_e7cf => 1, // System.Runtime.Log
+        0xf135_4327 => 1, // System.Runtime.GetNotifications
+        0xbc8c_5ac3 => 1, // System.Runtime.BurnGas
+        0x8f80_0cb3 => 3, // System.Runtime.LoadScript
+        // System.Runtime (0-arg)
+        0x0388_c3b7 | 0xf6fc_79b2 | 0xa038_7de9 | 0xe0a0_fbc5 |
+        0xdc92_494c | 0x3008_512d | 0x74a8_fedb | 0x3c6e_5339 |
+        0x38e2_b4f9 | 0x28a9_de6b | 0xced8_8814 | 0x4311_2784 |
+        0x8b18_f1ac => 0,
+        // System.Storage
+        0xce67_f69b => 0, // System.Storage.GetContext
+        0xe26b_b4f6 => 0, // System.Storage.GetReadOnlyContext
+        0xe9bf_4c76 => 0, // System.Storage.AsReadOnly
+        0xe85e_8dd5 => 1, // System.Storage.Local.Get
+        0x0ae3_0c39 => 2, // System.Storage.Local.Put
+        0x94f5_5475 => 1, // System.Storage.Local.Delete
+        0xf352_7607 => 2, // System.Storage.Local.Find
+        0x31e8_5d92 => 2, // System.Storage.Get
+        0x9ab8_30df => 3, // System.Storage.Find
+        0x8418_3fe6 => 3, // System.Storage.Put
+        0xedc5_582f => 2, // System.Storage.Delete
+        // System.Crypto
+        0x27b3_e756 => 2, // System.Crypto.CheckSig
+        0x3adc_d09e => 2, // System.Crypto.CheckMultisig
+        // System.Iterator
+        0x9ced_089c => 1, // System.Iterator.Next
+        0x1dbf_54f3 => 1, // System.Iterator.Value
+        // Unknown: pass full stack for safety
+        _ => usize::MAX,
+    }
 }
 
 #[must_use]

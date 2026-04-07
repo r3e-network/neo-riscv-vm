@@ -48,6 +48,27 @@ namespace Neo.SmartContract.RiscV
         internal void FlagNeoVMMode() => _neoVMOnly = true;
         internal void ClearNeoVMMode() => _neoVMOnly = false;
 
+        /// <summary>
+        /// Execute standard NeoVM until the invocation stack returns to the specified depth.
+        /// Used to process a newly loaded context (e.g., from CallContractInternal) without
+        /// processing the outer RISC-V contexts.
+        /// </summary>
+        internal VMState ExecuteUntilStackDepth(int targetDepth)
+        {
+            // Save and restore State since the outer RISC-V execution may have set it to BREAK/NONE
+            var savedState = State;
+            State = VMState.NONE;
+            while (State != VMState.HALT && State != VMState.FAULT && InvocationStack.Count > targetDepth)
+            {
+                ExecuteNext();
+            }
+            var result = State;
+            // Restore state for the outer execution if this context completed normally
+            if (result == VMState.HALT)
+                State = savedState;
+            return result;
+        }
+
         public override VMState Execute()
         {
             // NeoVM-only mode: skip RISC-V contexts, process only NeoVM user contracts.
@@ -62,6 +83,7 @@ namespace Neo.SmartContract.RiscV
             var contexts = InvocationStack
                 .Reverse()
                 .ToArray();
+
             Trace($"execute start contexts={contexts.Length} trigger={Trigger} neoVMOnly={_neoVMOnly}");
             var result = new RiscvExecutionResult(VMState.HALT, System.Array.Empty<StackItem>(), null);
             IReadOnlyList<StackItem> initialStack = System.Array.Empty<StackItem>();

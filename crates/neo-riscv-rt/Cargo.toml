@@ -1,0 +1,11 @@
+[package]
+name = "neo-riscv-rt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+neo-riscv-abi = { path = "../neo-riscv-abi" }
+
+[features]
+default = ["std"]
+std = []

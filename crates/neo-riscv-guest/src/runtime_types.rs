@@ -120,6 +120,7 @@ impl CompoundIds {
                 }
                 self.map(imported)
             }
+            AbiStackValue::Buffer(value) => self.buffer(value),
             AbiStackValue::Interop(handle) => StackValue::Interop(handle),
             AbiStackValue::Iterator(handle) => StackValue::Iterator(handle),
             AbiStackValue::Null => StackValue::Null,
@@ -165,7 +166,7 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
             }
             AbiStackValue::Map(converted)
         }
-        StackValue::Buffer(_, bytes) => AbiStackValue::ByteString(clone_bytes(bytes)),
+        StackValue::Buffer(_, bytes) => AbiStackValue::Buffer(clone_bytes(bytes)),
         StackValue::Interop(handle) => AbiStackValue::Interop(*handle),
         StackValue::Iterator(handle) => AbiStackValue::Iterator(*handle),
         StackValue::Null => AbiStackValue::Null,
@@ -190,10 +191,7 @@ fn compound_id(value: &StackValue) -> Option<u64> {
     }
 }
 
-pub(crate) fn find_affected_indices(
-    target_id: u64,
-    stack: &[StackValue],
-) -> Vec<usize> {
+pub(crate) fn find_affected_indices(target_id: u64, stack: &[StackValue]) -> Vec<usize> {
     let mut indices = Vec::with_capacity(stack.len().min(8));
     for (idx, value) in stack.iter().enumerate() {
         if contains_compound_id(value, target_id) {
@@ -208,9 +206,9 @@ fn contains_compound_id(value: &StackValue, target_id: u64) -> bool {
         return true;
     }
     match value {
-        StackValue::Array(_, items) | StackValue::Struct(_, items) => {
-            items.iter().any(|item| contains_compound_id(item, target_id))
-        }
+        StackValue::Array(_, items) | StackValue::Struct(_, items) => items
+            .iter()
+            .any(|item| contains_compound_id(item, target_id)),
         StackValue::Map(_, items) => items
             .iter()
             .any(|(k, v)| contains_compound_id(k, target_id) || contains_compound_id(v, target_id)),
@@ -251,7 +249,8 @@ pub(crate) fn propagate_update(
 }
 
 fn replace_alias(target: &mut StackValue, updated: &StackValue) {
-    if compound_id(target).is_some() && compound_id(target) == compound_id(updated) {
+    let target_id = compound_id(target);
+    if target_id.is_some() && target_id == compound_id(updated) {
         *target = updated.clone();
         return;
     }

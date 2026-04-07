@@ -14,7 +14,7 @@ extern "C" {
 
 pub fn invoke_host_call(api: u32, stack: &[StackValue]) -> Result<Vec<StackValue>, String> {
     let encoded = callback_codec::encode_stack_result(&Ok(stack.to_vec()));
-    let mut result_buf = vec![0u8; 4096];
+    let mut result_buf = vec![0u8; 65536];
 
     let len = unsafe {
         host_call(

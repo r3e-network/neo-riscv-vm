@@ -1,6 +1,6 @@
 # Neo.VM Standalone RISC-V Compatibility Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Extend verification beyond Neo core so the standalone `neo-vm` repository can execute its existing script corpus against the Rust RISC-V backend.
 

@@ -1,0 +1,11 @@
+[package]
+name = "neo-riscv-contract-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+neo-riscv-abi = { path = "../neo-riscv-abi" }
+neo-riscv-rt = { path = "../neo-riscv-rt", default-features = false }
+polkavm-derive = "0.32.0"
+postcard.workspace = true

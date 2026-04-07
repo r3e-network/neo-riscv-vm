@@ -1,7 +1,7 @@
 # Current Status
 
-**Date:** 2026-03-24  
-**Status:** Workspace production-ready
+**Date:** 2026-03-26
+**Status:** Workspace production-ready (hardened)
 
 ## Executive Summary
 
@@ -43,7 +43,7 @@ Fresh committed-state verification passed with:
 ### VM-local verification
 
 - `cargo test --workspace --all-targets`
-  - `206` guest tests
+  - `271` guest tests
   - `93` host tests
   - `12` devpack tests
 - `cargo clippy -p neo-riscv-abi -p neo-riscv-guest -p neo-riscv-host --tests -- -D warnings`
@@ -60,9 +60,19 @@ Fresh committed-state verification passed with:
 - `dotnet build src/Neo/Neo.csproj` in `neo-riscv-core`
 - targeted core extraction/provider slice: `82/82` tests passed
 - `./scripts/cross-repo-test.sh`
-  - core matrix: `1171` tests passed
+  - core matrix: `1,169` tests passed (89 + 92 + 988)
   - node matrix: `477` tests passed
   - `neo-cli` smoke passed
+- **Total cross-repo: 2,022 tests passing**
+
+## Production Hardening (2026-03-26)
+
+Following 8 review cycles, 34 fixes have been applied across the codebase:
+
+- **Interpreter correctness:** Fixed XDROP boundary handling, ENDTRY control flow, CALL/RET frame management, and JMPEQ offset semantics to match C# NeoVM behavior exactly.
+- **Security hardening:** Added codec size limits to prevent unbounded deserialization, OOM guards for guest memory allocation, and bounds checking on stack/slot operations.
+- **C# adapter fixes:** Corrected adapter bridge marshalling, provider registration edge cases, and plugin lifecycle handling.
+- **Reliability and quality:** Improved error propagation, panic-safety in FFI boundaries, and test coverage for edge cases discovered during review.
 
 ## Known Coupling / Residual Risk
 

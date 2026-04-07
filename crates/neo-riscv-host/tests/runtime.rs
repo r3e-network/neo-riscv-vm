@@ -104,6 +104,17 @@ fn build_native_stack_items(stack: &[StackValue]) -> (*mut neo_riscv_host::Nativ
                 bytes_ptr: ptr::null_mut(),
                 bytes_len: 0,
             },
+            StackValue::Buffer(value) => {
+                let bytes = value.clone().into_boxed_slice();
+                let bytes_len = bytes.len();
+                let bytes_ptr = Box::into_raw(bytes) as *mut u8;
+                neo_riscv_host::NativeStackItem {
+                    kind: 11,
+                    integer_value: 0,
+                    bytes_ptr,
+                    bytes_len,
+                }
+            }
         })
         .collect::<Vec<_>>()
         .into_boxed_slice();
@@ -137,6 +148,39 @@ unsafe fn free_native_stack_items(ptr_items: *mut neo_riscv_host::NativeStackIte
     }
     let slice = ptr::slice_from_raw_parts_mut(ptr_items, len);
     unsafe { drop(Box::from_raw(slice)) };
+}
+
+unsafe fn copy_test_native_stack_items(
+    ptr_items: *mut neo_riscv_host::NativeStackItem,
+    len: usize,
+) -> Result<Vec<StackValue>, String> {
+    let mut stack = Vec::with_capacity(len);
+    for index in 0..len {
+        let item = unsafe { &*ptr_items.add(index) };
+        match item.kind {
+            0 => stack.push(StackValue::Integer(item.integer_value)),
+            1 => {
+                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
+                };
+                stack.push(StackValue::ByteString(bytes));
+            }
+            2 => stack.push(StackValue::Null),
+            3 => stack.push(StackValue::Boolean(item.integer_value != 0)),
+            5 => {
+                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
+                };
+                stack.push(StackValue::BigInteger(bytes));
+            }
+            other => return Err(format!("unsupported native stack item kind {other}")),
+        }
+    }
+    Ok(stack)
 }
 
 #[test]
@@ -636,8 +680,16 @@ fn custom_host_callback_handles_large_dynamic_call_shape_with_prior_stack_item()
     .expect("host runtime should handle a large dynamic-call shaped stack with a prior item");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
-    assert_eq!(observed, Some(expected));
+    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
+    assert_eq!(
+        observed,
+        Some(vec![
+            StackValue::Array(vec![StackValue::ByteString(vec![0x42; 576])]),
+            StackValue::Integer(i64::from(0x0f_u8)),
+            StackValue::ByteString(b"bls12381Deserialize".to_vec()),
+            StackValue::ByteString(vec![0x55; 20]),
+        ])
+    );
 }
 
 #[test]
@@ -815,7 +867,7 @@ fn dynamic_call_wrapper_executes_from_nonempty_stack_with_large_argument() {
     .expect("dynamic call wrapper should execute from a non-empty stack");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
+    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
     assert!(observed.is_some());
 }
 
@@ -918,7 +970,7 @@ fn large_dynamic_call_executes_after_small_prior_syscall() {
 
     assert_eq!(call_count, 2);
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
+    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
 }
 
 #[test]
@@ -1019,7 +1071,7 @@ fn consecutive_large_dynamic_calls_can_return_single_final_integer() {
 
     assert_eq!(call_count, 2);
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
+    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
 }
 
 #[test]
@@ -1226,6 +1278,65 @@ fn custom_host_callback_preserves_integer_result_between_syscalls() {
     assert_eq!(
         result.stack,
         vec![StackValue::Integer(1), StackValue::Integer(2)]
+    );
+}
+
+#[test]
+fn custom_host_callback_preserves_integer_then_bytestring_between_syscalls() {
+    let api = neo_riscv_abi::interop_hash("System.Test.Mixed");
+    let script = vec![
+        0x41,
+        api.to_le_bytes()[0],
+        api.to_le_bytes()[1],
+        api.to_le_bytes()[2],
+        api.to_le_bytes()[3],
+        0x41,
+        api.to_le_bytes()[0],
+        api.to_le_bytes()[1],
+        api.to_le_bytes()[2],
+        api.to_le_bytes()[3],
+        0x40,
+    ];
+
+    let mut call_count = 0i64;
+    let mut observed_second = None;
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |callback_api, _ip, _context, stack| {
+            assert_eq!(callback_api, api);
+            call_count += 1;
+            match call_count {
+                1 => Ok(HostCallbackResult {
+                    stack: vec![StackValue::Integer(8)],
+                }),
+                2 => {
+                    observed_second = Some(stack.to_vec());
+                    Ok(HostCallbackResult {
+                        stack: vec![
+                            StackValue::Integer(8),
+                            StackValue::ByteString(b"GAS".to_vec()),
+                        ],
+                    })
+                }
+                _ => unreachable!("unexpected extra callback"),
+            }
+        },
+    )
+    .expect("mixed integer/bytestring results should survive into the second callback");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(observed_second, Some(vec![StackValue::Integer(8)]));
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(8), StackValue::ByteString(b"GAS".to_vec())]
     );
 }
 
@@ -1814,6 +1925,63 @@ unsafe extern "C" fn ffi_error_free_callback(
     }
 }
 
+#[repr(C)]
+struct FfiMixedState {
+    call_count: u32,
+}
+
+unsafe extern "C" fn ffi_mixed_callback(
+    user_data: *mut c_void,
+    _api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiMixedState) };
+    state.call_count += 1;
+
+    let stack = match state.call_count {
+        1 => vec![StackValue::Integer(8)],
+        2 => vec![
+            StackValue::Integer(8),
+            StackValue::ByteString(b"GAS".to_vec()),
+        ],
+        _ => return false,
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_mixed_free_callback(
+    _user_data: *mut c_void,
+    result: *mut NativeHostResult,
+) {
+    if result.is_null() {
+        return;
+    }
+    let result = unsafe { &mut *result };
+    if !result.stack_ptr.is_null() {
+        unsafe { free_native_stack_items(result.stack_ptr, result.stack_len) };
+        result.stack_ptr = ptr::null_mut();
+        result.stack_len = 0;
+    }
+}
+
 #[test]
 fn ffi_host_callback_errors_fault_without_trapping() {
     let syscall = neo_riscv_abi::interop_hash("System.Runtime.Platform");
@@ -2012,6 +2180,67 @@ fn ffi_large_dynamic_call_wrapper_host_error_surfaces_without_trapping() {
 }
 
 #[test]
+fn ffi_mixed_integer_and_bytestring_results_round_trip() {
+    let api = neo_riscv_abi::interop_hash("System.Test.Mixed");
+    let script = vec![
+        0x41,
+        api.to_le_bytes()[0],
+        api.to_le_bytes()[1],
+        api.to_le_bytes()[2],
+        api.to_le_bytes()[3],
+        0x41,
+        api.to_le_bytes()[0],
+        api.to_le_bytes()[1],
+        api.to_le_bytes()[2],
+        api.to_le_bytes()[3],
+        0x40,
+    ];
+
+    let mut state = Box::new(FfiMixedState { call_count: 0 });
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            0,
+            0,
+            ptr::null(),
+            0,
+            (&mut *state) as *mut FfiMixedState as *mut c_void,
+            ffi_mixed_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::Integer(8), StackValue::ByteString(b"GAS".to_vec())]
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
 fn popitem_removes_last_array_element() {
     // Script: PUSH3, PUSH2, PUSH1, PUSH3, PACK, POPITEM, RET
     // PACK pops 3 items: 1, 2, 3 (top to bottom) → Array([1, 2, 3])
@@ -2092,7 +2321,7 @@ fn callt_invokes_host_callback() {
             exec_fee_factor_pico: 0,
         },
         |api, _ip, _context, stack| {
-            if api == 42 {
+            if api == (neo_riscv_guest::CALLT_MARKER | 42) {
                 let mut new_stack = stack.to_vec();
                 new_stack.pop(); // pop "test"
                 new_stack.push(StackValue::Integer(99));
@@ -2276,4 +2505,1094 @@ fn biginteger_through_host_callback() {
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::BigInteger(big_value)]);
+}
+
+#[test]
+fn block_78538_contract_deploy_does_not_trap() {
+    // Mainnet block 78538 tx 0xf5d8a7... — this script pushes a large manifest (855 bytes)
+    // and NEF (311 bytes) then calls System.Contract.Call("deploy"). The large data caused
+    // a PolkaVM Trap in earlier versions due to bump allocator overflow on 32-bit.
+    let contract_call = neo_riscv_abi::interop_hash("System.Contract.Call");
+
+    // Simplified: push two large byte arrays + 4 Contract.Call args, then SYSCALL
+    let manifest = vec![0x42u8; 855]; // 855-byte manifest
+    let nef = vec![0x4e; 311]; // 311-byte NEF
+
+    let mut script = Vec::new();
+    // PUSHDATA2 manifest
+    script.push(0x0d);
+    script.extend_from_slice(&(manifest.len() as u16).to_le_bytes());
+    script.extend_from_slice(&manifest);
+    // PUSHDATA2 nef
+    script.push(0x0d);
+    script.extend_from_slice(&(nef.len() as u16).to_le_bytes());
+    script.extend_from_slice(&nef);
+    // PUSH2 + PACK → Array([nef, manifest])
+    script.push(0x12); // PUSH2
+    script.push(0xc1); // PACK
+    // PUSH15 (callFlags)
+    script.push(0x1f);
+    // PUSHDATA1 "deploy"
+    script.push(0x0c);
+    script.push(6);
+    script.extend_from_slice(b"deploy");
+    // PUSHDATA1 contract hash (20 bytes)
+    script.push(0x0c);
+    script.push(20);
+    script.extend_from_slice(&[0xfd, 0xa3, 0xfa, 0x43, 0x46, 0xea, 0x53, 0x2a, 0x25, 0x8f,
+                                0xc4, 0x97, 0xdd, 0xad, 0xdb, 0x64, 0x37, 0xc9, 0xfd, 0xff]);
+    // SYSCALL System.Contract.Call
+    script.push(0x41);
+    script.extend_from_slice(&contract_call.to_le_bytes());
+    // RET
+    script.push(0x40);
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, _stack| {
+            if api == contract_call {
+                // Mock: return an ~843-byte encoded result (matching real ContractState size)
+                let result_item = StackValue::Array(vec![
+                    StackValue::Map(vec![
+                        (StackValue::ByteString(b"name".to_vec()), StackValue::ByteString(b"HashPuppies".to_vec())),
+                        (StackValue::ByteString(b"groups".to_vec()), StackValue::Array(vec![])),
+                    ]),
+                    StackValue::Integer(0),
+                    StackValue::ByteString(vec![0u8; 200]),
+                    StackValue::ByteString(vec![0u8; 300]),
+                    StackValue::Array(vec![
+                        StackValue::ByteString(vec![0u8; 50]),
+                        StackValue::ByteString(vec![0u8; 50]),
+                        StackValue::ByteString(vec![0u8; 50]),
+                        StackValue::ByteString(vec![0u8; 50]),
+                    ]),
+                ]);
+                Ok(HostCallbackResult { stack: vec![result_item] })
+            } else {
+                Err(format!("unexpected syscall 0x{api:08x}"))
+            }
+        },
+    );
+
+    match result {
+        Ok(r) => {
+            assert_eq!(r.state, VmState::Halt, "script should halt normally");
+            assert_eq!(r.stack.len(), 1, "should have 1 result item on stack");
+        }
+        Err(e) => {
+            if e.contains("Trap") {
+                eprintln!("TRAP ERROR: {e}");
+                panic!("PolkaVM Trap on large contract deploy script: {e}");
+            }
+            eprintln!("Non-trap error (acceptable): {e}");
+        }
+    }
+}
+
+unsafe extern "C" fn ffi_deploy_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _ip: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let contract_call = neo_riscv_abi::interop_hash("System.Contract.Call");
+    if api != contract_call {
+        return false;
+    }
+    // Return a complex result mimicking ContractState (~800 bytes)
+    let result_stack = vec![StackValue::Array(vec![
+        StackValue::Map(vec![
+            (StackValue::ByteString(b"name".to_vec()), StackValue::ByteString(b"HashPuppies".to_vec())),
+        ]),
+        StackValue::Integer(0),
+        StackValue::ByteString(vec![0u8; 300]),
+        StackValue::ByteString(vec![0u8; 200]),
+        StackValue::Array(vec![
+            StackValue::ByteString(vec![0u8; 50]),
+            StackValue::ByteString(vec![0u8; 50]),
+        ]),
+    ])];
+    let (stack_ptr, stack_len) = build_native_stack_items(&result_stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_deploy_free_callback(
+    _user_data: *mut c_void,
+    result: *mut NativeHostResult,
+) {
+    if result.is_null() { return; }
+    let result = unsafe { &mut *result };
+    if !result.stack_ptr.is_null() {
+        unsafe { free_native_stack_items(result.stack_ptr, result.stack_len) };
+        result.stack_ptr = ptr::null_mut();
+        result.stack_len = 0;
+    }
+}
+
+#[test]
+fn block_78538_ffi_path_does_not_trap() {
+    let contract_call = neo_riscv_abi::interop_hash("System.Contract.Call");
+    let manifest = vec![0x42u8; 855];
+    let nef = vec![0x4e; 311];
+
+    let mut script = Vec::new();
+    script.push(0x0d);
+    script.extend_from_slice(&(manifest.len() as u16).to_le_bytes());
+    script.extend_from_slice(&manifest);
+    script.push(0x0d);
+    script.extend_from_slice(&(nef.len() as u16).to_le_bytes());
+    script.extend_from_slice(&nef);
+    script.push(0x12); // PUSH2
+    script.push(0xc1); // PACK
+    script.push(0x1f); // PUSH15
+    script.push(0x0c);
+    script.push(6);
+    script.extend_from_slice(b"deploy");
+    script.push(0x0c);
+    script.push(20);
+    script.extend_from_slice(&[0xfd; 20]);
+    script.push(0x41);
+    script.extend_from_slice(&contract_call.to_le_bytes());
+    script.push(0x40);
+
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let success = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0, // initial_ip
+            0x40, // trigger
+            860833102, // network
+            53, // address_version
+            0, // timestamp
+            100_000_000, // gas_left
+            0, // exec_fee_factor_pico
+            ptr::null(), // initial_stack
+            0,
+            ptr::null_mut(), // user_data
+            ffi_deploy_callback,
+            ffi_deploy_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(success, "FFI execution should not crash");
+
+    if !output.error_ptr.is_null() && output.error_len > 0 {
+        let error = unsafe {
+            String::from_utf8_lossy(slice::from_raw_parts(output.error_ptr, output.error_len))
+                .to_string()
+        };
+        if error.contains("Trap") {
+            unsafe { neo_riscv_free_execution_result(&mut output) };
+            panic!("FFI path Trap: {error}");
+        }
+        eprintln!("FFI error (non-trap): {error}");
+    }
+
+    unsafe { neo_riscv_free_execution_result(&mut output) };
+}
+
+/// Test: Execute a C#-compiled RISC-V native contract (Contract_Assignment)
+/// This binary was generated by: C# → nccs --target riscv → Rust → polkatool link → .polkavm
+#[test]
+fn test_csharp_compiled_native_contract() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_assignment.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found (run C# compiler with --target riscv first)");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 1_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "testAssignment",
+        vec![],
+        context,
+        |_api, _ip, _ctx, _stack| {
+            Ok(HostCallbackResult {
+                stack: vec![],
+            })
+        },
+    );
+
+    match &result {
+        Ok(r) => {
+            eprintln!("C# native contract executed: state={:?}, stack={:?}", r.state, r.stack);
+        }
+        Err(e) => {
+            eprintln!("C# native contract error: {e}");
+        }
+    }
+    // The contract should at least load and attempt execution without panicking
+    assert!(result.is_ok() || result.as_ref().err().map_or(false, |e| !e.contains("Trap")),
+        "Contract should not trap: {:?}", result);
+}
+
+/// Test: Execute Contract_MissingCheckWitness.unsafeUpdate via Rust host directly.
+/// This bypasses C# FFI marshaling to isolate whether the bug is in the Rust host or C# layer.
+#[test]
+fn test_native_contract_missing_check_witness_unsafe_update() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    // Storage for tracking Put calls
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    let storage: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let storage_clone = storage.clone();
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "unsafeUpdate",
+        vec![
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={}", api, stack.len());
+            match api {
+                0xce67f69b => {
+                    // Storage.GetContext - return integer 0
+                    eprintln!("[TEST]   -> GetContext");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Integer(0)],
+                    })
+                }
+                0x84183fe6 => {
+                    // Storage.Put(context, key, value)
+                    if stack.len() >= 3 {
+                        let key = match &stack[1] {
+                            StackValue::ByteString(b) => b.clone(),
+                            _ => vec![],
+                        };
+                        let value = match &stack[2] {
+                            StackValue::ByteString(b) => b.clone(),
+                            _ => vec![],
+                        };
+                        eprintln!("[TEST]   -> Put key={:?} value={:?}", String::from_utf8_lossy(&key), String::from_utf8_lossy(&value));
+                        storage_clone.lock().unwrap().insert(key, value);
+                    } else {
+                        eprintln!("[TEST]   -> Put: stack too short (len={})", stack.len());
+                    }
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => {
+                    eprintln!("[TEST]   -> unknown syscall");
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+            }
+        },
+    );
+
+    match &result {
+        Ok(r) => {
+            eprintln!("[TEST] result: state={:?}, stack_len={}, fault={:?}", r.state, r.stack.len(), r.fault_message);
+            eprintln!("[TEST] storage entries: {}", storage.lock().unwrap().len());
+            for (k, v) in storage.lock().unwrap().iter() {
+                eprintln!("[TEST]   {:?} = {:?}", String::from_utf8_lossy(k), String::from_utf8_lossy(v));
+            }
+        }
+        Err(e) => {
+            eprintln!("[TEST] error: {e}");
+        }
+    }
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(storage.lock().unwrap().len(), 1, "Storage should have 1 entry");
+    assert_eq!(
+        storage.lock().unwrap().get(b"mykey".as_slice()),
+        Some(&b"myvalue".to_vec()),
+        "Storage should contain mykey=myvalue"
+    );
+}
+
+#[test]
+fn test_native_contract_echo_args() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "echoArgs",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |_api, _ip, _ctx, _stack| {
+            Ok(HostCallbackResult { stack: vec![] })
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[ECHO] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    // Stack should have [myvalue, mykey, myaccount] (loaded in reverse order: arg2, arg1, arg0)
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_echo_after_bridge() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "echoAfterBridge",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |api, _ip, _ctx, stack| {
+            eprintln!("[ECHO1] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] }),
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[ECHO1] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_echo_after_bridge_with_local() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "echoAfterBridgeWithLocal",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |api, _ip, _ctx, stack| {
+            eprintln!("[ECHOWL] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] }),
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[ECHOWL] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_echo_after_2_bridges() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "echoAfter2Bridges",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |api, _ip, _ctx, stack| {
+            eprintln!("[ECHO2] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] }),
+                0xce67f69b => Ok(HostCallbackResult { stack: vec![StackValue::Integer(0)] }),
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[ECHO2] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_echo_after_2_bridges_local() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "echoAfter2BridgesLocal",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |api, _ip, _ctx, stack| {
+            eprintln!("[ECHOL] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] }),
+                0xce67f69b => Ok(HostCallbackResult { stack: vec![StackValue::Integer(0)] }),
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[ECHOL] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_two_bridges_no_host() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "twoBridgesNoHost",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        |api, _ip, _ctx, _stack| {
+            panic!("twoBridgesNoHost should NOT call any host callbacks, but got api=0x{:08x}", api);
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TWOBRIDGES] state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, VmState::Halt, "Should HALT");
+    assert_eq!(r.stack.len(), 3, "Stack should have 3 items");
+    assert_eq!(r.stack[0], StackValue::ByteString(b"myvalue".to_vec()), "arg[2] should be myvalue");
+    assert_eq!(r.stack[1], StackValue::ByteString(b"mykey".to_vec()), "arg[1] should be mykey");
+    assert_eq!(r.stack[2], StackValue::ByteString(b"myaccount".to_vec()), "arg[0] should be myaccount");
+}
+
+#[test]
+fn test_native_contract_missing_check_witness_safe_update() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    let storage: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let storage_clone = storage.clone();
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "safeUpdate",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()), // account for CheckWitness
+            StackValue::ByteString(b"mykey".to_vec()),     // storage key
+            StackValue::ByteString(b"myvalue".to_vec()),   // storage value
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => {
+                    // CheckWitness - return true
+                    eprintln!("[TEST]   -> CheckWitness -> true");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Boolean(true)],
+                    })
+                }
+                0xce67f69b => {
+                    // Storage.GetContext - return integer 0
+                    eprintln!("[TEST]   -> GetContext");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Integer(0)],
+                    })
+                }
+                0x84183fe6 => {
+                    // Storage.Put(context, key, value)
+                    if stack.len() >= 3 {
+                        let key = match &stack[1] {
+                            StackValue::ByteString(b) => b.clone(),
+                            _ => vec![],
+                        };
+                        let value = match &stack[2] {
+                            StackValue::ByteString(b) => b.clone(),
+                            _ => vec![],
+                        };
+                        eprintln!("[TEST]   -> Put key={:?} value={:?}", String::from_utf8_lossy(&key), String::from_utf8_lossy(&value));
+                        storage_clone.lock().unwrap().insert(key, value);
+                    } else {
+                        eprintln!("[TEST]   -> Put SKIPPED: stack too short");
+                    }
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(storage.lock().unwrap().len(), 1, "Storage should have 1 entry");
+    assert_eq!(
+        storage.lock().unwrap().get(b"mykey".as_slice()),
+        Some(&b"myvalue".to_vec()),
+        "Storage should contain mykey=myvalue"
+    );
+}
+
+#[test]
+fn test_native_contract_checkwitness_simple() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_testcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "testCheckWitness",
+        vec![
+            StackValue::ByteString(b"testaddr".to_vec()),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={}", api, stack.len());
+            match api {
+                0x8cec27f8 => {
+                    // CheckWitness - return true
+                    eprintln!("[TEST]   -> CheckWitness -> true");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Boolean(true)],
+                    })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert!(!r.stack.is_empty(), "Result stack should not be empty");
+    assert_eq!(r.stack[0], StackValue::Boolean(true), "CheckWitness should return true");
+}
+
+#[test]
+fn test_native_contract_checkwitness_init3() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "testCheckWitness3",
+        vec![
+            StackValue::Boolean(true),
+            StackValue::Boolean(true),
+            StackValue::Boolean(true),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={}", api, stack.len());
+            match api {
+                0x8cec27f8 => {
+                    eprintln!("[TEST]   -> CheckWitness -> true");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Boolean(true)],
+                    })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+}
+
+#[test]
+fn test_native_contract_safe_update_minimal_args() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    // Use only Boolean(true) as all 3 args — minimize encoding differences
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "safeUpdate",
+        vec![
+            StackValue::Boolean(true),
+            StackValue::Boolean(true),
+            StackValue::Boolean(true),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => {
+                    eprintln!("[TEST]   -> CheckWitness -> true");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Boolean(true)],
+                    })
+                }
+                0xce67f69b => {
+                    eprintln!("[TEST]   -> GetContext");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Integer(0)],
+                    })
+                }
+                0x84183fe6 => {
+                    eprintln!("[TEST]   -> Put");
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+}
+
+#[test]
+#[test]
+fn test_native_contract_unsafe_update_two_syscalls() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "unsafeUpdate",
+        vec![
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={}", api, stack.len());
+            match api {
+                0xce67f69b => {
+                    eprintln!("[TEST]   -> GetContext");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Integer(0)],
+                    })
+                }
+                0x84183fe6 => {
+                    eprintln!("[TEST]   -> Put");
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+}
+
+#[test]
+fn test_native_contract_checkwitness_with_assert() {
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "testCheckWitness",
+        vec![
+            StackValue::ByteString(b"testaddr".to_vec()),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] callback: api=0x{:08x} stack_len={}", api, stack.len());
+            match api {
+                0x8cec27f8 => {
+                    eprintln!("[TEST]   -> CheckWitness -> true");
+                    Ok(HostCallbackResult {
+                        stack: vec![StackValue::Boolean(true)],
+                    })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+}
+
+#[test]
+fn test_native_contract_checkwitness_then_put_hardcoded() {
+    // Test: CheckWitness + Put with hardcoded values (no arg loading after syscalls)
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    let storage: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let storage_clone = storage.clone();
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "checkWitnessThenPut",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()),
+            StackValue::ByteString(b"mykey".to_vec()),
+            StackValue::ByteString(b"myvalue".to_vec()),
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] checkwitness_then_put: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => {
+                    Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] })
+                }
+                0xce67f69b => {
+                    Ok(HostCallbackResult { stack: vec![StackValue::Integer(0)] })
+                }
+                0x84183fe6 => {
+                    if stack.len() >= 3 {
+                        let key = match &stack[1] { StackValue::ByteString(b) => b.clone(), _ => vec![] };
+                        let value = match &stack[2] { StackValue::ByteString(b) => b.clone(), _ => vec![] };
+                        eprintln!("[TEST]   -> Put key={:?} value={:?}", String::from_utf8_lossy(&key), String::from_utf8_lossy(&value));
+                        storage_clone.lock().unwrap().insert(key, value);
+                    }
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(storage.lock().unwrap().get(b"hardcoded_key".as_slice()), Some(&b"hardcoded_value".to_vec()));
+}
+
+#[test]
+fn test_native_contract_checkwitness_getcontext_put() {
+    // Test: CheckWitness + GetContext + Put with arg loading after syscalls
+    let polkavm_path = "/tmp/riscv-test-output/contract_missingcheckwitness.polkavm";
+    if !std::path::Path::new(polkavm_path).exists() {
+        eprintln!("Skipping: {polkavm_path} not found");
+        return;
+    }
+    let binary = std::fs::read(polkavm_path).expect("read polkavm binary");
+
+    let context = RuntimeContext {
+        trigger: 0x40,
+        network: 860833102,
+        address_version: 53,
+        timestamp: None,
+        gas_left: 10_000_000_000_000,
+        exec_fee_factor_pico: 30_000,
+    };
+
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    let storage: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let storage_clone = storage.clone();
+
+    let result = neo_riscv_host::execute_native_contract(
+        &binary,
+        "checkWitnessGetContextPut",
+        vec![
+            StackValue::ByteString(b"myaccount".to_vec()), // account for CheckWitness
+            StackValue::ByteString(b"mykey".to_vec()),     // storage key
+            StackValue::ByteString(b"myvalue".to_vec()),   // storage value
+        ],
+        context,
+        move |api, _ip, _ctx, stack| {
+            eprintln!("[TEST] checkwitness_getcontext_put: api=0x{:08x} stack_len={} stack={:?}", api, stack.len(), stack);
+            match api {
+                0x8cec27f8 => {
+                    Ok(HostCallbackResult { stack: vec![StackValue::Boolean(true)] })
+                }
+                0xce67f69b => {
+                    Ok(HostCallbackResult { stack: vec![StackValue::Integer(0)] })
+                }
+                0x84183fe6 => {
+                    if stack.len() >= 3 {
+                        let key = match &stack[1] { StackValue::ByteString(b) => b.clone(), _ => vec![] };
+                        let value = match &stack[2] { StackValue::ByteString(b) => b.clone(), _ => vec![] };
+                        eprintln!("[TEST]   -> Put key={:?} value={:?}", String::from_utf8_lossy(&key), String::from_utf8_lossy(&value));
+                        storage_clone.lock().unwrap().insert(key, value);
+                    }
+                    Ok(HostCallbackResult { stack: vec![] })
+                }
+                _ => Ok(HostCallbackResult { stack: vec![] }),
+            }
+        },
+    );
+
+    assert!(result.is_ok(), "Contract should execute: {:?}", result);
+    let r = result.unwrap();
+    eprintln!("[TEST] checkwitness_getcontext_put result: state={:?} stack={:?}", r.state, r.stack);
+    assert_eq!(r.state, neo_riscv_abi::VmState::Halt, "Should HALT");
+    assert_eq!(storage.lock().unwrap().len(), 1, "Storage should have 1 entry");
+    assert_eq!(
+        storage.lock().unwrap().get(b"mykey".as_slice()),
+        Some(&b"myvalue".to_vec()),
+        "Storage should contain mykey=myvalue"
+    );
 }

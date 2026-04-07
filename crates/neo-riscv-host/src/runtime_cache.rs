@@ -16,6 +16,9 @@ type ExecutionInstance = Instance<ClosureHost, core::convert::Infallible>;
 type InstancePreMap = HashMap<u32, CachedInstancePre>;
 type ExecutionInstancePool = HashMap<u32, Vec<ExecutionInstance>>;
 
+/// Maximum number of cached instances per aux_size in the pool.
+const MAX_POOL_SIZE_PER_AUX: usize = 16;
+
 static INSTANCE_PRES: OnceLock<Mutex<InstancePreMap>> = OnceLock::new();
 static EXECUTION_INSTANCES: OnceLock<Mutex<ExecutionInstancePool>> = OnceLock::new();
 
@@ -45,7 +48,11 @@ impl Drop for CachedExecutionInstance {
 
         if let Some(pool) = EXECUTION_INSTANCES.get() {
             if let Ok(mut guard) = pool.lock() {
-                guard.entry(self.aux_size).or_default().push(instance);
+                let instances = guard.entry(self.aux_size).or_default();
+                if instances.len() < MAX_POOL_SIZE_PER_AUX {
+                    instances.push(instance);
+                }
+                // else: pool is full, just drop the instance
             }
         }
     }

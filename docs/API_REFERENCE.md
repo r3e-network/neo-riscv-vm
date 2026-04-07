@@ -1,7 +1,7 @@
 # API Reference
 
 **Version:** 1.0  
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-26
 
 ---
 
@@ -138,16 +138,24 @@ pub fn get_peak_memory() -> usize
 
 ```c
 /**
- * Execute a script with default context
- * 
+ * Execute a script with basic context
+ *
  * @param script - Script bytecode
  * @param script_len - Script length in bytes
+ * @param trigger - Execution trigger type
+ * @param network - Network magic number
+ * @param timestamp - Block timestamp (0 for none)
+ * @param gas_left - Initial gas (datoshi)
  * @param result - Output execution result
  * @return true on success, false on error
  */
 bool neo_riscv_execute_script(
     const uint8_t* script,
     size_t script_len,
+    uint8_t trigger,
+    uint32_t network,
+    uint64_t timestamp,
+    int64_t gas_left,
     NativeExecutionResult* result
 );
 ```
@@ -506,36 +514,45 @@ pub enum StackValue {
 }
 ```
 
-### Binary Encoding
+### Binary Encoding (fast_codec)
 
-Stack values are encoded as:
+Stack values are encoded using the custom fast codec (`crates/neo-riscv-abi/src/fast_codec.rs`).
+Each encoded stack begins with a 4-byte LE item count, followed by the items:
 
 ```
-[tag: u8] [data: variable]
+[count: u32 LE] [item]...
+
+Item = [tag: u8] [data: variable]
 
 Tags:
-0x00 = Integer (8 bytes, little-endian i64)
-0x01 = ByteString (4 bytes LE length + data)
-0x02 = Boolean (1 byte: 0=false, 1=true)
-0x03 = Null (no data)
-0x04 = Array (4 bytes LE count + items)
-0x05 = BigInteger (4 bytes LE length + data)
-0x06 = Struct (4 bytes LE count + items)
-0x07 = Map (4 bytes LE count + key-value pairs)
-0x08 = Interop (8 bytes handle)
-0x09 = Iterator (8 bytes handle)
-0x0A = Pointer (8 bytes usize)
+0x01 = Integer (8 bytes, little-endian i64)
+0x02 = BigInteger (4 bytes LE length + data)
+0x03 = ByteString (4 bytes LE length + data)
+0x04 = Boolean (1 byte: 0=false, 1=true)
+0x05 = Array (4 bytes LE count + items, recursive)
+0x06 = Struct (4 bytes LE count + items, recursive)
+0x07 = Map (4 bytes LE count + key-value pairs, recursive)
+0x08 = Interop (8 bytes LE handle)
+0x09 = Iterator (8 bytes LE handle)
+0x0A = Null (no data)
+0x0B = Pointer (8 bytes LE i64)
 ```
+
+Decoding enforces `MAX_DECODE_DEPTH` (64) and `MAX_COLLECTION_LEN` (4096) to prevent
+stack overflow and OOM from malicious payloads.
+
+**Guest result size limit:** The host rejects any guest result larger than
+`MAX_RESULT_SIZE` (16 MB, defined in `neo-riscv-host/src/lib.rs`).
 
 ### Example Encodings
 
 | Value | Encoding (hex) |
 |-------|----------------|
-| Integer(42) | `00 2a 00 00 00 00 00 00 00` |
-| Boolean(true) | `02 01` |
-| Null | `03` |
-| ByteString("hi") | `01 02 00 00 00 68 69` |
-| Array([1, 2]) | `04 02 00 00 00 00 01 00 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00` |
+| Integer(42) | `01 2a 00 00 00 00 00 00 00` |
+| Boolean(true) | `04 01` |
+| Null | `0a` |
+| ByteString("hi") | `03 02 00 00 00 68 69` |
+| Array([1, 2]) | `05 02 00 00 00 01 01 00 00 00 00 00 00 00 01 02 00 00 00 00 00 00 00` |
 
 ---
 
@@ -604,18 +621,22 @@ fn main() {
 int main() {
     uint8_t script[] = {0x11, 0x12, 0x9e, 0x40};
     NativeExecutionResult result;
-    
+
     bool success = neo_riscv_execute_script(
-        script, 
-        sizeof(script), 
+        script,
+        sizeof(script),
+        0x40,          /* trigger: Application */
+        860833102,     /* network magic */
+        0,             /* timestamp (none) */
+        10000000,      /* gas_left */
         &result
     );
-    
+
     if (success && result.state == 0) {
         printf("Execution succeeded\n");
         printf("Gas consumed: %ld\n", result.fee_consumed_pico);
     }
-    
+
     neo_riscv_free_execution_result(&result);
     return 0;
 }
@@ -647,6 +668,7 @@ Console.WriteLine($"Execution state: {state}");
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-03-24 | Initial release |
+| 1.1 | 2026-03-26 | Updated FFI signatures, fast_codec tags, MAX_RESULT_SIZE docs |
 
 ---
 

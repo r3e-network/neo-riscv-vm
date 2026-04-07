@@ -603,7 +603,7 @@ fn string_concatenation() {
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(
         result.stack,
-        vec![StackValue::ByteString(b"hello".to_vec())]
+        vec![StackValue::Buffer(b"hello".to_vec())]
     );
 }
 

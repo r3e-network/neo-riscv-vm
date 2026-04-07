@@ -1,6 +1,6 @@
 # Devpack Native Contract + Syscall Hardening Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make `neo-riscv-devpack` production-credible by fixing syscall ABI correctness, replacing native wrapper stubs with real contract-call wrappers, and validating coverage with deterministic tests.
 

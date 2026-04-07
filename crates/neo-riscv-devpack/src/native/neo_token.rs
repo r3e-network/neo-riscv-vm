@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use neo_riscv_abi::StackValue;
 
@@ -86,14 +86,11 @@ pub fn neo_unclaimed_gas(account: &[u8; 20], end: u32) -> i64 {
         .unwrap_or(0)
 }
 
-pub fn neo_symbol() -> &'static str {
+pub fn neo_symbol() -> String {
     const DEFAULT: &str = "NEO";
-    let actual = call_native_read_only(&NEO_TOKEN_HASH, "symbol", &[])
-        .and_then(|v| stack_item_as_string(&v));
-    match actual.as_deref() {
-        Some("NEO") => DEFAULT,
-        _ => DEFAULT,
-    }
+    call_native_read_only(&NEO_TOKEN_HASH, "symbol", &[])
+        .and_then(|v| stack_item_as_string(&v))
+        .unwrap_or_else(|| String::from(DEFAULT))
 }
 
 pub fn neo_decimals() -> u8 {

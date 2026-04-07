@@ -305,3 +305,52 @@ fn completely_empty_input_returns_error() {
     let result = decode_stack_result(bytes);
     assert!(result.is_err(), "empty input must produce an error");
 }
+
+// ===========================================================================
+// 5. Decode safety limits (callback_codec)
+// ===========================================================================
+
+#[test]
+fn decode_rejects_excessive_nesting() {
+    // Build a payload: result tag 0 (Ok), top-level count = 1,
+    // then 65 nested arrays (tag 4, len 1) to exceed MAX_DECODE_DEPTH (64).
+    // decode_stack_value_depth starts at depth=0, each Array recurses with depth+1,
+    // so the 65th nested array will attempt depth=65 which exceeds the limit.
+    let mut payload = Vec::new();
+    payload.push(0x00); // result tag: Ok
+    payload.extend_from_slice(&1u32.to_le_bytes()); // top-level stack count = 1
+    for _ in 0..65 {
+        payload.push(4); // Array tag
+        payload.extend_from_slice(&1u32.to_le_bytes()); // array length = 1
+    }
+    // Innermost value (won't be reached due to depth limit)
+    payload.push(9); // Null tag
+
+    let result = decode_stack_result(&payload);
+    assert!(result.is_err(), "excessive nesting must be rejected");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("depth"),
+        "error should mention depth, got: {err}"
+    );
+}
+
+#[test]
+fn decode_rejects_excessive_collection_length() {
+    // Build a payload: result tag 0 (Ok), top-level count = 5000,
+    // which exceeds MAX_COLLECTION_LEN (4096).
+    let mut payload = Vec::new();
+    payload.push(0x00); // result tag: Ok
+    payload.extend_from_slice(&5000u32.to_le_bytes()); // count = 5000
+
+    let result = decode_stack_result(&payload);
+    assert!(
+        result.is_err(),
+        "excessive collection length must be rejected"
+    );
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("length"),
+        "error should mention length, got: {err}"
+    );
+}

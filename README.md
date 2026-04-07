@@ -4,7 +4,7 @@
 [![Status](https://img.shields.io/badge/status-workspace%20production%20ready-brightgreen)](./docs/CURRENT_STATUS.md)
 [![Syscalls](https://img.shields.io/badge/syscalls-C%23%20source%20of%20truth-blue)](./docs/architecture-syscalls.md)
 
-Production-ready RISC-V execution stack for Neo N3.
+Production-ready RISC-V execution stack for Neo N3, hardened through 8 review cycles with 34 fixes applied across correctness, security, reliability, and code quality.
 
 The current committed implementation is a plugin-first, cross-repo integration:
 
@@ -32,12 +32,13 @@ Latest committed verification passed with:
 
 | Scope | Evidence |
 |------|----------|
-| VM workspace tests | `cargo test --workspace --all-targets` passed (`311` Rust/devpack tests) |
+| VM workspace tests | `cargo test --workspace --all-targets` passed (`376` Rust/devpack tests) |
 | JSON compatibility | full corpus runner passed over `161` copied NeoVM JSON files |
 | Adapter tests | `NEO_RISCV_HOST_LIB=... dotnet test compat/Neo.Riscv.Adapter.Tests/...` passed (`10` tests) |
-| Core matrix | `1171` tests passed across `Neo.Extensions.Tests`, `Neo.Json.UnitTests`, and `Neo.UnitTests` |
+| Core matrix | `1,169` tests passed across `Neo.Extensions.Tests` (89), `Neo.Json.UnitTests` (92), and `Neo.UnitTests` (988) |
 | Node matrix | `477` tests passed across `13` node/plugin test projects |
 | Smoke coverage | VM E2E, FFI resolution, and `neo-cli` smoke all passed |
+| **Total** | **2,022 tests passing cross-repo** |
 
 Canonical full validation command:
 

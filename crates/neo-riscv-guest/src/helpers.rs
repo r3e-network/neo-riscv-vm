@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::runtime_types::{to_abi_stack, CompoundIds, StackValue};
+use crate::runtime_types::{to_abi_stack, to_abi_value, CompoundIds, StackValue};
 use crate::SyscallProvider;
 use alloc::{
     format,
@@ -332,13 +332,17 @@ pub(crate) fn apply_abi_stack(
     abi_stack: Vec<neo_riscv_abi::StackValue>,
     ids: &mut CompoundIds,
 ) {
-    let len = abi_stack.len();
-    let mut imported = Vec::with_capacity(len);
-    for item in abi_stack {
-        imported.push(ids.import_abi(item));
-    }
-    let retired = core::mem::replace(stack, imported);
+    // Drop the old vector shell but leak its storage before allocating the
+    // replacement. Under PolkaVM, post-callback allocations can otherwise
+    // overlap still-live stack backing memory.
+    let retired = core::mem::take(stack);
     core::mem::forget(retired);
+
+    let mut next_stack = Vec::with_capacity(abi_stack.len());
+    for item in abi_stack {
+        next_stack.push(ids.import_abi(item));
+    }
+    *stack = next_stack;
 }
 
 pub(crate) fn invoke_syscall<H: SyscallProvider>(
@@ -348,15 +352,40 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
     stack: &mut Vec<StackValue>,
     ids: &mut CompoundIds,
 ) -> Result<(), String> {
-    let mut abi_stack = to_abi_stack(stack);
-    match host.syscall(api, ip, &mut abi_stack) {
+    // Only pass the arguments the syscall actually needs instead of the entire
+    // evaluation stack. This avoids encoding/decoding thousands of items through
+    // the host boundary — e.g., System.Contract.Call needs 4 items, not 1,230.
+    let arg_count = neo_riscv_abi::syscall_arg_count(api).min(stack.len());
+    let keep = stack.len() - arg_count;
+
+    let mut abi_args: Vec<neo_riscv_abi::StackValue> = Vec::with_capacity(arg_count.min(64));
+    for item in &stack[keep..] {
+        abi_args.push(to_abi_value(item));
+    }
+
+    match host.syscall(api, ip, &mut abi_args) {
         Ok(()) => {
-            apply_abi_stack(stack, abi_stack, ids);
+            if keep == 0 {
+                let retired = core::mem::take(stack);
+                core::mem::forget(retired);
+
+                let mut next_stack = Vec::with_capacity(abi_args.len());
+                for item in abi_args {
+                    next_stack.push(ids.import_abi(item));
+                }
+                *stack = next_stack;
+            } else {
+                // Known syscalls keep a prefix on the evaluation stack and only
+                // replace the consumed argument tail with callback results.
+                stack.truncate(keep);
+                for item in abi_args {
+                    stack.push(ids.import_abi(item));
+                }
+            }
             Ok(())
         }
         Err(e) => {
-            // Leak abi_stack on error to avoid talc free-list corruption on RISC-V/PolkaVM
-            core::mem::forget(abi_stack);
+            core::mem::forget(abi_args);
             Err(e)
         }
     }

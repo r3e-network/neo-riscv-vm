@@ -2,12 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LIB_PATH="${NEO_RISCV_HOST_LIB:-${ROOT_DIR}/target/debug/libneo_riscv_host.so}"
+LIB_PATH="${NEO_RISCV_HOST_LIB:-${ROOT_DIR}/target/release/libneo_riscv_host.so}"
 
 echo "Testing FFI library resolution..."
 
 if [[ ! -f "${LIB_PATH}" ]]; then
-  cargo build -p neo-riscv-host
+  cargo build -p neo-riscv-host --release
 fi
 
 if [[ ! -f "${LIB_PATH}" ]]; then

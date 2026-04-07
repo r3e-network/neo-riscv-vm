@@ -59,6 +59,9 @@ impl SyscallProvider for FfiHost {
         };
         let (input_stack_ptr, input_stack_len) = serialize_stack_items(stack);
 
+        // SAFETY: self.callback is a C# delegate pointer provided by the FFI caller.
+        // self.user_data is a GCHandle pinned for the duration of the execution.
+        // input_stack_ptr was allocated by serialize_stack_items and is valid until freed below.
         let invoked = unsafe {
             (self.callback)(
                 self.user_data,
@@ -82,7 +85,12 @@ impl SyscallProvider for FfiHost {
             ));
         }
 
+        // copy_native_host_result deep-copies all data from the C#-owned result BEFORE
+        // free_callback is called. This ordering is critical — the free_callback releases
+        // the C# GCHandle and associated memory.
         let host_result = copy_native_host_result(&result);
+        // SAFETY: self.free_callback is the C# cleanup delegate. result was populated by
+        // the callback above and is valid for this call.
         unsafe {
             (self.free_callback)(self.user_data, &mut result);
         }
@@ -118,6 +126,9 @@ fn copy_native_stack_items(
     let mut stack = Vec::with_capacity(stack_len);
 
     for index in 0..stack_len {
+        // SAFETY: stack_ptr points to a contiguous array of stack_len NativeStackItem structs
+        // allocated by the C# caller (Marshal.AllocHGlobal). index < stack_len is guaranteed
+        // by the loop bound.
         let item_ptr = unsafe { stack_ptr.add(index) };
         let item = unsafe { &*item_ptr };
         match item.kind {
@@ -143,6 +154,14 @@ fn copy_native_stack_items(
                     unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
                 };
                 stack.push(neo_riscv_abi::StackValue::ByteString(bytes));
+            }
+            11 => {
+                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
+                };
+                stack.push(neo_riscv_abi::StackValue::Buffer(bytes));
             }
             3 => stack.push(neo_riscv_abi::StackValue::Boolean(item.integer_value != 0)),
             4 => {
@@ -241,6 +260,17 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
                 let bytes_ptr = Box::into_raw(bytes) as *mut u8;
                 NativeStackItem {
                     kind: 1,
+                    integer_value: 0,
+                    bytes_ptr,
+                    bytes_len,
+                }
+            }
+            neo_riscv_abi::StackValue::Buffer(value) => {
+                let bytes = value.clone().into_boxed_slice();
+                let bytes_len = bytes.len();
+                let bytes_ptr = Box::into_raw(bytes) as *mut u8;
+                NativeStackItem {
+                    kind: 11,
                     integer_value: 0,
                     bytes_ptr,
                     bytes_len,

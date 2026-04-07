@@ -6,10 +6,7 @@ pub fn bench(c: &mut Criterion) {
         StackValue::Integer(42),
         StackValue::ByteString(vec![1, 2, 3, 4, 5]),
         StackValue::Boolean(true),
-        StackValue::Array(vec![
-            StackValue::Integer(1),
-            StackValue::Integer(2),
-        ]),
+        StackValue::Array(vec![StackValue::Integer(1), StackValue::Integer(2)]),
     ];
 
     c.bench_function("fast_codec_encode", |b| {

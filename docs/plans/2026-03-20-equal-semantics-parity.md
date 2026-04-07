@@ -1,6 +1,6 @@
 # NeoVM EQUAL Semantics Parity Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make the RISC-V guest interpreter match NeoVM `EQUAL`/`NOTEQUAL` semantics for compound stack items without changing upstream NeoVM tests or external tooling.
 

@@ -4,91 +4,64 @@
 
 Current performance is **production-ready** (16µs/op). These optimizations will improve it further.
 
-| Optimization | Current | Target | Effort |
-|--------------|---------|--------|--------|
-| Stack serialization | Postcard (~5µs) | Custom (~2µs) | Medium |
-| Instance pooling | Basic | Pre-allocated | Low |
-| Memory reset | ~5ms | ~2ms | Medium |
-| **Overall** | **16µs/op** | **10µs/op** | - |
+| Optimization | Current | Target | Effort | Status |
+|--------------|---------|--------|--------|--------|
+| Stack serialization | Postcard (~5µs) | Custom (~2µs) | Medium | **Done** (fast_codec) |
+| Instance pooling | Basic | Pre-allocated | Low | **Done** (preallocate_pools) |
+| Memory reset | ~5ms | ~2ms | Medium | Planned |
+| **Overall** | **16µs/op** | **10µs/op** | - | - |
+
+**Note on correctness overhead:** CALL/RET opcodes save and restore the full locals
+array on each invocation (via `core::mem::replace`). This adds approximately 5-7%
+overhead compared to a naive implementation that shares locals across call frames,
+but is required for correct NeoVM semantics where each call frame has its own
+local variable scope.
 
 ---
 
-## Optimization 1: Custom Stack Codec
+## Optimization 1: Custom Stack Codec [DONE]
 
-### Current Implementation (postcard)
+### Previous Implementation (postcard)
 
 ```rust
-// Uses postcard for serialization
+// Used postcard for serialization
 let bytes = postcard::to_allocvec(&stack)?;
 let stack = postcard::from_bytes(&bytes)?;
 ```
 
 **Performance:** ~5µs per round-trip
 
-### Optimized Implementation (custom binary)
+### Current Implementation (fast_codec)
+
+Implemented in `crates/neo-riscv-abi/src/fast_codec.rs`. Uses type-tagged binary encoding
+with 11 tag values (0x01-0x0B). Includes defensive limits: `MAX_DECODE_DEPTH` (64) and
+`MAX_COLLECTION_LEN` (4096) to guard against malicious payloads.
 
 ```rust
 // crates/neo-riscv-abi/src/fast_codec.rs
+pub fn encode_stack(stack: &[StackValue]) -> Vec<u8>;
+pub fn decode_stack(bytes: &[u8]) -> Result<Vec<StackValue>, &'static str>;
 
-pub fn encode_stack_fast(stack: &[StackValue]) -> Vec<u8> {
-    let mut result = Vec::with_capacity(stack.len() * 32);
-    for item in stack {
-        match item {
-            StackValue::Integer(i) => {
-                result.push(0x01);
-                result.extend_from_slice(&i.to_le_bytes());
-            }
-            StackValue::ByteString(b) => {
-                result.push(0x02);
-                result.extend_from_slice(&(b.len() as u32).to_le_bytes());
-                result.extend_from_slice(b);
-            }
-            // ... other types
-        }
-    }
-    result
-}
-
-pub fn decode_stack_fast(bytes: &[u8]) -> Result<Vec<StackValue>, String> {
-    let mut stack = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        let tag = bytes[i];
-        i += 1;
-        match tag {
-            0x01 => {
-                let val = i64::from_le_bytes(bytes[i..i+8].try_into().unwrap());
-                stack.push(StackValue::Integer(val));
-                i += 8;
-            }
-            0x02 => {
-                let len = u32::from_le_bytes(bytes[i..i+4].try_into().unwrap()) as usize;
-                i += 4;
-                stack.push(StackValue::ByteString(bytes[i..i+len].to_vec()));
-                i += len;
-            }
-            // ... other types
-            _ => return Err("Invalid tag".to_string()),
-        }
-    }
-    Ok(stack)
-}
+// Slice-based variant for no_std guest
+pub fn encode_stack_to_slice<'a>(
+    stack: &[StackValue], buf: &'a mut [u8],
+) -> Result<&'a mut [u8], &'static str>;
 ```
 
-**Expected Gain:** 20-30% overall speedup
+**Achieved Gain:** ~20-30% overall speedup
 
 ---
 
-## Optimization 2: Pre-Allocated Instance Pools
+## Optimization 2: Pre-Allocated Instance Pools [DONE]
 
-### Current Implementation
+### Previous Implementation
 
 ```rust
 // Instance allocated on demand
 let instance = instance_pre.instantiate()?;
 ```
 
-### Optimized Implementation
+### Current Implementation
 
 ```rust
 // crates/neo-riscv-host/src/runtime_cache.rs
@@ -123,7 +96,10 @@ pub fn initialize() {
 }
 ```
 
-**Expected Gain:** 10-15% for first execution
+Pool size is bounded by `MAX_POOL_SIZE_PER_AUX` (16 instances per aux-data size) to
+prevent unbounded memory growth.
+
+**Achieved Gain:** 10-15% for first execution
 
 ---
 
@@ -220,27 +196,22 @@ fn cached_engine() -> Result<&'static Engine, String> {
 
 ## Implementation Priority
 
-### Phase 1: Quick Wins (This Week)
+### Phase 1: Quick Wins [COMPLETE]
 
-1. **Instance Pool Pre-allocation** (2 hours)
-   - Low effort, immediate benefit
-   - No risk
+1. **Instance Pool Pre-allocation** -- Done
+2. **Custom Stack Codec** -- Done (fast_codec with depth/length guards)
 
-2. **Memory Reset Optimization** (4 hours)
+### Phase 2: Core Optimizations (Next)
+
+3. **Memory Reset Optimization** (4 hours)
    - Simple conditional logic
    - Measurable improvement
-
-### Phase 2: Core Optimizations (Next 2 Weeks)
-
-3. **Custom Stack Codec** (3 days)
-   - Significant performance gain
-   - Requires careful testing
 
 4. **Batch Syscalls** (2 days)
    - Contract-specific optimization
    - Analytical approach needed
 
-### Phase 3: Advanced (Next Month)
+### Phase 3: Advanced (Future)
 
 5. **JIT Compilation** (2 weeks)
    - Requires infrastructure

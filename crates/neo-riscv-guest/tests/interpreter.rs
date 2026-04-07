@@ -394,7 +394,7 @@ fn concatenates_integer_as_bytestring_preserving_sign_bit() {
         .expect("guest interpreter should encode 128 as [0x80, 0x00] preserving the positive sign");
 
     // 128 encoded as LE two's complement = [0x80, 0x00] (trailing 0x00 preserves positive sign)
-    assert_eq!(result.stack, vec![StackValue::ByteString(vec![0x80, 0x00])]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(vec![0x80, 0x00])]);
 }
 
 #[test]
@@ -406,7 +406,7 @@ fn concatenates_negative_integer_as_bytestring() {
     let result = interpret(&[0x0f, 0x0c, 0x00, 0x8b, 0x40])
         .expect("guest interpreter should encode -1 as [0xFF]");
 
-    assert_eq!(result.stack, vec![StackValue::ByteString(vec![0xFF])]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(vec![0xFF])]);
 }
 
 #[test]
@@ -707,7 +707,7 @@ fn reverseitems_updates_buffer_alias() {
 
     assert_eq!(
         result.stack,
-        vec![StackValue::ByteString(vec![0x03, 0x02, 0x01])]
+        vec![StackValue::Buffer(vec![0x03, 0x02, 0x01])]
     );
 }
 
@@ -1192,7 +1192,10 @@ fn executes_two_consecutive_large_dynamic_calls() {
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(host.call_count, 2);
-    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
+    // Each iteration pushes Contract.Call args (NEWARRAY consumes the bytestring),
+    // then SYSCALL consumes the 4 args and pushes 1 result.
+    // Items below args are preserved — each call leaves its result on the stack.
+    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
 }
 
 #[test]
@@ -2425,4 +2428,138 @@ fn push_high_constants() {
         result.stack,
         vec![StackValue::Integer(8), StackValue::Integer(16)]
     );
+}
+
+#[test]
+fn xdrop_removes_nth_from_top_deep() {
+    // Verify XDROP uses top-relative indexing (stack.len()-1-n).
+    // Push 10, 20, 30, 40 onto stack, then PUSH2 (n=2), XDROP.
+    // Stack before XDROP: [10, 20, 30, 40], n=2
+    // Index 0 from top=40, index 1=30, index 2=20 → remove 20
+    // Expected after: [10, 30, 40]
+    let script: &[u8] = &[
+        0x00, 0x0a, // PUSHINT8 10
+        0x00, 0x14, // PUSHINT8 20
+        0x00, 0x1e, // PUSHINT8 30
+        0x00, 0x28, // PUSHINT8 40
+        0x12, // PUSH2 (n=2)
+        0x48, // XDROP
+        0x40, // RET
+    ];
+    let result = interpret(script).expect("XDROP with n=2 should succeed");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::Integer(10),
+            StackValue::Integer(30),
+            StackValue::Integer(40),
+        ]
+    );
+}
+
+#[test]
+fn call_ret_preserves_caller_locals() {
+    // Verify CALL/RET isolate local variables across frames.
+    // Caller: INITSLOT 1 local 0 args, PUSH5, STLOC0, CALL subroutine, LDLOC0, RET
+    // Subroutine: INITSLOT 1 local 0 args, PUSHINT8 99, STLOC0, RET
+    // If locals are properly saved/restored, LDLOC0 after CALL returns 5 (not 99).
+    //
+    // Byte layout:
+    //   ip=0:  INITSLOT 1 0   (0x57, 0x01, 0x00)  3 bytes
+    //   ip=3:  PUSH5          (0x15)                1 byte
+    //   ip=4:  STLOC0         (0x70)                1 byte
+    //   ip=5:  CALL +6        (0x34, 0x06)          2 bytes → target ip=11
+    //   ip=7:  LDLOC0         (0x68)                1 byte
+    //   ip=8:  RET            (0x40)                1 byte
+    //   --- padding to reach ip=11 ---
+    //   ip=9:  NOP            (0x21)                1 byte
+    //   ip=10: NOP            (0x21)                1 byte
+    //   ip=11: INITSLOT 1 0   (0x57, 0x01, 0x00)  3 bytes
+    //   ip=14: PUSHINT8 99    (0x00, 0x63)          2 bytes
+    //   ip=16: STLOC0         (0x70)                1 byte
+    //   ip=17: RET            (0x40)                1 byte
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x15, // PUSH5
+        0x70, // STLOC0
+        0x34, 0x06, // CALL +6 → ip=11
+        0x68, // LDLOC0
+        0x40, // RET
+        0x21, 0x21, // NOP, NOP (padding)
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args (subroutine)
+        0x00, 0x63, // PUSHINT8 99
+        0x70, // STLOC0
+        0x40, // RET
+    ];
+    let result = interpret(script).expect("CALL/RET locals isolation should succeed");
+    assert_eq!(result.state, VmState::Halt);
+    // The subroutine stored 99 in its own LDLOC0, but caller's local should still be 5.
+    assert_eq!(result.stack, vec![StackValue::Integer(5)]);
+}
+
+#[test]
+fn try_finally_endfinally_continues_at_correct_ip() {
+    // Verify ENDTRY stores the correct continuation IP and ENDFINALLY jumps there.
+    // Layout:
+    //   ip=0:  TRY catch=0, finally=+6   (0x3b, 0x00, 0x06)  3 bytes
+    //   ip=3:  PUSH1                      (0x11)               1 byte
+    //   ip=4:  ENDTRY +5                  (0x3d, 0x05)         2 bytes → continuation at ip=9
+    //   --- finally handler at ip=6 ---
+    //   ip=6:  PUSH2                      (0x12)               1 byte
+    //   ip=7:  ENDFINALLY                 (0x3f)               1 byte
+    //   --- unreachable filler ---
+    //   ip=8:  ABORT                      (0x38)               1 byte
+    //   --- continuation at ip=9 ---
+    //   ip=9:  PUSH3                      (0x13)               1 byte
+    //   ip=10: RET                        (0x40)               1 byte
+    let script: &[u8] = &[
+        0x3b, 0x00, 0x06, // TRY catch=0, finally=+6
+        0x11, // PUSH1
+        0x3d, 0x05, // ENDTRY +5 → continuation ip=9, triggers finally at ip=6
+        0x12, // PUSH2 (finally handler)
+        0x3f, // ENDFINALLY → jumps to continuation ip=9
+        0x38, // ABORT (unreachable; proves ENDFINALLY skipped past this)
+        0x13, // PUSH3 (continuation target)
+        0x40, // RET
+    ];
+    let result = interpret(script).expect("try-finally-endfinally continuation should succeed");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::Integer(1),
+            StackValue::Integer(2),
+            StackValue::Integer(3),
+        ]
+    );
+}
+
+#[test]
+fn jmpeq_jumps_on_deep_equal_structs() {
+    // Verify JMPEQ uses vm_equal (deep equality) for structs, not identity comparison.
+    // Create two distinct empty structs (same content) and JMPEQ should jump.
+    // Layout:
+    //   ip=0:  PUSH0          (0x10)               1 byte
+    //   ip=1:  NEWSTRUCT      (0xc6)               1 byte  → struct A
+    //   ip=2:  PUSH0          (0x10)               1 byte
+    //   ip=3:  NEWSTRUCT      (0xc6)               1 byte  → struct B
+    //   ip=4:  JMPEQ +3       (0x28, 0x03)         2 bytes → target ip=7
+    //   ip=6:  ABORT          (0x38)               1 byte  (should be skipped)
+    //   ip=7:  PUSH1          (0x11)               1 byte
+    //   ip=8:  RET            (0x40)               1 byte
+    let script: &[u8] = &[
+        0x10, // PUSH0
+        0xc6, // NEWSTRUCT (creates struct with 0 fields)
+        0x10, // PUSH0
+        0xc6, // NEWSTRUCT (creates another struct with 0 fields)
+        0x28, 0x03, // JMPEQ +3 → ip=7
+        0x38, // ABORT (would fault if JMPEQ did not jump)
+        0x11, // PUSH1
+        0x40, // RET
+    ];
+    let result =
+        interpret(script).expect("JMPEQ on deep-equal structs should jump, not fall through");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
 }

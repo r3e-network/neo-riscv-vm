@@ -121,7 +121,17 @@ All NeoVM opcodes (0x00-0xFF) are supported:
 | Arithmetic | 0x99-0xBB | ✅ Full |
 | Compound | 0xBE-0xD3 | ✅ Full |
 
-#### 4.2 Opcode Pricing
+#### 4.2 Opcode Semantics
+
+Key implementation details:
+
+- **CALL / CALL_L / CALLA**: Save the current locals and initialization state onto the call stack before jumping. A fresh locals array is allocated for the callee.
+- **RET**: Restore the caller's saved locals and initialization state from the call stack.
+- **ENDTRY / ENDTRY_L**: When a finally block exists, the continuation IP is saved in the try frame (`end_ip`) before entering the finally block. ENDFINALLY then jumps to the saved continuation IP.
+- **JMPEQ / JMPNE**: Use `vm_equal` for value comparison, which handles cross-type equality (e.g., Integer vs BigInteger, ByteString vs Boolean) matching NeoVM semantics.
+- **EQUAL / NOTEQUAL**: Also use `vm_equal` for consistent comparison behavior.
+
+#### 4.3 Opcode Pricing
 
 Gas costs match NeoVM exactly:
 
@@ -182,15 +192,18 @@ Stack values are serialized using a compact binary format:
 StackValue:
   | Tag (1 byte) | Data (variable) |
 
-Tags:
-  0x00 = Integer (8 bytes, little-endian)
-  0x01 = ByteString (4 bytes length + data)
-  0x02 = Boolean (1 byte: 0 or 1)
-  0x03 = Null (no data)
-  0x04 = Array (4 bytes count + items)
-  0x05 = Map (4 bytes count + key-value pairs)
-  0x06 = Struct (4 bytes count + items)
-  0x07 = Interop (8 bytes handle)
+Tags (fast_codec):
+  0x01 = Integer (8 bytes, little-endian i64)
+  0x02 = BigInteger (4 bytes length + data)
+  0x03 = ByteString (4 bytes length + data)
+  0x04 = Boolean (1 byte: 0 or 1)
+  0x05 = Array (4 bytes count + items, recursive)
+  0x06 = Struct (4 bytes count + items, recursive)
+  0x07 = Map (4 bytes count + key-value pairs, recursive)
+  0x08 = Interop (8 bytes handle)
+  0x09 = Iterator (8 bytes handle)
+  0x0A = Null (no data)
+  0x0B = Pointer (8 bytes i64)
 ```
 
 #### 6.2 Execution Result
@@ -276,6 +289,19 @@ Guest VM error → Host encodes → FFI returns → C# exception
 | Execution time | Gas-based | Indirect limit |
 | Call depth | 1024 | Hard limit |
 | Stack size | 2048 items | Hard limit |
+| Guest result size | 16 MB (`MAX_RESULT_SIZE`) | Hard limit per host read |
+| Instance pool | 16 per aux-data size (`MAX_POOL_SIZE_PER_AUX`) | Bounded pool cap |
+
+#### 9.3 Codec Safety
+
+The custom fast codec (`fast_codec.rs`) enforces defensive limits during deserialization:
+
+| Guard | Value | Purpose |
+|-------|-------|---------|
+| `MAX_DECODE_DEPTH` | 64 | Prevents stack overflow from deeply nested structures |
+| `MAX_COLLECTION_LEN` | 4096 | Prevents OOM from oversized arrays, maps, or structs |
+
+These limits apply to both the top-level stack length and every nested collection. Payloads that exceed either limit are rejected with an error before any allocation occurs.
 
 ### 10. Compatibility
 

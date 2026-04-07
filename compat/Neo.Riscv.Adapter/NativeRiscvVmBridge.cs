@@ -26,6 +26,7 @@ namespace Neo.SmartContract.RiscV
     {
         public const string LibraryPathEnvironmentVariable = "NEO_RISCV_HOST_LIB";
         private const string TraceEnvironmentVariable = "NEO_RISCV_TRACE_HOST";
+        private static readonly byte[] StorageContextTokenMagic = [0x4E, 0x52, 0x53, 0x43];
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeExecutionResult
@@ -263,7 +264,7 @@ namespace Neo.SmartContract.RiscV
                 StackItem[] inputStack;
                 try
                 {
-                    inputStack = state.Bridge.ReadStack(inputStackPtr, inputStackLen, state.Request.Engine.ReferenceCounter, state.Scope);
+                    inputStack = state.Bridge.ReadStack(inputStackPtr, inputStackLen, state.Request.Engine.ReferenceCounter, state.Scope, decodeStorageContextTokens: false);
                     Trace($"callback read-stack api=0x{api:x8} managedStackLen={inputStack.Length}");
                 }
                 catch (Exception ex)
@@ -282,10 +283,25 @@ namespace Neo.SmartContract.RiscV
             }
         }
 
+        /// Marker for CALLT tokens sent through the syscall channel.
+        /// Upper 16 bits = 0x4354 ("CT"), lower 16 bits = token_id.
+        /// Must match the Rust-side constant in neo-riscv-guest.
+        private const uint CalltMarkerHi = 0x4354;
+
         private bool HandleHostCallback(RiscvExecutionRequest request, ExecutionScope scope, uint api, nuint instructionPointer, long gasLeft, StackItem[] inputStack, out NativeHostResult result)
         {
             try
             {
+                // Handle CALLT tokens: upper 16 bits = 0x4354 means this is a method token.
+                if ((api >> 16) == CalltMarkerHi)
+                {
+                    var calltToken = (ushort)(api & 0xFFFF);
+                    var calltGasLeft = gasLeft - (request.GasLeft - request.Engine.GasLeft);
+                    var calltResult = HandleCallT(request, scope, calltGasLeft, calltToken, inputStack);
+                    result = CreateNativeHostResult(calltResult, scope);
+                    return true;
+                }
+
                 var descriptor = ApplicationEngine.GetInteropDescriptor(api);
                 Trace($"syscall enter name={descriptor.Name} api=0x{api:x8} ip={instructionPointer} gasLeft={gasLeft} stackLen={inputStack.Length}");
                 if (!request.CurrentCallFlags.HasFlag(descriptor.RequiredCallFlags))
@@ -355,14 +371,7 @@ namespace Neo.SmartContract.RiscV
                     uint hash when hash == ApplicationEngine.System_Iterator_Value =>
                         HandleIteratorValue(request, inputStack),
                     uint hash when hash == ApplicationEngine.System_Runtime_GetInvocationCounter =>
-                        Append(inputStack, new Integer(Math.Max(
-                            request.ScriptHashes.Count(scriptHash => scriptHash.Equals(request.ScriptHashes[^1])),
-                            request.Engine.ExecuteInNativeContractContext(
-                                request.ScriptHashes[^1],
-                                request.ScriptHashes.Count > 1 ? request.ScriptHashes[^2] : null,
-                                NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, request.ScriptHashes[^1]),
-                                request.CurrentCallFlags,
-                                () => request.Engine.GetInvocationCounter())))),
+                        HandleGetInvocationCounter(request, inputStack),
                     uint hash when hash == ApplicationEngine.System_Runtime_CurrentSigners =>
                         Append(inputStack, request.Engine.Convert(request.Engine.GetCurrentSigners()) ?? StackItem.Null),
                     uint hash when hash == ApplicationEngine.System_Runtime_BurnGas =>
@@ -445,6 +454,23 @@ namespace Neo.SmartContract.RiscV
                 System.Array.Copy(inputStack, next, next.Length);
             }
             return next;
+        }
+
+        private StackItem[] HandleGetInvocationCounter(RiscvExecutionRequest request, StackItem[] inputStack)
+        {
+            var count = request.ScriptHashes.Count(scriptHash => scriptHash.Equals(request.ScriptHashes[^1]));
+            var contract = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, request.ScriptHashes[^1]);
+            if (contract is not null)
+            {
+                var engineCount = request.Engine.ExecuteInNativeContractContext(
+                    request.ScriptHashes[^1],
+                    request.ScriptHashes.Count > 1 ? request.ScriptHashes[^2] : null,
+                    contract,
+                    request.CurrentCallFlags,
+                    () => request.Engine.GetInvocationCounter());
+                count = Math.Max(count, engineCount);
+            }
+            return Append(inputStack, new Integer(count));
         }
 
         private StackItem[] HandleRuntimeLoadScript(RiscvExecutionRequest request, ExecutionScope scope, long gasLeft, StackItem[] inputStack)
@@ -588,10 +614,24 @@ namespace Neo.SmartContract.RiscV
                         out nativeResult))
                     throw new InvalidOperationException("Native RISC-V ABI call failed.");
 
-                var stack = ReadStack(nativeResult.StackPtr, nativeResult.StackLen, request.Engine.ReferenceCounter, scope);
-                if (nativeResult.FeeConsumedPico != 0)
+                var stack = ReadStack(nativeResult.StackPtr, nativeResult.StackLen, request.Engine.ReferenceCounter, scope, decodeStorageContextTokens: true);
+                if (TraceEnabled)
                 {
-                    request.Engine.AddFee(nativeResult.FeeConsumedPico);
+                    for (var i = 0; i < stack.Length; i++)
+                        Trace($"execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
+                }
+                // Reconcile Rust-side opcode fees with C# engine.
+                // During syscall callbacks, C# already called AddFee for syscall fixed prices,
+                // reducing Engine.GasLeft. We must subtract what C# already charged to avoid
+                // double-counting. AddFee works in "internal pico" units (datoshi * FeeFactor),
+                // while GasLeft is in datoshi. Conversion: pico = datoshi * FeeFactor.
+                var gasSpentByCallbacksDatoshi = request.GasLeft - request.Engine.GasLeft;
+                if (gasSpentByCallbacksDatoshi < 0) gasSpentByCallbacksDatoshi = 0;
+                var gasSpentByCallbacksPico = (BigInteger)gasSpentByCallbacksDatoshi * ApplicationEngine.FeeFactor;
+                var adjustedFeePico = nativeResult.FeeConsumedPico - gasSpentByCallbacksPico;
+                if (adjustedFeePico > 0)
+                {
+                    request.Engine.AddFee(adjustedFeePico);
                 }
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
@@ -653,10 +693,21 @@ namespace Neo.SmartContract.RiscV
                         out nativeResult))
                     throw new InvalidOperationException("Native RISC-V contract execution failed.");
 
-                var stack = ReadStack(nativeResult.StackPtr, nativeResult.StackLen, request.Engine.ReferenceCounter, scope);
-                if (nativeResult.FeeConsumedPico != 0)
+                var stack = ReadStack(nativeResult.StackPtr, nativeResult.StackLen, request.Engine.ReferenceCounter, scope, decodeStorageContextTokens: true);
+                if (TraceEnabled)
                 {
-                    request.Engine.AddFee(nativeResult.FeeConsumedPico);
+                    for (var i = 0; i < stack.Length; i++)
+                        Trace($"native execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
+                }
+                // Same gas reconciliation as ExecuteScriptInternal — subtract what C# already
+                // charged during callbacks to avoid double-counting.
+                var nativeGasSpentByCallbacksDatoshi = request.GasLeft - request.Engine.GasLeft;
+                if (nativeGasSpentByCallbacksDatoshi < 0) nativeGasSpentByCallbacksDatoshi = 0;
+                var nativeGasSpentByCallbacksPico = (BigInteger)nativeGasSpentByCallbacksDatoshi * ApplicationEngine.FeeFactor;
+                var nativeAdjustedFeePico = nativeResult.FeeConsumedPico - nativeGasSpentByCallbacksPico;
+                if (nativeAdjustedFeePico > 0)
+                {
+                    request.Engine.AddFee(nativeAdjustedFeePico);
                 }
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
@@ -688,11 +739,11 @@ namespace Neo.SmartContract.RiscV
 
         private static StackItem CreateStorageContextItem(StorageContext context)
         {
-            return new Neo.VM.Types.Array(new StackItem[]
-            {
-                new Integer(context.Id),
-                context.IsReadOnly ? StackItem.True : StackItem.False,
-            });
+            var payload = new byte[StorageContextTokenMagic.Length + sizeof(int) + 1];
+            System.Array.Copy(StorageContextTokenMagic, payload, StorageContextTokenMagic.Length);
+            System.BitConverter.GetBytes(context.Id).CopyTo(payload, StorageContextTokenMagic.Length);
+            payload[^1] = context.IsReadOnly ? (byte)1 : (byte)0;
+            return new ByteString(payload);
         }
 
         private static StackItem[] HandleBurnGas(RiscvExecutionRequest request, StackItem[] inputStack)
@@ -920,6 +971,9 @@ namespace Neo.SmartContract.RiscV
 
         private static StorageContext ParseStorageContext(StackItem item)
         {
+            if (item is ByteString encoded && TryParseStorageContextToken(encoded.GetSpan(), out var encodedContext))
+                return encodedContext;
+
             if (item is not Neo.VM.Types.Array array || array.Count != 2)
                 throw new InvalidOperationException("Storage context must be a two-item array.");
 
@@ -928,6 +982,31 @@ namespace Neo.SmartContract.RiscV
                 Id = (int)array[0].GetInteger(),
                 IsReadOnly = array[1].GetBoolean(),
             };
+        }
+
+        private static bool TryParseStorageContextToken(ReadOnlySpan<byte> bytes, out StorageContext context)
+        {
+            context = default;
+            if (bytes.Length != StorageContextTokenMagic.Length + sizeof(int) + 1)
+                return false;
+            if (!bytes[..StorageContextTokenMagic.Length].SequenceEqual(StorageContextTokenMagic))
+                return false;
+
+            context = new StorageContext
+            {
+                Id = System.BitConverter.ToInt32(bytes.Slice(StorageContextTokenMagic.Length, sizeof(int))),
+                IsReadOnly = bytes[^1] != 0,
+            };
+            return true;
+        }
+
+        private static StackItem CreateStorageContextArray(StorageContext context)
+        {
+            return new Neo.VM.Types.Array(new StackItem[]
+            {
+                new Integer(context.Id),
+                context.IsReadOnly ? StackItem.True : StackItem.False,
+            });
         }
 
         private static StackItem[] HandleCryptoCheckSig(RiscvExecutionRequest request, StackItem[] inputStack)
@@ -1189,6 +1268,42 @@ namespace Neo.SmartContract.RiscV
             return next;
         }
 
+        private StackItem[] HandleCallT(RiscvExecutionRequest request, ExecutionScope scope, long gasLeft, ushort token, StackItem[] inputStack)
+        {
+            // Resolve the method token from the current contract's NEF.
+            var currentHash = request.ScriptHashes[^1];
+            var contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, currentHash)
+                ?? throw new InvalidOperationException($"CALLT: current contract {currentHash} not found in storage.");
+            if (token >= contractState.Nef.Tokens.Length)
+                throw new InvalidOperationException($"CALLT: token {token} out of range (contract {currentHash} has {contractState.Nef.Tokens.Length} tokens).");
+
+            var methodToken = contractState.Nef.Tokens[token];
+            Trace($"callt enter token={token} target={methodToken.Hash} method={methodToken.Method} params={methodToken.ParametersCount} callFlags={methodToken.CallFlags}");
+
+            // NOTE: CALLT opcode fee is already charged by the guest via host_on_instruction.
+            // Do NOT call AddFee here — that would double-charge.
+
+            // Pop the method's parameter count from the stack and pack into an Array.
+            if (inputStack.Length < methodToken.ParametersCount)
+                throw new InvalidOperationException($"CALLT: stack has {inputStack.Length} items but method {methodToken.Method} expects {methodToken.ParametersCount} parameters.");
+
+            var argsArray = new Neo.VM.Types.Array();
+            for (var i = 0; i < methodToken.ParametersCount; i++)
+                argsArray.Add(inputStack[inputStack.Length - 1 - i]);
+
+            // Build the equivalent System.Contract.Call stack: [remaining..., argsArray, callFlags, method, hash]
+            var callStack = new StackItem[inputStack.Length - methodToken.ParametersCount + 4];
+            if (inputStack.Length > methodToken.ParametersCount)
+                System.Array.Copy(inputStack, callStack, inputStack.Length - methodToken.ParametersCount);
+
+            callStack[^4] = argsArray;
+            callStack[^3] = new Integer((int)methodToken.CallFlags);
+            callStack[^2] = new ByteString(Encoding.UTF8.GetBytes(methodToken.Method));
+            callStack[^1] = new ByteString(methodToken.Hash.GetSpan().ToArray());
+
+            return HandleContractCall(request, scope, gasLeft, callStack);
+        }
+
         private StackItem[] HandleContractCall(RiscvExecutionRequest request, ExecutionScope scope, long gasLeft, StackItem[] inputStack)
         {
             if (inputStack.Length < 4)
@@ -1208,18 +1323,43 @@ namespace Neo.SmartContract.RiscV
             var callFlags = (CallFlags)(byte)callFlagsItem.GetInteger();
             if ((callFlags & ~CallFlags.All) != 0)
                 throw new InvalidOperationException($"Invalid call flags: {callFlags}");
+            Trace($"contract.call enter hash={contractHash} method={method} stackLen={inputStack.Length} args={argsArray.Count}");
 
-            // Dispatch native contracts directly. Native contracts are resolved by class, not snapshot state.
-            // This mirrors CallNativeContract which resolves via NativeContract.GetContract(CurrentScriptHash).
-            var nativeContract = NativeContract.GetContract(contractHash);
-            if (nativeContract is not null)
+            // Delegate ALL contract calls to the standard NeoVM path via CallContractInternal.
+            // This uses the EXACT same code path as NeoVM (context creation, _initialize handling,
+            // static field setup, snapshot clone, ContextUnloaded commit), which is critical for
+            // state root compatibility. The RISC-V guest only executes the outermost transaction script.
+            if (request.Engine is RiscvApplicationEngine riscvEngine)
             {
                 var contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, contractHash)
-                    ?? nativeContract.GetContractState(request.Engine.ProtocolSettings, request.Engine.PersistingBlock?.Index ?? NativeContract.Ledger.CurrentIndex(request.Engine.SnapshotCache));
-                request.Engine.IncrementInvocationCounter(nativeContract.Hash);
-                return HandleNativeContractCall(request, inputStack, contractState, nativeContract, method, callFlags, argsArray);
+                    ?? NativeContract.GetContract(contractHash)?.GetContractState(request.Engine.ProtocolSettings, request.Engine.PersistingBlock?.Index ?? 0);
+                if (contractState == null)
+                    throw new InvalidOperationException($"Called Contract Does Not Exist: {contractHash}.{method}");
+                var md = contractState.Manifest.Abi.GetMethod(method, argsArray.Count);
+                var hasReturnValue = md is { ReturnType: not ContractParameterType.Void };
+                var args = new StackItem[argsArray.Count];
+                for (var i = 0; i < argsArray.Count; i++)
+                    args[i] = argsArray[i];
+
+                var stackDepth = riscvEngine.InvocationStack.Count;
+                riscvEngine.CallContractInternal(contractHash, method, callFlags, hasReturnValue, args);
+                var state = riscvEngine.ExecuteUntilStackDepth(stackDepth);
+
+                if (state == VMState.FAULT)
+                    throw riscvEngine.FaultException ?? new InvalidOperationException($"Contract call failed: {contractHash}.{method}");
+
+                var resultItem = hasReturnValue && riscvEngine.CurrentContext?.EvaluationStack.Count > 0
+                    ? riscvEngine.Pop()
+                    : StackItem.Null;
+                Trace($"contract.call exit hash={contractHash} method={method} result={DescribeStackItem(resultItem)}");
+                var callResult = new StackItem[inputStack.Length - 4 + 1];
+                if (inputStack.Length > 4)
+                    System.Array.Copy(inputStack, callResult, inputStack.Length - 4);
+                callResult[^1] = resultItem;
+                return callResult;
             }
 
+            // Fallback for non-RISC-V engines (shouldn't normally reach here)
             var contract = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, contractHash)
                 ?? throw new InvalidOperationException($"Called Contract Does Not Exist: {contractHash}.{method}");
             request.Engine.IncrementInvocationCounter(contract.Hash);
@@ -1271,6 +1411,7 @@ namespace Neo.SmartContract.RiscV
                     : ExecuteScriptInternal(nestedRequest, calleeScript, nestedInitialStack, descriptor.Offset, scope));
             if (nestedResult.State != VMState.HALT)
                 throw nestedResult.FaultException ?? new InvalidOperationException("Contract.Call failed.");
+            Trace($"contract.call nested exit method={method} resultCount={nestedResult.ResultStack.Count}");
 
             var returnedCount = nestedResult.ResultStack.Count == 0 ? 1 : nestedResult.ResultStack.Count;
             var next = new StackItem[inputStack.Length - 4 + returnedCount];
@@ -1287,6 +1428,22 @@ namespace Neo.SmartContract.RiscV
                 next[inputStack.Length - 4 + index] = nestedResult.ResultStack[index];
             }
             return next;
+        }
+
+        private static string DescribeStackItem(StackItem item)
+        {
+            return item switch
+            {
+                ByteString bytes => $"bytes:{Convert.ToHexString(bytes.GetSpan())}",
+                Integer integer => $"int:{integer.GetInteger()}",
+                Neo.VM.Types.Boolean boolean => $"bool:{boolean.GetBoolean()}",
+                Null => "null",
+                Neo.VM.Types.Struct @struct => $"struct:{@struct.Count}",
+                Neo.VM.Types.Array array => $"array:{array.Count}",
+                Neo.VM.Types.Map map => $"map:{map.Count}",
+                InteropInterface => "interop",
+                _ => item.GetType().Name,
+            };
         }
 
         private StackItem[] HandleNativeContractCall(
@@ -1320,7 +1477,6 @@ namespace Neo.SmartContract.RiscV
             if (!request.Engine.IsHardforkEnabled(Hardfork.HF_Faun) ||
                 !NativeContract.Policy.IsWhitelistFeeContract(request.Engine.SnapshotCache, nativeContract.Hash, method.Descriptor, out var fixedFee))
             {
-                request.Engine.AddFee(request.Engine.ExecFeePicoFactor);
                 request.Engine.AddFee(
                     (method.CpuFee * request.Engine.ExecFeePicoFactor) +
                     (method.StorageFee * request.Engine.StoragePrice * ApplicationEngine.FeeFactor));
@@ -1346,8 +1502,6 @@ namespace Neo.SmartContract.RiscV
             {
                 if (!task.GetAwaiter().IsCompleted)
                 {
-                    // The native contract loaded a user contract context via CallFromNativeContractAsync.
-                    // Signal the engine to process NeoVM contexts only, then execute.
                     if (request.Engine is RiscvApplicationEngine riscvEngine)
                     {
                         riscvEngine.FlagNeoVMMode();
@@ -1435,6 +1589,7 @@ namespace Neo.SmartContract.RiscV
                         BytesLen = 0,
                     },
                     ByteString byteString => CreateNativeByteStringItem(byteString),
+                    Neo.VM.Types.Buffer buffer => CreateNativeBufferItem(buffer),
                     Neo.VM.Types.Struct @struct => CreateNativeStructItem(@struct, scope),
                     Neo.VM.Types.Array array => CreateNativeArrayItem(array, scope),
                     Neo.VM.Types.Map map => CreateNativeMapItem(map, scope),
@@ -1466,6 +1621,13 @@ namespace Neo.SmartContract.RiscV
                         BytesPtr = IntPtr.Zero,
                         BytesLen = 0,
                     },
+                    Neo.VM.Types.Pointer pointer => new NativeStackItem
+                    {
+                        Kind = 10,
+                        IntegerValue = pointer.Position,
+                        BytesPtr = IntPtr.Zero,
+                        BytesLen = 0,
+                    },
                     _ => throw new InvalidOperationException($"Unsupported host callback stack item type: {stack[index].GetType().Name}.")
                 };
 
@@ -1493,6 +1655,24 @@ namespace Neo.SmartContract.RiscV
             return new NativeStackItem
             {
                 Kind = 1,
+                IntegerValue = 0,
+                BytesPtr = bytesPtr,
+                BytesLen = (nuint)bytes.Length,
+            };
+        }
+
+        private static NativeStackItem CreateNativeBufferItem(Neo.VM.Types.Buffer buffer)
+        {
+            var bytes = buffer.GetSpan().ToArray();
+            var bytesPtr = bytes.Length == 0 ? IntPtr.Zero : Marshal.AllocHGlobal(bytes.Length);
+            if (bytes.Length > 0)
+            {
+                Marshal.Copy(bytes, 0, bytesPtr, bytes.Length);
+            }
+
+            return new NativeStackItem
+            {
+                Kind = 11,
                 IntegerValue = 0,
                 BytesPtr = bytesPtr,
                 BytesLen = (nuint)bytes.Length,
@@ -1625,18 +1805,36 @@ namespace Neo.SmartContract.RiscV
                 nameof(FormatException) or "System.FormatException" => new FormatException(message, inner),
                 nameof(InvalidOperationException) or "System.InvalidOperationException" => new InvalidOperationException(message, inner),
                 nameof(NullReferenceException) or "System.NullReferenceException" => new NullReferenceException(message),
+                nameof(NotSupportedException) or "System.NotSupportedException" => new NotSupportedException(message, inner),
+                nameof(NotImplementedException) or "System.NotImplementedException" => new NotImplementedException(message, inner),
+                nameof(OverflowException) or "System.OverflowException" => new OverflowException(message, inner),
+                nameof(IndexOutOfRangeException) or "System.IndexOutOfRangeException" => new IndexOutOfRangeException(message),
+                nameof(KeyNotFoundException) or "System.Collections.Generic.KeyNotFoundException" => new KeyNotFoundException(message, inner),
+                nameof(DivideByZeroException) or "System.DivideByZeroException" => new DivideByZeroException(message, inner),
                 _ => new InvalidOperationException(message, inner),
             };
         }
 
-        private static ByteString ReadByteString(NativeStackItem nativeItem)
+        private static StackItem ReadByteString(NativeStackItem nativeItem, bool decodeStorageContextTokens)
         {
             if (nativeItem.BytesPtr == IntPtr.Zero)
                 return ByteString.Empty;
 
             var bytes = new byte[checked((int)nativeItem.BytesLen)];
             Marshal.Copy(nativeItem.BytesPtr, bytes, 0, bytes.Length);
-            return new ByteString(bytes);
+            return decodeStorageContextTokens && TryParseStorageContextToken(bytes, out var context)
+                ? CreateStorageContextArray(context)
+                : new ByteString(bytes);
+        }
+
+        private static StackItem ReadBuffer(NativeStackItem nativeItem)
+        {
+            var bytes = new byte[checked((int)nativeItem.BytesLen)];
+            if (bytes.Length > 0)
+            {
+                Marshal.Copy(nativeItem.BytesPtr, bytes, 0, bytes.Length);
+            }
+            return new Neo.VM.Types.Buffer(bytes);
         }
 
         private static Integer ReadBigInteger(NativeStackItem nativeItem)
@@ -1649,7 +1847,7 @@ namespace Neo.SmartContract.RiscV
             return new Integer(new BigInteger(bytes));
         }
 
-        private StackItem[] ReadStack(IntPtr stackPtr, nuint stackLen, IReferenceCounter? referenceCounter, ExecutionScope scope)
+        private StackItem[] ReadStack(IntPtr stackPtr, nuint stackLen, IReferenceCounter? referenceCounter, ExecutionScope scope, bool decodeStorageContextTokens)
         {
             if (stackPtr == IntPtr.Zero || stackLen == 0)
                 return System.Array.Empty<StackItem>();
@@ -1659,11 +1857,16 @@ namespace Neo.SmartContract.RiscV
             {
                 var itemPtr = IntPtr.Add(stackPtr, index * Marshal.SizeOf<NativeStackItem>());
                 var nativeItem = Marshal.PtrToStructure<NativeStackItem>(itemPtr);
+                if (TraceEnabled)
+                {
+                    Trace($"readstack item[{index}] kind={nativeItem.Kind} int={nativeItem.IntegerValue} bytesLen={nativeItem.BytesLen} bytesPtr=0x{nativeItem.BytesPtr.ToInt64():x}");
+                }
                 stack[index] = nativeItem.Kind switch
                 {
                     0 => new Integer(nativeItem.IntegerValue),
                     5 => ReadBigInteger(nativeItem),
-                    1 => ReadByteString(nativeItem),
+                    1 => ReadByteString(nativeItem, decodeStorageContextTokens),
+                    11 => ReadBuffer(nativeItem),
                     3 => nativeItem.IntegerValue != 0 ? StackItem.True : StackItem.False,
                     4 => ReadArray(nativeItem, referenceCounter, scope),
                     7 => ReadStruct(nativeItem, referenceCounter, scope),
@@ -1671,6 +1874,7 @@ namespace Neo.SmartContract.RiscV
                     8 => ReadMap(nativeItem, referenceCounter, scope),
                     6 => ReadIteratorHandle(scope, checked((ulong)nativeItem.IntegerValue)),
                     2 => StackItem.Null,
+                    10 => new Neo.VM.Types.Pointer(Script.Empty, (int)nativeItem.IntegerValue),
                     _ => throw new InvalidOperationException($"Unsupported native stack item kind: {nativeItem.Kind}.")
                 };
             }
@@ -1707,19 +1911,19 @@ namespace Neo.SmartContract.RiscV
 
         private Neo.VM.Types.Array ReadArray(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
         {
-            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope);
+            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope, decodeStorageContextTokens: true);
             return new Neo.VM.Types.Array(referenceCounter, children);
         }
 
         private Neo.VM.Types.Struct ReadStruct(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
         {
-            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope);
+            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope, decodeStorageContextTokens: true);
             return new Neo.VM.Types.Struct(referenceCounter, children);
         }
 
         private Neo.VM.Types.Map ReadMap(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
         {
-            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope);
+            var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope, decodeStorageContextTokens: true);
             if (children.Length % 2 != 0)
                 throw new InvalidOperationException("Native map stack item contains an odd number of entries.");
 

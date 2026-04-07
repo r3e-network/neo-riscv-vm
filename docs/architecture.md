@@ -1,3 +1,5 @@
+> **Note:** The canonical, comprehensive architecture document is [ARCHITECTURE.md](./ARCHITECTURE.md). This file is kept for historical reference.
+
 # Architecture
 
 ## Goal
@@ -46,7 +48,7 @@ The ABI is centered on:
 
 - `StackValue`
 - `ExecutionResult`
-- serialized stack/result payloads carried with `postcard`
+- serialized stack/result payloads carried with the custom fast codec (formerly `postcard`)
 
 Supported stack classes include:
 

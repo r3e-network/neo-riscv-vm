@@ -107,7 +107,7 @@ run_node_cli_smoke() {
     mkdir -p ./out/Plugins
     cp -a "${PLUGIN_BUNDLE_DIR}/." ./out/Plugins/
     find . -maxdepth 1 -name 'test-wallet*.json' -delete
-    expect ./.github/workflows/test-neo-cli.expect
+    NEO_RISCV_HOST_LIB="${HOST_LIB}" expect ./.github/workflows/test-neo-cli.expect
   )
   echo "PASS neo-cli smoke"
 }
@@ -131,7 +131,7 @@ main() {
 
   run_step "VM Verification" "${VM_DIR}/scripts/verify-all.sh"
   run_step "VM E2E" "${VM_DIR}/tests/e2e/run-all.sh"
-  run_step "VM FFI Resolution" "${VM_DIR}/scripts/test-ffi-resolution.sh"
+  run_step "VM FFI Resolution" env "NEO_RISCV_HOST_LIB=${HOST_LIB}" "${VM_DIR}/scripts/test-ffi-resolution.sh"
   run_step "Core Test Matrix" run_core_matrix
   run_step "Node Test Matrix" run_node_matrix
   run_step "Node CLI Smoke" run_node_cli_smoke

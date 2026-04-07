@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Status:** Production Ready  
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-26
 
 ---
 
@@ -33,8 +33,8 @@ The Neo RISC-V VM is a plugin-first execution stack for Neo N3. It uses:
 
 | Metric | Value |
 |--------|-------|
-| VM workspace tests | 311 |
-| Cross-repo core+node tests | 1656 |
+| VM workspace tests | 376 |
+| Cross-repo core+node tests | 2022 |
 | Compatibility | 100% NeoVM compatible |
 | Performance | ~16µs per operation |
 | Memory Overhead | 256MB guest arena |
@@ -169,8 +169,8 @@ All NeoVM bytecode executes identically:
 │  │  │  ┌─────────────────────────────────────────────────────┐   │   │   │
 │  │  │  │ Execution Context                                    │   │   │   │
 │  │  │  │ ├── Instruction pointer                             │   │   │   │
-│  │  │  │ ├── Call stack                                      │   │   │   │
-│  │  │  │ └── Try frames (TRY/CATCH/FINALLY)                  │   │   │   │
+│  │  │  │ ├── Call stack (saves/restores locals per frame)     │   │   │   │
+│  │  │  │ └── Try frames (TRY/CATCH/FINALLY, end_ip field)    │   │   │   │
 │  │  │  └─────────────────────────────────────────────────────┘   │   │   │
 │  │  │                                                             │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
@@ -179,7 +179,7 @@ All NeoVM bytecode executes identically:
 │  │  │ Memory Management                                            │   │   │
 │  │  │ ├── Bump allocator (256MB arena)                            │   │   │
 │  │  │ ├── Stack buffer (1MB)                                      │   │   │
-│  │  │ └── Result buffer (1MB)                                     │   │   │
+│  │  │ └── Result buffer (64KB)                                    │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  │                                                                     │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
@@ -218,7 +218,7 @@ All NeoVM bytecode executes identically:
 **Key Modules:**
 - `lib.rs` - Public API, execution functions
 - `runtime_cache.rs` - Instance/module caching
-- `bridge.rs` - Host function registration
+- `bridge.rs` - Host function registration (logs diagnostic errors)
 - `pricing.rs` - Gas accounting
 - `ffi.rs` - C FFI exports
 
@@ -381,6 +381,10 @@ Guest VM                    Host Runtime                    C# Core
 | Stack items | 2048 | Checked on each push |
 | Call depth | 1024 | Checked on each call |
 | Gas | Transaction limit | Checked per opcode |
+| Codec decode depth | 64 | MAX_DECODE_DEPTH in fast codec |
+| Codec collection len | 4096 | MAX_COLLECTION_LEN in fast codec |
+| Result size | 16MB | MAX_RESULT_SIZE on host |
+| Instance pool per aux | 16 | MAX_POOL_SIZE_PER_AUX on host |
 
 ### Trust Boundaries
 
@@ -428,9 +432,10 @@ Trusted:
 
 ### Optimization Opportunities
 
-1. **Custom serialization** - Replace postcard (20-30% gain)
-2. **JIT compilation** - Enable PolkaVM JIT (50-80% gain)
-3. **Instance pre-allocation** - Reduce cold start (10-15% gain)
+1. **JIT compilation** - Enable PolkaVM JIT (50-80% gain)
+2. **Instance pre-allocation** - Reduce cold start (10-15% gain)
+
+*Note:* Custom serialization (fast codec) has already replaced postcard.
 
 See [Optimization Plan](./OPTIMIZATION_PLAN.md) for details.
 

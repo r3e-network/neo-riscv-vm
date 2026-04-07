@@ -17,7 +17,7 @@ pub(crate) fn charge_opcode(
         .checked_add(delta)
         .ok_or_else(|| "opcode fee overflow".to_string())?;
     let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
-    let consumed_delta = current_datoshi - previous_datoshi;
+    let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
 
     context.gas_left = context
         .gas_left

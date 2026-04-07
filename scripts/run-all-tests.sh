@@ -21,13 +21,17 @@ run_quick() {
   NEO_RISCV_VM_JSON_MODE=smoke \
   dotnet test "${ROOT_DIR}/compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj"
 
+  NEO_RISCV_HOST_LIB="${HOST_LIB}" \
   dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+
+  NEO_RISCV_HOST_LIB="${HOST_LIB}" \
   "${ROOT_DIR}/scripts/test-ffi-resolution.sh"
 }
 
 run_local_full() {
   "${ROOT_DIR}/scripts/verify-all.sh"
   "${ROOT_DIR}/tests/e2e/run-all.sh"
+  NEO_RISCV_HOST_LIB="${HOST_LIB}" \
   "${ROOT_DIR}/scripts/test-ffi-resolution.sh"
 }
 

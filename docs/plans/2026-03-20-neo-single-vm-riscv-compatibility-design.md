@@ -1,6 +1,6 @@
 # Neo Single-VM RISC-V Compatibility Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make the PolkaVM-backed RISC-V runtime the only execution VM used by Neo N3 core, while preserving 100% backward compatibility for existing NeoVM contracts, NEF artifacts, manifests, RPC flows, wallets, witnesses, script builders, and contract-call tooling.
 

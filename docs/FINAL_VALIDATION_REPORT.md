@@ -1,7 +1,7 @@
 # Final Validation Report
 
-**Date:** 2026-03-24  
-**Status:** Cross-repo validation passing
+**Date:** 2026-03-26
+**Status:** Cross-repo validation passing (production-hardened)
 
 ## Executive Summary
 
@@ -22,7 +22,7 @@ Key facts:
 
 `cargo test --workspace --all-targets` passed with:
 
-- `206` guest tests
+- `271` guest tests
 - `93` host tests
 - `12` devpack tests
 
@@ -49,9 +49,9 @@ Additional VM-local checks that passed:
 
 - `Neo.Extensions.Tests`: `89`
 - `Neo.Json.UnitTests`: `92`
-- `Neo.UnitTests`: `990`
+- `Neo.UnitTests`: `988`
 
-Core total: `1171`
+Core total: `1,169`
 
 Additional focused verification:
 
@@ -81,6 +81,26 @@ Node total: `477`
 Additional smoke verification:
 
 - `neo-cli` publish + packaged plugin smoke passed
+
+### Cross-repo totals
+
+| Scope | Tests |
+|-------|-------|
+| VM workspace | 376 |
+| Core matrix | 1,169 |
+| Node matrix | 477 |
+| **Total** | **2,022** |
+
+### Production Hardening Fixes (2026-03-26)
+
+Following 8 review cycles, 34 fixes have been applied across the codebase:
+
+- **Interpreter correctness (4 areas):** XDROP boundary handling, ENDTRY control flow, CALL/RET frame management, and JMPEQ offset semantics corrected to match C# NeoVM behavior.
+- **Security hardening:** Codec size limits to prevent unbounded deserialization, OOM guards for guest memory allocation, bounds checking on stack/slot operations.
+- **C# adapter fixes:** Adapter bridge marshalling corrections, provider registration edge cases, plugin lifecycle handling.
+- **Reliability and quality:** Improved error propagation, panic-safety in FFI boundaries, expanded test coverage for edge cases discovered during review.
+
+All fixes are validated by the test counts above.
 
 ## Operational Interpretation
 

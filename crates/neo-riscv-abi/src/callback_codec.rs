@@ -30,6 +30,9 @@ pub fn encode_stack_result(result: &Result<Vec<StackValue>, String>) -> Vec<u8> 
     out
 }
 
+const MAX_DECODE_DEPTH: usize = 64;
+const MAX_COLLECTION_LEN: usize = 4096;
+
 pub fn decode_stack_result_into(
     bytes: &[u8],
     stack: &mut Vec<StackValue>,
@@ -39,10 +42,13 @@ pub fn decode_stack_result_into(
     let value = match tag {
         0 => {
             let len = cursor.read_u32()? as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum".to_string());
+            }
             stack.clear();
             stack.reserve(len);
             for _ in 0..len {
-                stack.push(decode_stack_value(&mut cursor)?);
+                stack.push(decode_stack_value_depth(&mut cursor, 0)?);
             }
             Ok(())
         }
@@ -63,9 +69,12 @@ pub fn decode_stack_result(bytes: &[u8]) -> Result<Result<Vec<StackValue>, Strin
     let value = match tag {
         0 => {
             let len = cursor.read_u32()? as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum".to_string());
+            }
             let mut stack = Vec::with_capacity(len);
             for _ in 0..len {
-                stack.push(decode_stack_value(&mut cursor)?);
+                stack.push(decode_stack_value_depth(&mut cursor, 0)?);
             }
             Ok(stack)
         }
@@ -85,9 +94,7 @@ fn encode_stack_value(value: &StackValue, out: &mut Vec<u8>) {
     match value {
         StackValue::Integer(value) => {
             out.push(0);
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&value.to_le_bytes());
-            out.extend_from_slice(&buf);
+            out.extend_from_slice(&value.to_le_bytes());
         }
         StackValue::BigInteger(bytes) => {
             out.push(1);
@@ -125,28 +132,29 @@ fn encode_stack_value(value: &StackValue, out: &mut Vec<u8>) {
         }
         StackValue::Interop(handle) => {
             out.push(7);
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&handle.to_le_bytes());
-            out.extend_from_slice(&buf);
+            out.extend_from_slice(&handle.to_le_bytes());
         }
         StackValue::Iterator(handle) => {
             out.push(8);
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&handle.to_le_bytes());
-            out.extend_from_slice(&buf);
+            out.extend_from_slice(&handle.to_le_bytes());
         }
         StackValue::Null => out.push(9),
+        StackValue::Buffer(bytes) => {
+            out.push(11);
+            encode_bytes(bytes, out);
+        }
         StackValue::Pointer(value) => {
             out.push(10);
-            let mut buf = [0u8; 8];
-            buf.copy_from_slice(&value.to_le_bytes());
-            out.extend_from_slice(&buf);
+            out.extend_from_slice(&value.to_le_bytes());
         }
     }
 }
 
 #[inline]
-fn decode_stack_value(cursor: &mut Cursor<'_>) -> Result<StackValue, String> {
+fn decode_stack_value_depth(cursor: &mut Cursor<'_>, depth: usize) -> Result<StackValue, String> {
+    if depth > MAX_DECODE_DEPTH {
+        return Err("decode depth exceeds maximum".to_string());
+    }
     match cursor.read_u8()? {
         0 => Ok(StackValue::Integer(cursor.read_i64()?)),
         1 => Ok(StackValue::BigInteger(cursor.read_bytes()?.to_vec())),
@@ -154,26 +162,35 @@ fn decode_stack_value(cursor: &mut Cursor<'_>) -> Result<StackValue, String> {
         3 => Ok(StackValue::Boolean(cursor.read_u8()? != 0)),
         4 => {
             let len = cursor.read_u32()? as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum".to_string());
+            }
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                items.push(decode_stack_value(cursor)?);
+                items.push(decode_stack_value_depth(cursor, depth + 1)?);
             }
             Ok(StackValue::Array(items))
         }
         5 => {
             let len = cursor.read_u32()? as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum".to_string());
+            }
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                items.push(decode_stack_value(cursor)?);
+                items.push(decode_stack_value_depth(cursor, depth + 1)?);
             }
             Ok(StackValue::Struct(items))
         }
         6 => {
             let len = cursor.read_u32()? as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum".to_string());
+            }
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                let key = decode_stack_value(cursor)?;
-                let value = decode_stack_value(cursor)?;
+                let key = decode_stack_value_depth(cursor, depth + 1)?;
+                let value = decode_stack_value_depth(cursor, depth + 1)?;
                 items.push((key, value));
             }
             Ok(StackValue::Map(items))
@@ -182,6 +199,7 @@ fn decode_stack_value(cursor: &mut Cursor<'_>) -> Result<StackValue, String> {
         8 => Ok(StackValue::Iterator(cursor.read_u64()?)),
         9 => Ok(StackValue::Null),
         10 => Ok(StackValue::Pointer(cursor.read_i64()?)),
+        11 => Ok(StackValue::Buffer(cursor.read_bytes()?.to_vec())),
         _ => Err("invalid stack value tag".to_string()),
     }
 }

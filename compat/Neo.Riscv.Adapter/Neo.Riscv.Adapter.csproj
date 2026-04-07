@@ -15,6 +15,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Neo.UnitTests" />
     <InternalsVisibleTo Include="Neo.Riscv.Adapter.Tests" />
+    <InternalsVisibleTo Include="StateRootValidator" />
+    <InternalsVisibleTo Include="FullBlockValidator" />
   </ItemGroup>
 
   <ItemGroup>

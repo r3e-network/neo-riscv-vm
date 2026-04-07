@@ -1,6 +1,6 @@
 # Neo Master-N3 PolkaVM Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build the first working slice of a `master-n3` C# to Rust to PolkaVM NeoVM execution path without changing existing `ApplicationEngine.Create()` callers.
 

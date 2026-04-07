@@ -5,13 +5,20 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use core::alloc::{GlobalAlloc, Layout};
+
+// Increase PolkaVM call stack from the default size to handle deep codec
+// decoding (e.g., nested arrays in Contract.Call results at mainnet block 78538).
+#[cfg(all(any(target_arch = "riscv32", target_arch = "riscv64"), target_feature = "e"))]
+polkavm_derive::min_stack_size!(1048576);
 use core::cell::UnsafeCell;
 use core::ptr::NonNull;
-use neo_riscv_abi::{callback_codec, ExecutionResult, StackValue};
+use neo_riscv_abi::{callback_codec, fast_codec, ExecutionResult, StackValue};
 use neo_riscv_guest::SyscallProvider;
 
-const ARENA_SIZE: usize = 256 * 1024 * 1024;
-const SCRATCH_BUF_SIZE: usize = 1024 * 1024;
+// Keep enough heap headroom for 1MB MaxItemSize allocations alongside
+// interpreter state and callback decoding buffers.
+const ARENA_SIZE: usize = 8 * 1024 * 1024;
+const SCRATCH_BUF_SIZE: usize = 2 * 1024 * 1024;
 const PANIC_BUF_SIZE: usize = 256;
 const TRACE_HEAD_SIZE: usize = 32;
 
@@ -123,10 +130,28 @@ impl ResettableBumpAllocator {
 
         let state = &mut *self.0.get();
         let base = ARENA.as_mut_ptr() as usize;
-        let current = base + state.offset;
         let align_mask = layout.align() - 1;
-        let aligned = (current + align_mask) & !align_mask;
-        let end = aligned.saturating_add(layout.size());
+        // Use checked arithmetic to prevent 32-bit integer overflow when
+        // base + offset + align_mask wraps around on riscv32.
+        let Some(current) = base.checked_add(state.offset) else {
+            state.fail_count = state.fail_count.saturating_add(1);
+            state.fail_size = layout.size();
+            state.fail_align = layout.align();
+            return core::ptr::null_mut();
+        };
+        let Some(sum) = current.checked_add(align_mask) else {
+            state.fail_count = state.fail_count.saturating_add(1);
+            state.fail_size = layout.size();
+            state.fail_align = layout.align();
+            return core::ptr::null_mut();
+        };
+        let aligned = sum & !align_mask;
+        let Some(end) = aligned.checked_add(layout.size()) else {
+            state.fail_count = state.fail_count.saturating_add(1);
+            state.fail_size = layout.size();
+            state.fail_align = layout.align();
+            return core::ptr::null_mut();
+        };
         if end > base + ARENA_SIZE {
             state.fail_count = state.fail_count.saturating_add(1);
             state.fail_size = layout.size();
@@ -198,6 +223,9 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         let _ = core::fmt::write(&mut w, format_args!("{info}"));
         PANIC_LEN = w.len as u32;
     }
+    unsafe {
+        core::arch::asm!("unimp");
+    }
     loop {}
 }
 
@@ -259,9 +287,8 @@ impl SyscallProvider for PolkaVmSyscallProvider {
             TRACE_REQ_LEN = 0;
         }
         let req_bytes = unsafe { REQ_BUF.as_mut_slice(REQ_BUF.len()) };
-        req_bytes.fill(0);
-        let req_bytes =
-            postcard::to_slice(stack, req_bytes).map_err(|_| "failed to serialize stack")?;
+        let req_bytes = fast_codec::encode_stack_to_slice(stack, req_bytes)
+            .map_err(|e| alloc::format!("failed to serialize stack: {e}"))?;
         unsafe {
             TRACE_SYSCALL_STAGE = 2;
             TRACE_REQ_LEN = req_bytes.len().min(u32::MAX as usize) as u32;
@@ -301,12 +328,13 @@ impl SyscallProvider for PolkaVmSyscallProvider {
         }
         unsafe {
             let res_bytes = RES_BUF.as_mut_slice(res_len);
+
             let new_stack = callback_codec::decode_stack_result(res_bytes)
                 .map_err(|error| alloc::format!("failed to decode stack result: {error}"))??;
-            let traced = callback_codec::encode_stack_result(&Ok(new_stack.clone()));
+            // Write trace header directly from response bytes (avoid clone which doubles memory)
             let trace_head = TRACE_RES_HEAD.as_mut_slice(TRACE_HEAD_SIZE);
-            let copy_len = core::cmp::min(traced.len(), TRACE_HEAD_SIZE);
-            trace_head[..copy_len].copy_from_slice(&traced[..copy_len]);
+            let copy_len = core::cmp::min(res_len, TRACE_HEAD_SIZE);
+            trace_head[..copy_len].copy_from_slice(&res_bytes[..copy_len]);
             if copy_len < TRACE_HEAD_SIZE {
                 trace_head[copy_len..].fill(0);
             }
@@ -395,6 +423,8 @@ pub extern "C" fn get_trace_stack_items() -> u32 {
     unsafe { TRACE_STACK_ITEMS }
 }
 
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_peak() -> u32 {
     unsafe { ALLOCATOR.peak_bytes() }
 }
@@ -464,7 +494,7 @@ fn execute_inner(
     let initial_stack: Vec<StackValue> = if stack_len > 0 {
         let stack_bytes =
             unsafe { core::slice::from_raw_parts(stack_ptr as *const u8, stack_len as usize) };
-        postcard::from_bytes(stack_bytes)
+        fast_codec::decode_stack(stack_bytes)
             .map_err(|e| alloc::format!("failed to deserialize initial stack: {e}"))?
     } else {
         Vec::new()

@@ -3,7 +3,7 @@ use core::convert::TryInto;
 
 use neo_riscv_abi::StackValue;
 
-use crate::{api_ids, ffi};
+use crate::{api_ids, ffi, syscalls::CALL_FLAGS_ALL};
 
 pub mod contract_management;
 pub mod crypto_lib;
@@ -18,8 +18,14 @@ pub mod std_lib;
 pub mod treasury;
 
 pub(crate) const CALL_FLAGS_READ_ONLY: u8 = 0x05;
-pub(crate) const CALL_FLAGS_ALL: u8 = 0x0f;
 
+/// Build the evaluation stack for a `System.Contract.Call` host invocation
+/// targeting a native contract.
+///
+/// This version takes a fixed `&[u8; 20]` hash, which guarantees at compile
+/// time that the hash length matches a Neo `UInt160`.  For general-purpose
+/// calls where the hash comes from dynamic input, see
+/// [`crate::syscalls::build_contract_call_stack`].
 pub(crate) fn build_contract_call_stack(
     hash: &[u8; 20],
     method: &str,

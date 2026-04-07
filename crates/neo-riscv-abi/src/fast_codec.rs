@@ -4,8 +4,8 @@
 //! Replaces postcard with zero-copy, type-tagged encoding.
 
 extern crate alloc;
-use alloc::vec::Vec;
 use crate::StackValue;
+use alloc::vec::Vec;
 
 // Type tags (1 byte each)
 const TAG_INTEGER: u8 = 0x01;
@@ -19,6 +19,7 @@ const TAG_INTEROP: u8 = 0x08;
 const TAG_ITERATOR: u8 = 0x09;
 const TAG_NULL: u8 = 0x0A;
 const TAG_POINTER: u8 = 0x0B;
+const TAG_BUFFER: u8 = 0x0C;
 
 /// Encode stack to binary format
 #[inline]
@@ -56,6 +57,9 @@ pub fn encode_stack_to_slice<'a>(
     Ok(&mut buf[..pos])
 }
 
+const MAX_DECODE_DEPTH: usize = 64;
+const MAX_COLLECTION_LEN: usize = 4096;
+
 /// Decode stack from binary format
 #[inline]
 pub fn decode_stack(bytes: &[u8]) -> Result<Vec<StackValue>, &'static str> {
@@ -64,11 +68,14 @@ pub fn decode_stack(bytes: &[u8]) -> Result<Vec<StackValue>, &'static str> {
     }
 
     let len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+    if len > MAX_COLLECTION_LEN {
+        return Err("collection length exceeds maximum");
+    }
     let mut stack = Vec::with_capacity(len);
     let mut pos = 4;
 
     for _ in 0..len {
-        let (value, consumed) = decode_value(&bytes[pos..])?;
+        let (value, consumed) = decode_value_depth(&bytes[pos..], 0)?;
         stack.push(value);
         pos += consumed;
     }
@@ -90,6 +97,11 @@ fn encode_value(value: &StackValue, buf: &mut Vec<u8>) {
         }
         StackValue::ByteString(b) => {
             buf.push(TAG_BYTESTRING);
+            buf.extend_from_slice(&(b.len() as u32).to_le_bytes());
+            buf.extend_from_slice(b);
+        }
+        StackValue::Buffer(b) => {
+            buf.push(TAG_BUFFER);
             buf.extend_from_slice(&(b.len() as u32).to_le_bytes());
             buf.extend_from_slice(b);
         }
@@ -138,38 +150,61 @@ fn encode_value(value: &StackValue, buf: &mut Vec<u8>) {
 }
 
 #[inline]
-fn encode_value_to_slice(value: &StackValue, buf: &mut [u8], mut pos: usize) -> Result<usize, &'static str> {
+fn encode_value_to_slice(
+    value: &StackValue,
+    buf: &mut [u8],
+    mut pos: usize,
+) -> Result<usize, &'static str> {
     match value {
         StackValue::Integer(i) => {
-            if buf.len() < pos + 9 { return Err("buffer too small"); }
+            if buf.len() < pos + 9 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_INTEGER;
-            buf[pos+1..pos+9].copy_from_slice(&i.to_le_bytes());
+            buf[pos + 1..pos + 9].copy_from_slice(&i.to_le_bytes());
             Ok(pos + 9)
         }
         StackValue::BigInteger(b) => {
-            if buf.len() < pos + 5 + b.len() { return Err("buffer too small"); }
+            if buf.len() < pos + 5 + b.len() {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_BIGINTEGER;
-            buf[pos+1..pos+5].copy_from_slice(&(b.len() as u32).to_le_bytes());
-            buf[pos+5..pos+5+b.len()].copy_from_slice(b);
+            buf[pos + 1..pos + 5].copy_from_slice(&(b.len() as u32).to_le_bytes());
+            buf[pos + 5..pos + 5 + b.len()].copy_from_slice(b);
             Ok(pos + 5 + b.len())
         }
         StackValue::ByteString(b) => {
-            if buf.len() < pos + 5 + b.len() { return Err("buffer too small"); }
+            if buf.len() < pos + 5 + b.len() {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_BYTESTRING;
-            buf[pos+1..pos+5].copy_from_slice(&(b.len() as u32).to_le_bytes());
-            buf[pos+5..pos+5+b.len()].copy_from_slice(b);
+            buf[pos + 1..pos + 5].copy_from_slice(&(b.len() as u32).to_le_bytes());
+            buf[pos + 5..pos + 5 + b.len()].copy_from_slice(b);
+            Ok(pos + 5 + b.len())
+        }
+        StackValue::Buffer(b) => {
+            if buf.len() < pos + 5 + b.len() {
+                return Err("buffer too small");
+            }
+            buf[pos] = TAG_BUFFER;
+            buf[pos + 1..pos + 5].copy_from_slice(&(b.len() as u32).to_le_bytes());
+            buf[pos + 5..pos + 5 + b.len()].copy_from_slice(b);
             Ok(pos + 5 + b.len())
         }
         StackValue::Boolean(b) => {
-            if buf.len() < pos + 2 { return Err("buffer too small"); }
+            if buf.len() < pos + 2 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_BOOLEAN;
-            buf[pos+1] = if *b { 1 } else { 0 };
+            buf[pos + 1] = if *b { 1 } else { 0 };
             Ok(pos + 2)
         }
         StackValue::Array(items) => {
-            if buf.len() < pos + 5 { return Err("buffer too small"); }
+            if buf.len() < pos + 5 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_ARRAY;
-            buf[pos+1..pos+5].copy_from_slice(&(items.len() as u32).to_le_bytes());
+            buf[pos + 1..pos + 5].copy_from_slice(&(items.len() as u32).to_le_bytes());
             pos += 5;
             for item in items {
                 pos = encode_value_to_slice(item, buf, pos)?;
@@ -177,9 +212,11 @@ fn encode_value_to_slice(value: &StackValue, buf: &mut [u8], mut pos: usize) -> 
             Ok(pos)
         }
         StackValue::Struct(items) => {
-            if buf.len() < pos + 5 { return Err("buffer too small"); }
+            if buf.len() < pos + 5 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_STRUCT;
-            buf[pos+1..pos+5].copy_from_slice(&(items.len() as u32).to_le_bytes());
+            buf[pos + 1..pos + 5].copy_from_slice(&(items.len() as u32).to_le_bytes());
             pos += 5;
             for item in items {
                 pos = encode_value_to_slice(item, buf, pos)?;
@@ -187,9 +224,11 @@ fn encode_value_to_slice(value: &StackValue, buf: &mut [u8], mut pos: usize) -> 
             Ok(pos)
         }
         StackValue::Map(pairs) => {
-            if buf.len() < pos + 5 { return Err("buffer too small"); }
+            if buf.len() < pos + 5 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_MAP;
-            buf[pos+1..pos+5].copy_from_slice(&(pairs.len() as u32).to_le_bytes());
+            buf[pos + 1..pos + 5].copy_from_slice(&(pairs.len() as u32).to_le_bytes());
             pos += 5;
             for (k, v) in pairs {
                 pos = encode_value_to_slice(k, buf, pos)?;
@@ -198,33 +237,44 @@ fn encode_value_to_slice(value: &StackValue, buf: &mut [u8], mut pos: usize) -> 
             Ok(pos)
         }
         StackValue::Interop(h) => {
-            if buf.len() < pos + 9 { return Err("buffer too small"); }
+            if buf.len() < pos + 9 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_INTEROP;
-            buf[pos+1..pos+9].copy_from_slice(&h.to_le_bytes());
+            buf[pos + 1..pos + 9].copy_from_slice(&h.to_le_bytes());
             Ok(pos + 9)
         }
         StackValue::Iterator(h) => {
-            if buf.len() < pos + 9 { return Err("buffer too small"); }
+            if buf.len() < pos + 9 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_ITERATOR;
-            buf[pos+1..pos+9].copy_from_slice(&h.to_le_bytes());
+            buf[pos + 1..pos + 9].copy_from_slice(&h.to_le_bytes());
             Ok(pos + 9)
         }
         StackValue::Null => {
-            if buf.len() < pos + 1 { return Err("buffer too small"); }
+            if buf.len() < pos + 1 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_NULL;
             Ok(pos + 1)
         }
         StackValue::Pointer(p) => {
-            if buf.len() < pos + 9 { return Err("buffer too small"); }
+            if buf.len() < pos + 9 {
+                return Err("buffer too small");
+            }
             buf[pos] = TAG_POINTER;
-            buf[pos+1..pos+9].copy_from_slice(&p.to_le_bytes());
+            buf[pos + 1..pos + 9].copy_from_slice(&p.to_le_bytes());
             Ok(pos + 9)
         }
     }
 }
 
 #[inline]
-fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
+fn decode_value_depth(bytes: &[u8], depth: usize) -> Result<(StackValue, usize), &'static str> {
+    if depth > MAX_DECODE_DEPTH {
+        return Err("decode depth exceeds maximum");
+    }
     if bytes.is_empty() {
         return Err("empty buffer");
     }
@@ -238,8 +288,14 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
                 return Err("truncated integer");
             }
             let val = i64::from_le_bytes([
-                bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
-                bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7],
+                bytes[pos],
+                bytes[pos + 1],
+                bytes[pos + 2],
+                bytes[pos + 3],
+                bytes[pos + 4],
+                bytes[pos + 5],
+                bytes[pos + 6],
+                bytes[pos + 7],
             ]);
             pos += 8;
             StackValue::Integer(val)
@@ -248,12 +304,14 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
             if bytes.len() < pos + 4 {
                 return Err("truncated biginteger length");
             }
-            let len = u32::from_le_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
             pos += 4;
             if bytes.len() < pos + len {
                 return Err("truncated biginteger data");
             }
-            let data = bytes[pos..pos+len].to_vec();
+            let data = bytes[pos..pos + len].to_vec();
             pos += len;
             StackValue::BigInteger(data)
         }
@@ -261,14 +319,31 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
             if bytes.len() < pos + 4 {
                 return Err("truncated bytestring length");
             }
-            let len = u32::from_le_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
             pos += 4;
             if bytes.len() < pos + len {
                 return Err("truncated bytestring data");
             }
-            let data = bytes[pos..pos+len].to_vec();
+            let data = bytes[pos..pos + len].to_vec();
             pos += len;
             StackValue::ByteString(data)
+        }
+        TAG_BUFFER => {
+            if bytes.len() < pos + 4 {
+                return Err("truncated buffer length");
+            }
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
+            pos += 4;
+            if bytes.len() < pos + len {
+                return Err("truncated buffer data");
+            }
+            let data = bytes[pos..pos + len].to_vec();
+            pos += len;
+            StackValue::Buffer(data)
         }
         TAG_BOOLEAN => {
             if bytes.len() < pos + 1 {
@@ -282,11 +357,16 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
             if bytes.len() < pos + 4 {
                 return Err("truncated array length");
             }
-            let len = u32::from_le_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum");
+            }
             pos += 4;
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                let (item, consumed) = decode_value(&bytes[pos..])?;
+                let (item, consumed) = decode_value_depth(&bytes[pos..], depth + 1)?;
                 items.push(item);
                 pos += consumed;
             }
@@ -296,11 +376,16 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
             if bytes.len() < pos + 4 {
                 return Err("truncated struct length");
             }
-            let len = u32::from_le_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum");
+            }
             pos += 4;
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                let (item, consumed) = decode_value(&bytes[pos..])?;
+                let (item, consumed) = decode_value_depth(&bytes[pos..], depth + 1)?;
                 items.push(item);
                 pos += consumed;
             }
@@ -310,13 +395,18 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
             if bytes.len() < pos + 4 {
                 return Err("truncated map length");
             }
-            let len = u32::from_le_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+            let len =
+                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+                    as usize;
+            if len > MAX_COLLECTION_LEN {
+                return Err("collection length exceeds maximum");
+            }
             pos += 4;
             let mut pairs = Vec::with_capacity(len);
             for _ in 0..len {
-                let (k, k_consumed) = decode_value(&bytes[pos..])?;
+                let (k, k_consumed) = decode_value_depth(&bytes[pos..], depth + 1)?;
                 pos += k_consumed;
-                let (v, v_consumed) = decode_value(&bytes[pos..])?;
+                let (v, v_consumed) = decode_value_depth(&bytes[pos..], depth + 1)?;
                 pos += v_consumed;
                 pairs.push((k, v));
             }
@@ -327,8 +417,14 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
                 return Err("truncated interop");
             }
             let val = u64::from_le_bytes([
-                bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
-                bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7],
+                bytes[pos],
+                bytes[pos + 1],
+                bytes[pos + 2],
+                bytes[pos + 3],
+                bytes[pos + 4],
+                bytes[pos + 5],
+                bytes[pos + 6],
+                bytes[pos + 7],
             ]);
             pos += 8;
             StackValue::Interop(val)
@@ -338,8 +434,14 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
                 return Err("truncated iterator");
             }
             let val = u64::from_le_bytes([
-                bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
-                bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7],
+                bytes[pos],
+                bytes[pos + 1],
+                bytes[pos + 2],
+                bytes[pos + 3],
+                bytes[pos + 4],
+                bytes[pos + 5],
+                bytes[pos + 6],
+                bytes[pos + 7],
             ]);
             pos += 8;
             StackValue::Iterator(val)
@@ -350,8 +452,14 @@ fn decode_value(bytes: &[u8]) -> Result<(StackValue, usize), &'static str> {
                 return Err("truncated pointer");
             }
             let val = i64::from_le_bytes([
-                bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
-                bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7],
+                bytes[pos],
+                bytes[pos + 1],
+                bytes[pos + 2],
+                bytes[pos + 3],
+                bytes[pos + 4],
+                bytes[pos + 5],
+                bytes[pos + 6],
+                bytes[pos + 7],
             ]);
             pos += 8;
             StackValue::Pointer(val)
@@ -384,6 +492,22 @@ mod tests {
     }
 
     #[test]
+    fn roundtrip_buffer() {
+        let stack = vec![StackValue::Buffer(vec![0, 0, 0, 0])];
+        let encoded = encode_stack(&stack);
+        let decoded = decode_stack(&encoded).unwrap();
+        assert_eq!(stack, decoded);
+    }
+
+    #[test]
+    fn roundtrip_buffer_empty() {
+        let stack = vec![StackValue::Buffer(vec![])];
+        let encoded = encode_stack(&stack);
+        let decoded = decode_stack(&encoded).unwrap();
+        assert_eq!(stack, decoded);
+    }
+
+    #[test]
     fn roundtrip_array() {
         let stack = vec![StackValue::Array(vec![
             StackValue::Integer(1),
@@ -404,5 +528,50 @@ mod tests {
         let encoded = encode_stack(&stack);
         let decoded = decode_stack(&encoded).unwrap();
         assert_eq!(stack, decoded);
+    }
+
+    #[test]
+    fn decode_rejects_excessive_nesting() {
+        // Build a payload: stack length = 1, then 65 nested arrays
+        // (TAG_ARRAY=0x05, len=1) to exceed MAX_DECODE_DEPTH (64).
+        // decode_value_depth starts at depth=0, each Array recurses with depth+1,
+        // so the 65th nested array will attempt depth=65 which exceeds the limit.
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&1u32.to_le_bytes()); // stack length = 1
+        for _ in 0..65 {
+            payload.push(TAG_ARRAY); // 0x05
+            payload.extend_from_slice(&1u32.to_le_bytes()); // array length = 1
+        }
+        // Innermost value (won't be reached due to depth limit)
+        payload.push(TAG_NULL); // 0x0A
+
+        let result = decode_stack(&payload);
+        assert!(result.is_err(), "excessive nesting must be rejected");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("depth"),
+            "error should mention depth, got: {err}"
+        );
+    }
+
+    #[test]
+    fn decode_rejects_excessive_collection_length() {
+        // Build a payload: stack length = 1, then an array with length 5000,
+        // which exceeds MAX_COLLECTION_LEN (4096).
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&1u32.to_le_bytes()); // stack length = 1
+        payload.push(TAG_ARRAY); // 0x05
+        payload.extend_from_slice(&5000u32.to_le_bytes()); // array length = 5000
+
+        let result = decode_stack(&payload);
+        assert!(
+            result.is_err(),
+            "excessive collection length must be rejected"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("length"),
+            "error should mention length, got: {err}"
+        );
     }
 }

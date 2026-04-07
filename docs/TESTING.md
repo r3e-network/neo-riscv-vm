@@ -1,7 +1,7 @@
 # Testing Guide
 
 **Version:** 1.1  
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-26
 
 ## Overview
 
@@ -29,9 +29,10 @@ The canonical full validation command is:
 
 ### VM workspace
 
-- guest tests: `206`
+- guest tests: `271`
 - host tests: `93`
 - devpack tests: `12`
+- VM total: `376`
 
 ### Compatibility / adapter
 
@@ -42,8 +43,8 @@ The canonical full validation command is:
 
 - `Neo.Extensions.Tests`: `89`
 - `Neo.Json.UnitTests`: `92`
-- `Neo.UnitTests`: `990`
-- core total: `1171`
+- `Neo.UnitTests`: `988`
+- core total: `1169`
 
 ### Node matrix
 

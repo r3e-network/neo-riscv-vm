@@ -116,6 +116,31 @@ neo-riscv-vm/
 └── docs/
 ```
 
+## Related Repositories
+
+This RISC-V VM is part of a multi-repo architecture. All repos are available at [github.com/r3e-network](https://github.com/r3e-network):
+
+| Repository | Description | Language |
+|------------|-------------|----------|
+| [neo-riscv-vm](https://github.com/r3e-network/neo-riscv-vm) | RISC-V VM execution engine (this repo) | Rust |
+| [neo-riscv-node](https://github.com/r3e-network/neo-riscv-node) | Neo node with RISC-VM support | C# |
+| [neo-riscv-core](https://github.com/r3e-network/neo-riscv-core) | Core Neo library with RISC-VM support | C# |
+| [neo-riscv-devpack](https://github.com/r3e-network/neo-riscv-devpack) | Rust smart contract development kit | Rust |
+
+### Using as Dependencies
+
+**C# Projects** - Reference via project dependencies or git submodules:
+```xml
+<!-- In Directory.Build.props -->
+<NeoSiblingCoreProject>$(MSBuildThisFileDirectory)neo-riscv-core\src\Neo\Neo.csproj</NeoSiblingCoreProject>
+```
+
+**Rust Projects** - Use git dependencies:
+```toml
+[dependencies]
+neo-riscv-devpack = { git = "https://github.com/r3e-network/neo-riscv-devpack" }
+```
+
 ## Documentation
 
 - [Current Status](./docs/CURRENT_STATUS.md)

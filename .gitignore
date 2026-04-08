@@ -11,3 +11,18 @@ dist/
 **/bin/
 **/obj/
 .venv/
+
+# Local chain/state validation artifacts
+mainnet-validation/
+Data_LevelDB_*/
+Data_MPT_*/
+neo-cli.pid
+validator-*.pid
+fullblock-production.log
+stateroot-*.log
+stateroot-*.txt
+stateroot-*.out
+tools/FullBlockValidator/*checkpoint.txt
+tools/FullBlockValidator/logs/
+tools/StateRootValidator/*checkpoint.txt
+tools/StateRootValidator/*.log

@@ -12,24 +12,26 @@ interpreter with randomly generated scripts, values, and syscall responses.
 | `stack_ops` | Stack manipulation operations such as `DUP`, `DROP`, and `SWAP` |
 | `exception_handling` | `TRY`, `THROW`, and `ENDTRY` control flow |
 | `syscall_fuzz` | Syscall invocation and return value handling |
+| `whole_system_parity` | Direct guest versus host-path parity for structured syscall scenarios |
 | `mem_op` | Memory operations such as `MEMCPY`, `SUBSTR`, and `CAT` |
 
 ## Build
 
 ```bash
-cargo build -p neo-riscv-fuzz
-cargo build -p neo-riscv-fuzz --release
+cd fuzz
+cargo +nightly fuzz build opcode_seq
+cargo +nightly fuzz build whole_system_parity
 ```
 
 ## Run
 
-The binaries are standard libFuzzer entrypoints. Build the package, then invoke
-the target directly with an optional seed corpus:
+Run the instrumented harnesses through `cargo-fuzz`:
 
 ```bash
-./target/release/opcode_seq fuzz/corpus/opcodes/
-./target/release/opcode_seq -max_total_time=300 fuzz/corpus/opcodes/
-./target/release/syscall_fuzz
+cd fuzz
+cargo +nightly fuzz run opcode_seq -- fuzz/corpus/opcodes/
+cargo +nightly fuzz run opcode_seq -- -max_total_time=300 fuzz/corpus/opcodes/
+cargo +nightly fuzz run whole_system_parity -- -runs=100
 ```
 
 ## Corpus
@@ -43,6 +45,18 @@ stable starting point for local smoke fuzzing and CI time-boxed runs.
 cargo build -p neo-riscv-fuzz --release
 ./target/release/opcode_seq -max_total_time=600 fuzz/corpus/opcodes/
 ```
+
+## Bounded validation helper
+
+`scripts/run-bounded-fuzz.sh` captures the supported fuzz binaries and gives them a repeatable, bounded execution window on the current workspace. The script uses `cargo +nightly fuzz run` for instrumented libFuzzer execution, then runs `opcode_seq`, `type_convert`, `stack_ops`, `exception_handling`, `syscall_fuzz`, `whole_system_parity`, and `mem_op` with `-max_total_time`, `-runs`, and `-seed` arguments so each harness exits within a predictable wall-clock budget. `opcode_seq` points at `fuzz/corpus/opcodes/` if it exists; the other targets use `fuzz/corpus/<target>/` when present.
+
+Default guardrails are `TIME_PER_TARGET=120`, `RUNS_PER_TARGET=100`, and `FUZZ_SEED=42`, but you can override them when invoking the script. For example:
+
+```bash
+TIME_PER_TARGET=10 RUNS_PER_TARGET=5 FUZZ_SEED=123 scripts/run-bounded-fuzz.sh
+```
+
+To keep fuzz validation optional, `scripts/verify-all.sh` will run `scripts/run-bounded-fuzz.sh` only when you set `NEO_RUN_FUZZ=1`. That lets CI opt into fuzzing or lets developers run `NEO_RUN_FUZZ=1 scripts/verify-all.sh` after the normal test suite finishes.
 
 ## Invariants
 

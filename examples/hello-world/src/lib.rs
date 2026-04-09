@@ -1,5 +1,7 @@
 #![cfg_attr(target_arch = "riscv32", no_std)]
-#![cfg_attr(target_arch = "riscv32", no_main)]
+
+#[path = "../../support/allocator.rs"]
+mod allocator;
 
 extern crate alloc;
 
@@ -12,15 +14,8 @@ pub fn dispatch() -> i32 {
     0
 }
 
-#[no_mangle]
-pub extern "C" fn invoke() -> i32 {
+pub fn invoke_entry() -> i32 {
     dispatch()
-}
-
-#[cfg(target_arch = "riscv32")]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
 }
 
 #[cfg(test)]

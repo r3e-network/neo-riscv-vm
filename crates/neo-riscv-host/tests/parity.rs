@@ -146,13 +146,8 @@ fn run_with_timeout(binary: &[u8], method: &str, timeout: Duration) -> MethodOut
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        let result = execute_native_contract(
-            &binary,
-            &method,
-            vec![],
-            default_context(),
-            dummy_callback,
-        );
+        let result =
+            execute_native_contract(&binary, &method, vec![], default_context(), dummy_callback);
         let _ = tx.send(result);
     });
 
@@ -455,17 +450,9 @@ fn parity_recursion() {
     );
 
     // even/odd — mutual recursion
-    assert_halts(
-        "contract_recursion",
-        "even",
-        vec![StackValue::Integer(4)],
-    );
+    assert_halts("contract_recursion", "even", vec![StackValue::Integer(4)]);
 
-    assert_halts(
-        "contract_recursion",
-        "odd",
-        vec![StackValue::Integer(3)],
-    );
+    assert_halts("contract_recursion", "odd", vec![StackValue::Integer(3)]);
 }
 
 #[test]
@@ -579,11 +566,7 @@ fn parity_pattern_matching() {
     }
 
     // between(5)
-    if let Some(stack) = assert_halts(
-        "contract_pattern",
-        "between",
-        vec![StackValue::Integer(5)],
-    ) {
+    if let Some(stack) = assert_halts("contract_pattern", "between", vec![StackValue::Integer(5)]) {
         assert_eq!(stack, vec![StackValue::Boolean(true)]);
     }
 }
@@ -636,12 +619,7 @@ fn parity_property() {
 
 #[test]
 fn parity_string() {
-    let methods = vec![
-        "testMain",
-        "testEqual",
-        "testSubstring",
-        "testEmpty",
-    ];
+    let methods = vec!["testMain", "testEqual", "testSubstring", "testEmpty"];
     let mut pass = 0;
     for method in &methods {
         if let Some(_) = assert_halts("contract_string", method, vec![]) {
@@ -947,9 +925,7 @@ fn parity_bulk_zero_arg_methods() {
     let manifests_dir = Path::new(MANIFESTS_DIR);
     let riscv_dir = Path::new(CONTRACTS_DIR);
     if !manifests_dir.exists() || !riscv_dir.exists() {
-        eprintln!(
-            "SKIP: contract directories not found. Run nccs --target riscv first."
-        );
+        eprintln!("SKIP: contract directories not found. Run nccs --target riscv first.");
         return;
     }
 
@@ -964,11 +940,7 @@ fn parity_bulk_zero_arg_methods() {
     let mut manifests: Vec<_> = fs::read_dir(manifests_dir)
         .expect("read manifests dir")
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .ends_with(".manifest.json")
-        })
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".manifest.json"))
         .collect();
     manifests.sort_by_key(|e| e.file_name());
 

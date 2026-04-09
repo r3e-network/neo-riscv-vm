@@ -46,6 +46,7 @@ fn host_call_import(
     result_cap: u32,
 ) -> u32 {
     let host = caller.user_data;
+    host.last_host_call_stage = 1;
     host.syscall_count = host.syscall_count.saturating_add(1);
     host.last_api = Some(api);
     host.last_ip = Some(ip);
@@ -53,6 +54,7 @@ fn host_call_import(
     host.last_result_cap = Some(result_cap);
 
     host.callback_read_buf.resize(stack_len as usize, 0);
+    host.last_host_call_stage = 2;
     if let Err(e) = caller
         .instance
         .read_memory_into(stack_ptr, &mut host.callback_read_buf[..])
@@ -75,8 +77,10 @@ fn host_call_import(
         }
     };
 
+    host.last_host_call_stage = 3;
     let result = host.invoke(api, ip as usize, &stack);
 
+    host.last_host_call_stage = 4;
     let bytes = match result {
         Ok(res) => {
             let payload: Result<Vec<neo_riscv_abi::StackValue>, String> = Ok(res.stack);
@@ -94,12 +98,14 @@ fn host_call_import(
         );
         return 0;
     }
+    host.last_host_call_stage = 5;
     if let Err(e) = caller.instance.write_memory(result_ptr, &bytes) {
         eprintln!(
             "[neo-riscv-host] host_call(api={api}): write_memory failed at ptr=0x{result_ptr:08x}: {e}"
         );
         return 0;
     }
+    host.last_host_call_stage = 6;
     bytes.len() as u32
 }
 
@@ -113,6 +119,7 @@ pub(crate) struct ClosureHost {
     pub(crate) last_ip: Option<u32>,
     pub(crate) last_stack_len: Option<u32>,
     pub(crate) last_result_cap: Option<u32>,
+    pub(crate) last_host_call_stage: u32,
     pub(crate) callback_read_buf: Vec<u8>,
     callback_data: *mut c_void,
     callback_invoke: CallbackInvokeFn,
@@ -138,6 +145,7 @@ impl ClosureHost {
             last_ip: None,
             last_stack_len: None,
             last_result_cap: None,
+            last_host_call_stage: 0,
             callback_read_buf: Vec::new(),
             callback_data: callback as *mut F as *mut c_void,
             callback_invoke: invoke_callback::<F>,
@@ -207,7 +215,9 @@ pub(crate) fn read_guest_panic(
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_panic_ptr", ())
         .ok()?;
-    if ptr == 0 { return None; }
+    if ptr == 0 {
+        return None;
+    }
     let mut bytes = vec![0u8; len as usize];
     instance.read_memory_into(ptr, &mut bytes[..]).ok()?;
     Some(String::from_utf8_lossy(&bytes).to_string())
@@ -226,7 +236,9 @@ pub(crate) fn read_guest_debug(
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_debug_ptr", ())
         .ok()?;
-    if ptr == 0 { return None; }
+    if ptr == 0 {
+        return None;
+    }
     let mut bytes = vec![0u8; len as usize];
     instance.read_memory_into(ptr, &mut bytes[..]).ok()?;
     Some(bytes)
@@ -245,7 +257,9 @@ pub(crate) fn read_pc_trace(
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_pc_trace_ptr", ())
         .ok()?;
-    if ptr == 0 { return None; }
+    if ptr == 0 {
+        return None;
+    }
     let mut bytes = vec![0u8; len as usize];
     instance.read_memory_into(ptr, &mut bytes[..]).ok()?;
     Some(bytes)

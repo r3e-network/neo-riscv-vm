@@ -23,7 +23,10 @@ fn api_ids_match_interop_hashes() {
         (api_ids::CONTRACT_CALL, "System.Contract.Call"),
         (api_ids::CONTRACT_CREATE, "System.Contract.Create"),
         (api_ids::CONTRACT_UPDATE, "System.Contract.Update"),
-        (api_ids::CONTRACT_GET_CALL_FLAGS, "System.Contract.GetCallFlags"),
+        (
+            api_ids::CONTRACT_GET_CALL_FLAGS,
+            "System.Contract.GetCallFlags",
+        ),
         (
             api_ids::CONTRACT_CREATE_STANDARD_ACCOUNT,
             "System.Contract.CreateStandardAccount",
@@ -71,8 +74,14 @@ fn api_ids_match_interop_hashes() {
         ),
         (api_ids::RUNTIME_GAS_LEFT, "System.Runtime.GasLeft"),
         (api_ids::RUNTIME_GET_RANDOM, "System.Runtime.GetRandom"),
-        (api_ids::RUNTIME_CURRENT_SIGNERS, "System.Runtime.CurrentSigners"),
-        (api_ids::RUNTIME_CHECK_WITNESS, "System.Runtime.CheckWitness"),
+        (
+            api_ids::RUNTIME_CURRENT_SIGNERS,
+            "System.Runtime.CurrentSigners",
+        ),
+        (
+            api_ids::RUNTIME_CHECK_WITNESS,
+            "System.Runtime.CheckWitness",
+        ),
         (api_ids::RUNTIME_NOTIFY, "System.Runtime.Notify"),
         (api_ids::RUNTIME_LOG, "System.Runtime.Log"),
         (

@@ -13,10 +13,7 @@ pub fn encode_string_params(params: &[&str]) -> StackValue {
 
 /// Encode integer parameters as a StackValue::Array of Integer values.
 pub fn encode_int_params(params: &[i64]) -> StackValue {
-    let items: Vec<StackValue> = params
-        .iter()
-        .map(|&i| StackValue::Integer(i))
-        .collect();
+    let items: Vec<StackValue> = params.iter().map(|&i| StackValue::Integer(i)).collect();
     StackValue::Array(items)
 }
 

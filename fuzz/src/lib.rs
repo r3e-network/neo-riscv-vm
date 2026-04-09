@@ -63,10 +63,10 @@ fn check_single_value(value: &StackValue) {
         StackValue::BigInteger(bytes) => {
             assert!(bytes.len() <= 32, "BigInteger should not exceed 32 bytes");
         }
-        StackValue::ByteString(bytes) => {
+        StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => {
             assert!(
                 bytes.len() <= 1024 * 1024,
-                "ByteString should not exceed 1MB"
+                "ByteString/Buffer should not exceed 1MB"
             );
         }
         StackValue::Array(items) | StackValue::Struct(items) => {

@@ -2,50 +2,51 @@
 
 ## Prerequisites
 
-- Rust 1.70+
-- C# .NET 8.0+
+- Rust stable toolchain
+- Rust nightly toolchain for PolkaVM contract compilation/fuzzing
+- .NET 10 SDK
 - Neo N3 node (v3.9.1+)
+- `polkatool` if you need to compile example or production RISC-V contracts
 
 ## Build Process
 
-### 1. Build Rust Components
+### 1. Package the adapter bundle
 
 ```bash
-cd ~/git/neo-riscv-vm
-cargo build --release
+cd ~/git/neo-riscv/neo-riscv-vm
+./scripts/package-adapter-plugin.sh
 ```
 
-Output: `target/release/libneo_riscv_host.so`
+Output: `dist/Plugins/Neo.Riscv.Adapter/`
 
-### 2. Build C# Adapter
+### 2. Compile a RISC-V contract blob
 
 ```bash
-cd ~/git/neo-riscv-core
-dotnet build -c Release src/Neo.Riscv.Adapter
+cd ~/git/neo-riscv/neo-riscv-vm
+./scripts/compile-riscv-contract.sh examples/counter examples/counter/target/counter.polkavm
 ```
 
-### 3. Build Neo Node
+### 3. Build Neo node / CLI
 
 ```bash
-cd ~/git/neo-riscv-node
+cd ~/git/neo-riscv/neo-riscv-node
 dotnet build -c Release
 ```
 
 ## Deployment
 
-1. Copy `libneo_riscv_host.so` to Neo node directory
-2. Copy `Neo.Riscv.Adapter.dll` to plugins directory
-3. Update `config.json` to enable RiscV plugin
-4. Start node: `dotnet neo-cli.dll`
+1. Copy `neo-riscv-vm/dist/Plugins` next to your `neo-cli` binaries, as printed by `./scripts/package-adapter-plugin.sh`.
+2. Update `config.json` to enable the RISC-V adapter plugin.
+3. Start node: `dotnet neo-cli.dll`
+4. Package and deploy your `.polkavm` contract blob through the normal Neo deployment flow.
 
 ## Verification
 
 ```bash
-# Check plugin loaded
-curl http://localhost:10332 -d '{"jsonrpc":"2.0","method":"listplugins","params":[],"id":1}'
-
-# Run test contract
-cargo test --release --workspace
+cd ~/git/neo-riscv/neo-riscv-vm
+./scripts/test-ffi-resolution.sh
+./tests/e2e/run-all.sh
+./scripts/cross-repo-test.sh
 ```
 
 ## Rollback

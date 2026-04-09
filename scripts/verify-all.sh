@@ -58,3 +58,8 @@ else
   echo "  NEO_RUN_NEO_UNITTESTS=1 scripts/verify-all.sh" >&2
   echo "  NEO_TEST_FILTER=FullyQualifiedName~SomeTest scripts/verify-all.sh" >&2
 fi
+
+if [[ "${NEO_RUN_FUZZ:-0}" == "1" ]]; then
+  echo "[verify-all] Running bounded fuzz validation (NEO_RUN_FUZZ=1)"
+  "$ROOT_DIR/scripts/run-bounded-fuzz.sh"
+fi

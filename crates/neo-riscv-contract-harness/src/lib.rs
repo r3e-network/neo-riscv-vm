@@ -20,7 +20,14 @@ use neo_riscv_rt::Context;
 // crate, so storing them in a static and re-calling later fails.
 #[polkavm_derive::polkavm_import]
 extern "C" {
-    fn host_call(api: u32, ip: u32, stack_ptr: u32, stack_len: u32, result_ptr: u32, result_cap: u32) -> u32;
+    fn host_call(
+        api: u32,
+        ip: u32,
+        stack_ptr: u32,
+        stack_len: u32,
+        result_ptr: u32,
+        result_cap: u32,
+    ) -> u32;
 }
 
 /// Result of decoding the entry stack.
@@ -92,11 +99,20 @@ static mut DEBUG_LEN: usize = 0;
 ///
 /// Format: [step:u8, api:u32 LE, stack_len:u32 LE, arg_count:u32 LE,
 ///          encoded_len:u32 LE, result_len:u32 LE, fault_msg_len:u16 LE, fault_msg...]
-fn debug_record(step: u8, api: u32, stack_len: u32, arg_count: u32,
-                encoded_len: u32, result_len: u32, fault: Option<&str>) {
+fn debug_record(
+    step: u8,
+    api: u32,
+    stack_len: u32,
+    arg_count: u32,
+    encoded_len: u32,
+    result_len: u32,
+    fault: Option<&str>,
+) {
     unsafe {
         let needed = 23 + fault.map_or(0, |s| 2 + s.len());
-        if DEBUG_LEN + needed > DEBUG_BUF_SIZE { return; }
+        if DEBUG_LEN + needed > DEBUG_BUF_SIZE {
+            return;
+        }
         let base = DEBUG_BUF.as_mut_ptr().add(DEBUG_LEN);
         base.write(step);
         base.add(1).cast::<u32>().write(api);
@@ -128,7 +144,9 @@ pub fn get_debug_len() -> u32 {
 
 /// Reset the debug buffer.
 pub fn reset_debug() {
-    unsafe { DEBUG_LEN = 0; }
+    unsafe {
+        DEBUG_LEN = 0;
+    }
 }
 
 // ---------------------------------------------------------------
@@ -181,8 +199,15 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
     // Encode arguments using fast_codec (the host decodes with fast_codec)
     let encoded = fast_codec::encode_stack(&abi_args);
 
-    debug_record(1, hash, stack_len as u32, actual_count as u32,
-                 encoded.len() as u32, 0, None);
+    debug_record(
+        1,
+        hash,
+        stack_len as u32,
+        actual_count as u32,
+        encoded.len() as u32,
+        0,
+        None,
+    );
 
     // Prepare a result buffer
     let mut result_buf = vec![0u8; 4096];
@@ -199,8 +224,15 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
         )
     };
 
-    debug_record(2, hash, stack_len as u32, actual_count as u32,
-                 encoded.len() as u32, result_len, None);
+    debug_record(
+        2,
+        hash,
+        stack_len as u32,
+        actual_count as u32,
+        encoded.len() as u32,
+        result_len,
+        None,
+    );
 
     if result_len == 0 {
         // No result data — syscall returned nothing (valid for void syscalls)

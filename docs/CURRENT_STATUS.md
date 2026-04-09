@@ -1,7 +1,7 @@
 # Current Status
 
-**Date:** 2026-03-26
-**Status:** Workspace production-ready (hardened)
+**Date:** 2026-04-09
+**Status:** Workspace integration validated (evidence-based)
 
 ## Executive Summary
 
@@ -55,6 +55,8 @@ Fresh committed-state verification passed with:
 - `./scripts/verify-all.sh`
   - full NeoVM JSON corpus runner (`161` copied corpus files)
   - adapter tests (`10`)
+- `TIME_PER_TARGET=2 RUNS_PER_TARGET=5 FUZZ_SEED=123 NEO_RUN_FUZZ=1 ./scripts/verify-all.sh`
+  - bounded instrumented libFuzzer run for `opcode_seq`, `type_convert`, `stack_ops`, `exception_handling`, `syscall_fuzz`, `whole_system_parity`, and `mem_op`
 - `./tests/e2e/run-all.sh`
 - `./scripts/test-ffi-resolution.sh`
 - `dotnet build src/Neo/Neo.csproj` in `neo-riscv-core`
@@ -63,9 +65,18 @@ Fresh committed-state verification passed with:
   - core matrix: `1,169` tests passed (89 + 92 + 988)
   - node matrix: `477` tests passed
   - `neo-cli` smoke passed
+- `dotnet test neo-devpack-dotnet.sln --configuration Release --no-build -m:1`
+  - `Neo.Compiler.CSharp.UnitTests`: `1107/1107`
+  - `Neo.SmartContract.Framework.UnitTests`: `239/239`
+  - `Neo.SmartContract.Testing.UnitTests`: `49/49`
+  - `Neo.SmartContract.Template.UnitTests`: `37/37`
+  - `Neo.SmartContract.Analyzer.UnitTests`: `132/132`
+  - two `*TestContracts` assemblies are build artifacts and report no discoverable tests
+- `cargo +nightly fuzz run whole_system_parity -- -max_total_time=30 -seed=123`
+  - grew the checked workspace corpus from `2` seed files to `27` corpus entries
 - **Total cross-repo: 2,022 tests passing**
 
-## Production Hardening (2026-03-26)
+## Hardening Snapshot (2026-03-26)
 
 Following 8 review cycles, 34 fixes have been applied across the codebase:
 
@@ -99,5 +110,14 @@ Standalone fuzz package:
 
 ```bash
 cargo test --manifest-path fuzz/Cargo.toml --lib
-cargo build --manifest-path fuzz/Cargo.toml --bins
+cd fuzz
+cargo +nightly fuzz build opcode_seq
 ```
+
+Bounded fuzz validation:
+
+```bash
+scripts/run-bounded-fuzz.sh
+```
+
+Set `TIME_PER_TARGET`, `RUNS_PER_TARGET`, or `FUZZ_SEED` to shrink or stabilize the run, e.g. `TIME_PER_TARGET=10 RUNS_PER_TARGET=5 FUZZ_SEED=123 scripts/run-bounded-fuzz.sh`. The script uses `cargo +nightly fuzz run` for instrumented libFuzzer execution rather than plain release binaries. The same script can also be invoked after `verify-all` by enabling `NEO_RUN_FUZZ=1 scripts/verify-all.sh`, so CI or developers can opt into the bounded fuzz gate without changing the default flow.

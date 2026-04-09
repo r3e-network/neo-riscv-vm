@@ -551,6 +551,7 @@ internal sealed class RiscvVmRunner : IDisposable
         {
             0 => new JObject { ["type"] = "Integer", ["value"] = item.IntegerValue.ToString() },
             1 => new JObject { ["type"] = "ByteString", ["value"] = ByteArrayToHex(ReadBytes(item.BytesPtr, item.BytesLen)) },
+            11 => new JObject { ["type"] = "Buffer", ["value"] = ByteArrayToHex(ReadBytes(item.BytesPtr, item.BytesLen)) },
             2 => new JObject { ["type"] = "Null" },
             3 => new JObject { ["type"] = "Boolean", ["value"] = item.IntegerValue != 0 },
             4 => new JObject { ["type"] = "Array", ["value"] = new JArray(ReadStackAsJson(item.BytesPtr, item.BytesLen)) },

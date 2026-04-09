@@ -92,8 +92,8 @@ cargo test --workspace --all-targets
 Run standalone fuzz package checks:
 
 ```bash
-cargo test --manifest-path fuzz/Cargo.toml --lib
-cargo build --manifest-path fuzz/Cargo.toml --bins
+cargo test --manifest-path fuzz/Cargo.toml --bin whole_system_parity
+TIME_PER_TARGET=10 RUNS_PER_TARGET=5 FUZZ_SEED=123 ./scripts/run-bounded-fuzz.sh
 ```
 
 ## Repository Layout

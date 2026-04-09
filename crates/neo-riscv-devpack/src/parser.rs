@@ -11,9 +11,7 @@ pub fn parse_stack_value(data: &[u8]) -> Result<StackValue, &'static str> {
 pub fn parse_string_result(data: &[u8]) -> Result<String, &'static str> {
     let value = parse_stack_value(data)?;
     match value {
-        StackValue::ByteString(bytes) => {
-            String::from_utf8(bytes).map_err(|_| "invalid utf-8")
-        }
+        StackValue::ByteString(bytes) => String::from_utf8(bytes).map_err(|_| "invalid utf-8"),
         _ => Err("expected ByteString"),
     }
 }

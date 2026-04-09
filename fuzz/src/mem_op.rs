@@ -101,8 +101,8 @@ fn check_mem_value(value: &StackValue) {
         StackValue::BigInteger(bytes) => {
             assert!(bytes.len() <= 32, "BigInteger exceeds max size");
         }
-        StackValue::ByteString(bytes) => {
-            assert!(bytes.len() <= 1024 * 1024, "ByteString exceeds max size");
+        StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => {
+            assert!(bytes.len() <= 1024 * 1024, "ByteString/Buffer exceeds max size");
         }
         StackValue::Array(items) | StackValue::Struct(items) => {
             assert!(items.len() <= 1000, "Array/Struct too large");

@@ -2,12 +2,10 @@
 //!
 //! Implements array, struct, map, and buffer creation and manipulation.
 
+use crate::stack_value::{StackValue, TAG_ARRAY, TAG_BUFFER, TAG_BYTESTRING, TAG_MAP, TAG_STRUCT};
+use crate::Context;
 use alloc::vec;
 use alloc::vec::Vec;
-use crate::stack_value::{
-    StackValue, TAG_ARRAY, TAG_BUFFER, TAG_BYTESTRING, TAG_MAP, TAG_STRUCT,
-};
-use crate::Context;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -401,10 +399,14 @@ impl Context {
     // ---------------------------------------------------------------
 
     /// Alias for new_array_0 (translator emits `ctx.new_array0()`)
-    pub fn new_array0(&mut self) { self.new_array_0(); }
+    pub fn new_array0(&mut self) {
+        self.new_array_0();
+    }
 
     /// Alias for new_struct_0 (translator emits `ctx.new_struct0()`)
-    pub fn new_struct0(&mut self) { self.new_struct_0(); }
+    pub fn new_struct0(&mut self) {
+        self.new_struct_0();
+    }
 
     /// Pops count, then that many key-value pairs, and pushes a Map (NeoVM PACKSTRUCT)
     pub fn pack_struct(&mut self) {
@@ -467,11 +469,7 @@ mod tests {
         let arr = c.pop();
         assert_eq!(
             arr,
-            StackValue::Array(vec![
-                StackValue::Null,
-                StackValue::Null,
-                StackValue::Null
-            ])
+            StackValue::Array(vec![StackValue::Null, StackValue::Null, StackValue::Null])
         );
     }
 

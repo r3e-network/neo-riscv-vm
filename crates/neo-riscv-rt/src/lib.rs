@@ -445,9 +445,7 @@ impl Context {
     pub fn throw_ex(&mut self) {
         let val = self.pop();
         let msg = match &val {
-            StackValue::ByteString(bytes) => {
-                String::from_utf8_lossy(bytes).to_string()
-            }
+            StackValue::ByteString(bytes) => String::from_utf8_lossy(bytes).to_string(),
             StackValue::Integer(v) => format!("exception: {v}"),
             _ => format!("exception: {:?}", val),
         };
@@ -678,10 +676,7 @@ impl Context {
     pub fn pop_integer(&mut self) -> i64 {
         match self.pop() {
             StackValue::Integer(v) => v,
-            other => panic!(
-                "expected Integer on stack, got tag {}",
-                other.type_tag()
-            ),
+            other => panic!("expected Integer on stack, got tag {}", other.type_tag()),
         }
     }
 }
@@ -816,10 +811,7 @@ mod tests {
         let mut ctx = Context::from_abi_stack(vec![]);
         ctx.fault("something went wrong");
         assert_eq!(ctx.state, VmState::Fault);
-        assert_eq!(
-            ctx.fault_message.as_deref(),
-            Some("something went wrong")
-        );
+        assert_eq!(ctx.fault_message.as_deref(), Some("something went wrong"));
     }
 
     // Stack operation tests
@@ -866,7 +858,7 @@ mod tests {
         ctx.push_int(10);
         ctx.push_int(20);
         ctx.push_int(30);
-        ctx.push_int(2);  // push index onto stack
+        ctx.push_int(2); // push index onto stack
         ctx.pick();
         assert_eq!(ctx.pop(), StackValue::Integer(10));
     }
@@ -984,10 +976,7 @@ mod tests {
         ctx.push(StackValue::ByteString(b"custom error".to_vec()));
         ctx.abort_msg();
         assert_eq!(ctx.state, VmState::Fault);
-        assert_eq!(
-            ctx.fault_message.as_deref(),
-            Some("ABORTMSG: custom error")
-        );
+        assert_eq!(ctx.fault_message.as_deref(), Some("ABORTMSG: custom error"));
     }
 
     #[test]

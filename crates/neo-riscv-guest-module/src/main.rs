@@ -8,7 +8,10 @@ use core::alloc::{GlobalAlloc, Layout};
 
 // Increase PolkaVM call stack from the default size to handle deep codec
 // decoding (e.g., nested arrays in Contract.Call results at mainnet block 78538).
-#[cfg(all(any(target_arch = "riscv32", target_arch = "riscv64"), target_feature = "e"))]
+#[cfg(all(
+    any(target_arch = "riscv32", target_arch = "riscv64"),
+    target_feature = "e"
+))]
 polkavm_derive::min_stack_size!(1048576);
 use core::cell::UnsafeCell;
 use core::ptr::NonNull;

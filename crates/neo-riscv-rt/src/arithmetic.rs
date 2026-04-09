@@ -187,13 +187,19 @@ impl Context {
     // ---------------------------------------------------------------
 
     /// Alias for abs_val (translator emits `ctx.abs()`)
-    pub fn abs(&mut self) { self.abs_val(); }
+    pub fn abs(&mut self) {
+        self.abs_val();
+    }
 
     /// Alias for modmul (translator emits `ctx.mod_mul()`)
-    pub fn mod_mul(&mut self) { self.modmul(); }
+    pub fn mod_mul(&mut self) {
+        self.modmul();
+    }
 
     /// Alias for modpow (translator emits `ctx.mod_pow()`)
-    pub fn mod_pow(&mut self) { self.modpow(); }
+    pub fn mod_pow(&mut self) {
+        self.modpow();
+    }
 
     /// Pops one integer and pushes value + 1 (NeoVM INC)
     pub fn inc(&mut self) {

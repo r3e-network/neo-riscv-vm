@@ -446,7 +446,16 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     script[ip + 3],
                     script[ip + 4],
                 ]);
-                if let Err(e) = invoke_syscall(host, api, ip, &mut stack, &mut ids) {
+                if let Err(e) = invoke_syscall(
+                    host,
+                    api,
+                    ip,
+                    &mut stack,
+                    &mut locals,
+                    &mut static_fields,
+                    &mut alt_stack,
+                    &mut ids,
+                ) {
                     if try_frames.is_empty() {
                         return Err(e);
                     }
@@ -1145,6 +1154,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                                     .get(index)
                                     .cloned()
                                     .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
+                                if cfg!(target_arch = "riscv32") {
+                                    core::mem::forget(items);
+                                }
                                 stack.push(value);
                             }
                             StackValue::Buffer(_, bytes) => {

@@ -601,10 +601,7 @@ fn string_concatenation() {
     .expect("should execute string concatenation");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(
-        result.stack,
-        vec![StackValue::Buffer(b"hello".to_vec())]
-    );
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"hello".to_vec())]);
 }
 
 #[test]

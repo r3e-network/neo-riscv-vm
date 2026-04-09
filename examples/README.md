@@ -10,16 +10,16 @@
 ## Build & Test
 
 ```bash
-# Build example
-cd examples/counter
-cargo build --release
+# Compile an example to a PolkaVM contract blob
+./scripts/compile-riscv-contract.sh examples/counter examples/counter/target/counter.polkavm
 
-# Run E2E tests
-../../tests/e2e/run-all.sh
+# Run the example E2E flow
+./tests/e2e/run-all.sh
 ```
 
 ## Deploy
 
 ```bash
-./scripts/neo-riscv-cli.sh deploy contract.nef testnet
+./scripts/package-contract.sh examples/counter/target/counter.polkavm manifest.json contract.nef
+./scripts/deploy-contract.sh contract.nef testnet
 ```

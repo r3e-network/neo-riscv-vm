@@ -38,15 +38,15 @@ namespace Neo.SmartContract.RiscV
 
         private static string? ResolveLibraryPath()
         {
-            var configured = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
-                return configured;
-
             foreach (var candidate in GetDefaultCandidates())
             {
                 if (File.Exists(candidate))
                     return candidate;
             }
+
+            var configured = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+                return configured;
 
             return null;
         }

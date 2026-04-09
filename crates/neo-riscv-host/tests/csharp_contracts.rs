@@ -57,7 +57,10 @@ fn execute_contract(
 fn test_all_csharp_contracts_load() {
     let dir = Path::new(CONTRACTS_DIR);
     if !dir.exists() {
-        eprintln!("SKIP: {} not found. Run nccs --target riscv first.", CONTRACTS_DIR);
+        eprintln!(
+            "SKIP: {} not found. Run nccs --target riscv first.",
+            CONTRACTS_DIR
+        );
         return;
     }
 
@@ -136,9 +139,16 @@ fn test_contract_assignment_executes() {
     let result = execute_contract("contract_assignment", "testAssignment", vec![]);
     match result {
         Ok((state, stack)) => {
-            eprintln!("Contract_Assignment.testAssignment: state={:?}, stack={:?}", state, stack);
+            eprintln!(
+                "Contract_Assignment.testAssignment: state={:?}, stack={:?}",
+                state, stack
+            );
             // The method uses Assert internally — if it halts, the assertions passed
-            assert_eq!(state, VmState::Halt, "testAssignment should halt (assertions pass)");
+            assert_eq!(
+                state,
+                VmState::Halt,
+                "testAssignment should halt (assertions pass)"
+            );
         }
         Err(e) => {
             eprintln!("Contract_Assignment.testAssignment error: {}", e);

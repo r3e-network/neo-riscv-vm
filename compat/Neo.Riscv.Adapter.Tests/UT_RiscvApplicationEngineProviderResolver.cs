@@ -40,6 +40,41 @@ public class UT_RiscvApplicationEngineProviderResolver
         }
     }
 
+    [TestMethod]
+    public void ResolveLibraryPath_PrefersPluginFolder_WhenEnvVarPointsToAnotherExistingLibrary()
+    {
+        var previous = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        var pluginRoot = Path.Combine(AppContext.BaseDirectory, "Plugins", "Neo.Riscv.Adapter");
+        Directory.CreateDirectory(pluginRoot);
+        var fileName = GetPlatformFileName();
+        var bundled = Path.Combine(pluginRoot, fileName);
+        var externalRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var external = Path.Combine(externalRoot, fileName);
+
+        try
+        {
+            Directory.CreateDirectory(externalRoot);
+            File.WriteAllText(bundled, string.Empty);
+            File.WriteAllText(external, "stale");
+            Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, external);
+            RiscvApplicationEngineProviderResolver.ResetForTesting();
+
+            var actual = RiscvApplicationEngineProviderResolver.ResolveLibraryPathForTesting();
+            Assert.AreEqual(bundled, actual);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, previous);
+            RiscvApplicationEngineProviderResolver.ResetForTesting();
+            if (File.Exists(bundled))
+                File.Delete(bundled);
+            if (File.Exists(external))
+                File.Delete(external);
+            if (Directory.Exists(externalRoot))
+                Directory.Delete(externalRoot, recursive: true);
+        }
+    }
+
     private static string GetPlatformFileName()
     {
         if (OperatingSystem.IsWindows())

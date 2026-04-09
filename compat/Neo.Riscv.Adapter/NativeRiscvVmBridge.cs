@@ -307,7 +307,9 @@ namespace Neo.SmartContract.RiscV
                 if (!request.CurrentCallFlags.HasFlag(descriptor.RequiredCallFlags))
                     throw new InvalidOperationException($"Cannot call this SYSCALL with the flag {request.CurrentCallFlags}.");
                 if (descriptor.FixedPrice != 0)
+                {
                     request.Engine.AddFee(descriptor.FixedPrice * request.Engine.ExecFeePicoFactor);
+                }
                 var effectiveGasLeft = gasLeft - (request.GasLeft - request.Engine.GasLeft);
 
                 var stack = api switch
@@ -401,6 +403,11 @@ namespace Neo.SmartContract.RiscV
                     _ => throw new InvalidOperationException($"Unsupported syscall 0x{api:x8}.")
                 };
 
+                if (TraceEnabled)
+                {
+                    for (var index = 0; index < stack.Length; index++)
+                        Trace($"syscall exit item[{index}] name={descriptor.Name} value={DescribeStackItem(stack[index])}");
+                }
                 Trace($"syscall exit name={descriptor.Name} api=0x{api:x8} resultStackLen={stack.Length}");
                 result = CreateNativeHostResult(stack, scope);
                 return true;
@@ -595,6 +602,12 @@ namespace Neo.SmartContract.RiscV
 
             try
             {
+                if (TraceEnabled)
+                {
+                    Trace($"execute script initialIp={initialInstructionPointer} scriptHex={Convert.ToHexString(script)}");
+                    for (var i = 0; i < initialStack.Length; i++)
+                        Trace($"execute initialStack[{i}] value={DescribeStackItem(initialStack[i])}");
+                }
                 Marshal.Copy(script, 0, scriptPtr, script.Length);
                 if (!_executeScript(
                         scriptPtr,
@@ -620,18 +633,12 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
-                // Reconcile Rust-side opcode fees with C# engine.
-                // During syscall callbacks, C# already called AddFee for syscall fixed prices,
-                // reducing Engine.GasLeft. We must subtract what C# already charged to avoid
-                // double-counting. AddFee works in "internal pico" units (datoshi * FeeFactor),
-                // while GasLeft is in datoshi. Conversion: pico = datoshi * FeeFactor.
-                var gasSpentByCallbacksDatoshi = request.GasLeft - request.Engine.GasLeft;
-                if (gasSpentByCallbacksDatoshi < 0) gasSpentByCallbacksDatoshi = 0;
-                var gasSpentByCallbacksPico = (BigInteger)gasSpentByCallbacksDatoshi * ApplicationEngine.FeeFactor;
-                var adjustedFeePico = nativeResult.FeeConsumedPico - gasSpentByCallbacksPico;
-                if (adjustedFeePico > 0)
+                // Rust only reports opcode charges here. Syscall fixed fees are already applied
+                // synchronously in HandleHostCallback, so adding the Rust total directly keeps
+                // opcode and syscall accounting aligned with NeoVM.
+                if (nativeResult.FeeConsumedPico > 0)
                 {
-                    request.Engine.AddFee(adjustedFeePico);
+                    request.Engine.AddFee(nativeResult.FeeConsumedPico);
                 }
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
@@ -699,15 +706,11 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"native execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
-                // Same gas reconciliation as ExecuteScriptInternal — subtract what C# already
-                // charged during callbacks to avoid double-counting.
-                var nativeGasSpentByCallbacksDatoshi = request.GasLeft - request.Engine.GasLeft;
-                if (nativeGasSpentByCallbacksDatoshi < 0) nativeGasSpentByCallbacksDatoshi = 0;
-                var nativeGasSpentByCallbacksPico = (BigInteger)nativeGasSpentByCallbacksDatoshi * ApplicationEngine.FeeFactor;
-                var nativeAdjustedFeePico = nativeResult.FeeConsumedPico - nativeGasSpentByCallbacksPico;
-                if (nativeAdjustedFeePico > 0)
+                // Rust only reports opcode charges here. Callback-side fixed fees were already
+                // applied directly to the engine during the callback.
+                if (nativeResult.FeeConsumedPico > 0)
                 {
-                    request.Engine.AddFee(nativeAdjustedFeePico);
+                    request.Engine.AddFee(nativeResult.FeeConsumedPico);
                 }
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
@@ -1430,16 +1433,19 @@ namespace Neo.SmartContract.RiscV
             return next;
         }
 
-        private static string DescribeStackItem(StackItem item)
+        private static string DescribeStackItem(StackItem item, int depth = 0)
         {
+            if (depth >= 2)
+                return item.GetType().Name;
+
             return item switch
             {
                 ByteString bytes => $"bytes:{Convert.ToHexString(bytes.GetSpan())}",
                 Integer integer => $"int:{integer.GetInteger()}",
                 Neo.VM.Types.Boolean boolean => $"bool:{boolean.GetBoolean()}",
                 Null => "null",
-                Neo.VM.Types.Struct @struct => $"struct:{@struct.Count}",
-                Neo.VM.Types.Array array => $"array:{array.Count}",
+                Neo.VM.Types.Struct @struct => $"struct:{@struct.Count}[{string.Join(",", Enumerable.Range(0, @struct.Count).Select(i => DescribeStackItem(@struct[i], depth + 1)))}]",
+                Neo.VM.Types.Array array => $"array:{array.Count}[{string.Join(",", Enumerable.Range(0, array.Count).Select(i => DescribeStackItem(array[i], depth + 1)))}]",
                 Neo.VM.Types.Map map => $"map:{map.Count}",
                 InteropInterface => "interop",
                 _ => item.GetType().Name,

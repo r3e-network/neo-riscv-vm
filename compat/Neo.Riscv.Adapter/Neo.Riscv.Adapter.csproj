@@ -28,6 +28,10 @@
       <Link>Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="..\..\target\debug\libneo_riscv_host.so" Condition="!Exists('..\..\target\release\libneo_riscv_host.so') and Exists('..\..\target\debug\libneo_riscv_host.so')">
+      <Link>Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

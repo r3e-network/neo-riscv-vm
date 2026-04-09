@@ -1,5 +1,7 @@
 #![cfg_attr(target_arch = "riscv32", no_std)]
-#![cfg_attr(target_arch = "riscv32", no_main)]
+
+#[path = "../../support/allocator.rs"]
+mod allocator;
 
 extern crate alloc;
 
@@ -73,20 +75,13 @@ pub fn dispatch(method: &str) -> i32 {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn invoke(method: *const u8, _args: *const u8) -> i32 {
+pub fn invoke_entry(method: *const u8, _args: *const u8) -> i32 {
     unsafe {
         let len = core::ptr::read(method) as usize;
         let slice = core::slice::from_raw_parts(method.add(1), len);
         let name = core::str::from_utf8_unchecked(slice);
         dispatch(name)
     }
-}
-
-#[cfg(target_arch = "riscv32")]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
 }
 
 #[cfg(test)]

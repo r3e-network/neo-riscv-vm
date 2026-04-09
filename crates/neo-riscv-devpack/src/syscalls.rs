@@ -84,10 +84,7 @@ pub fn contract_create_multisig_account(m: i64, pubkeys: &[Vec<u8>]) -> StackVal
         .iter()
         .map(|k| StackValue::ByteString(k.clone()))
         .collect();
-    let stack = vec![
-        StackValue::Integer(m),
-        StackValue::Array(keys),
-    ];
+    let stack = vec![StackValue::Integer(m), StackValue::Array(keys)];
     ffi::invoke_host_call(api_ids::CONTRACT_CREATE_MULTISIG_ACCOUNT, &stack)
         .ok()
         .and_then(|r| r.into_iter().next())

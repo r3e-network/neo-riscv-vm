@@ -384,6 +384,199 @@ impl SyscallProvider for ConsecutiveLargeCallHost {
 }
 
 #[test]
+fn retained_bytestring_survives_no_result_then_null_result_syscalls_in_interpreter() {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let log_api = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let local_get_api = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+    let script = vec![
+        0x41,
+        platform_api.to_le_bytes()[0],
+        platform_api.to_le_bytes()[1],
+        platform_api.to_le_bytes()[2],
+        platform_api.to_le_bytes()[3],
+        0x0c,
+        0x01,
+        b'k',
+        0x41,
+        log_api.to_le_bytes()[0],
+        log_api.to_le_bytes()[1],
+        log_api.to_le_bytes()[2],
+        log_api.to_le_bytes()[3],
+        0x0c,
+        0x01,
+        b'k',
+        0x41,
+        local_get_api.to_le_bytes()[0],
+        local_get_api.to_le_bytes()[1],
+        local_get_api.to_le_bytes()[2],
+        local_get_api.to_le_bytes()[3],
+        0x40,
+    ];
+
+    let mut observed_log = None;
+    let mut observed_get = None;
+    let result = interpret_with_syscalls(&script, &mut InterpreterRetainedBytesHost {
+        observed_log: &mut observed_log,
+        observed_get: &mut observed_get,
+    })
+    .expect("interpreter path should preserve the retained bytestring across no-result and null-result syscalls");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        observed_log,
+        Some(vec![StackValue::ByteString(b"k".to_vec())])
+    );
+    assert_eq!(
+        observed_get,
+        Some(vec![StackValue::ByteString(b"k".to_vec())])
+    );
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"v".to_vec()), StackValue::Null]
+    );
+}
+
+#[test]
+fn local_storage_round_trip_survives_delete_and_following_get_in_interpreter() {
+    let local_put = neo_riscv_abi::interop_hash("System.Storage.Local.Put");
+    let local_get = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+    let local_delete = neo_riscv_abi::interop_hash("System.Storage.Local.Delete");
+    let script = vec![
+        0x0c,
+        0x01,
+        b'k',
+        0x0c,
+        0x01,
+        b'v',
+        0x41,
+        local_put.to_le_bytes()[0],
+        local_put.to_le_bytes()[1],
+        local_put.to_le_bytes()[2],
+        local_put.to_le_bytes()[3],
+        0x0c,
+        0x01,
+        b'k',
+        0x41,
+        local_get.to_le_bytes()[0],
+        local_get.to_le_bytes()[1],
+        local_get.to_le_bytes()[2],
+        local_get.to_le_bytes()[3],
+        0x0c,
+        0x01,
+        b'k',
+        0x41,
+        local_delete.to_le_bytes()[0],
+        local_delete.to_le_bytes()[1],
+        local_delete.to_le_bytes()[2],
+        local_delete.to_le_bytes()[3],
+        0x0c,
+        0x01,
+        b'k',
+        0x41,
+        local_get.to_le_bytes()[0],
+        local_get.to_le_bytes()[1],
+        local_get.to_le_bytes()[2],
+        local_get.to_le_bytes()[3],
+        0x40,
+    ];
+
+    let mut host = InterpreterLocalStorageHost::default();
+    let result = interpret_with_syscalls(&script, &mut host)
+        .expect("interpreter local-storage round trip should preserve the first get across delete");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"v".to_vec()), StackValue::Null]
+    );
+}
+
+struct InterpreterRetainedBytesHost<'a> {
+    observed_log: &'a mut Option<Vec<StackValue>>,
+    observed_get: &'a mut Option<Vec<StackValue>>,
+}
+
+impl SyscallProvider for InterpreterRetainedBytesHost<'_> {
+    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
+        let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+        let log_api = neo_riscv_abi::interop_hash("System.Runtime.Log");
+        let local_get_api = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+
+        if api == platform_api {
+            *stack = vec![StackValue::ByteString(b"v".to_vec())];
+            return Ok(());
+        }
+        if api == log_api {
+            *self.observed_log = Some(stack.clone());
+            stack.clear();
+            return Ok(());
+        }
+        if api == local_get_api {
+            *self.observed_get = Some(stack.clone());
+            *stack = vec![StackValue::Null];
+            return Ok(());
+        }
+        Err(format!("unexpected syscall 0x{api:08x}"))
+    }
+}
+
+#[derive(Default)]
+struct InterpreterLocalStorageHost {
+    storage: std::collections::HashMap<Vec<u8>, Vec<u8>>,
+}
+
+impl SyscallProvider for InterpreterLocalStorageHost {
+    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
+        let local_put = neo_riscv_abi::interop_hash("System.Storage.Local.Put");
+        let local_get = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+        let local_delete = neo_riscv_abi::interop_hash("System.Storage.Local.Delete");
+
+        match api {
+            value if value == local_put => {
+                assert_eq!(stack.len(), 2);
+                let key = match &stack[0] {
+                    StackValue::ByteString(bytes) => bytes.clone(),
+                    other => panic!("expected local-put key bytes, got {other:?}"),
+                };
+                let val = match &stack[1] {
+                    StackValue::ByteString(bytes) => bytes.clone(),
+                    other => panic!("expected local-put value bytes, got {other:?}"),
+                };
+                self.storage.insert(key, val);
+                stack.clear();
+                Ok(())
+            }
+            value if value == local_get => {
+                assert_eq!(stack.len(), 1);
+                let key = match &stack[0] {
+                    StackValue::ByteString(bytes) => bytes.clone(),
+                    other => panic!("expected local-get key bytes, got {other:?}"),
+                };
+                let item = self
+                    .storage
+                    .get(&key)
+                    .cloned()
+                    .map(StackValue::ByteString)
+                    .unwrap_or(StackValue::Null);
+                *stack = vec![item];
+                Ok(())
+            }
+            value if value == local_delete => {
+                assert_eq!(stack.len(), 1);
+                let key = match &stack[0] {
+                    StackValue::ByteString(bytes) => bytes.clone(),
+                    other => panic!("expected local-delete key bytes, got {other:?}"),
+                };
+                self.storage.remove(&key);
+                stack.clear();
+                Ok(())
+            }
+            other => Err(format!("unexpected syscall 0x{other:08x}")),
+        }
+    }
+}
+
+#[test]
 fn concatenates_integer_as_bytestring_preserving_sign_bit() {
     // PUSH1 (value 128 = 0x80 requires 0x00 padding to remain positive)
     // PUSHINT16 128 = [0x01, 0x80, 0x00]
@@ -1195,7 +1388,10 @@ fn executes_two_consecutive_large_dynamic_calls() {
     // Each iteration pushes Contract.Call args (NEWARRAY consumes the bytestring),
     // then SYSCALL consumes the 4 args and pushes 1 result.
     // Items below args are preserved — each call leaves its result on the stack.
-    assert_eq!(result.stack, vec![StackValue::Integer(1), StackValue::Integer(2)]);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(1), StackValue::Integer(2)]
+    );
 }
 
 #[test]

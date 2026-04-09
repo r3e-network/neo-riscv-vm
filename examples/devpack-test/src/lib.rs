@@ -1,5 +1,4 @@
 #![cfg_attr(target_arch = "riscv32", no_std)]
-#![cfg_attr(target_arch = "riscv32", no_main)]
 
 extern crate alloc;
 
@@ -52,8 +51,7 @@ unsafe impl GlobalAlloc for ExampleBumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
 }
 
-#[no_mangle]
-pub extern "C" fn invoke(_method: *const u8, _args: *const u8) -> i32 {
+pub fn invoke_entry(_method: *const u8, _args: *const u8) -> i32 {
     let key = b"counter";
     let value = storage::get(key);
 
@@ -66,10 +64,4 @@ pub extern "C" fn invoke(_method: *const u8, _args: *const u8) -> i32 {
     storage::put(key, &new_count.to_le_bytes());
 
     new_count
-}
-
-#[cfg(target_arch = "riscv32")]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
 }

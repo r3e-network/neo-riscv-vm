@@ -93,7 +93,7 @@ impl CompoundIds {
         match value {
             AbiStackValue::Integer(value) => StackValue::Integer(value),
             AbiStackValue::BigInteger(value) => StackValue::BigInteger(value),
-            AbiStackValue::ByteString(value) => StackValue::ByteString(value.to_vec()),
+            AbiStackValue::ByteString(value) => StackValue::ByteString(value),
             AbiStackValue::Boolean(value) => StackValue::Boolean(value),
             AbiStackValue::Pointer(value) => StackValue::Pointer(value as usize),
             AbiStackValue::Array(items) => {

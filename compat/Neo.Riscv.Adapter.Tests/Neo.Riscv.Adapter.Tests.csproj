@@ -15,4 +15,22 @@
     <ProjectReference Include="..\Neo.Riscv.Adapter\Neo.Riscv.Adapter.csproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <RiscvHostLibRelease>..\..\target\release\libneo_riscv_host.so</RiscvHostLibRelease>
+    <RiscvHostLibDebug>..\..\target\debug\libneo_riscv_host.so</RiscvHostLibDebug>
+    <RiscvHostLibStaged>$(OutDir)Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</RiscvHostLibStaged>
+  </PropertyGroup>
+
+  <Target Name="StageNativeRiscvHostForAdapterTests" AfterTargets="Build">
+    <MakeDir Directories="$(OutDir)Plugins\Neo.Riscv.Adapter" />
+    <Copy SourceFiles="$(RiscvHostLibRelease)"
+          DestinationFiles="$(RiscvHostLibStaged)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(RiscvHostLibRelease)')" />
+    <Copy SourceFiles="$(RiscvHostLibDebug)"
+          DestinationFiles="$(RiscvHostLibStaged)"
+          SkipUnchangedFiles="true"
+          Condition="!Exists('$(RiscvHostLibRelease)') and Exists('$(RiscvHostLibDebug)')" />
+  </Target>
+
 </Project>

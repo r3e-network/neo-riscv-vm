@@ -51,8 +51,8 @@ mod tests {
         let result = execute_script(&script).expect("NEWBUFFER at MaxItemSize should succeed");
         assert_eq!(result.stack.len(), 1);
         match &result.stack[0] {
-            StackValue::ByteString(bytes) => assert_eq!(bytes.len(), MAX_ITEM_SIZE),
-            other => panic!("expected ByteString buffer, got {other:?}"),
+            StackValue::Buffer(bytes) => assert_eq!(bytes.len(), MAX_ITEM_SIZE),
+            other => panic!("expected Buffer, got {other:?}"),
         }
     }
 

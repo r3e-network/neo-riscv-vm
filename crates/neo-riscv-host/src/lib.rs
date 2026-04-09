@@ -9,7 +9,9 @@ mod pricing;
 mod profiling;
 mod runtime_cache;
 
-use bridge::{read_guest_debug, read_guest_panic, read_guest_trace, read_pc_trace, ClosureHost, GuestTrace};
+use bridge::{
+    read_guest_debug, read_guest_panic, read_guest_trace, read_pc_trace, ClosureHost, GuestTrace,
+};
 use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, VmState};
 
 /// Maximum allowed result size from guest (16 MB).
@@ -428,9 +430,12 @@ where
     let stack_bytes = fast_codec::encode_stack(&full_stack);
 
     // DEBUG: log encoded stack bytes for native contract execution
-    eprintln!("[NATIVE_DEBUG] method={} encoded_stack ({} bytes): {:?}",
-        method, stack_bytes.len(),
-        &stack_bytes[..std::cmp::min(128, stack_bytes.len())]);
+    eprintln!(
+        "[NATIVE_DEBUG] method={} encoded_stack ({} bytes): {:?}",
+        method,
+        stack_bytes.len(),
+        &stack_bytes[..std::cmp::min(128, stack_bytes.len())]
+    );
     let aux_size = if stack_bytes.is_empty() {
         0
     } else {
@@ -473,8 +478,7 @@ where
         .map_err(|_| "native contract stack too large for u32".to_string())?;
 
     // Call the contract's execute entry point
-    let call_result = instance
-        .call_typed(&mut host, "execute", (stack_ptr, stack_len));
+    let call_result = instance.call_typed(&mut host, "execute", (stack_ptr, stack_len));
 
     // DEBUG: log execution diagnostics
     {
@@ -485,10 +489,19 @@ where
             .open("/tmp/neo-riscv-bridge-debug.log")
         {
             let _ = writeln!(f, "[HOST] execute returned: {:?}", call_result.is_ok());
-            let _ = writeln!(f, "[HOST] opcode_count={} syscall_count={} last_api=0x{:08x} last_host_call_stage={}",
-                host.opcode_count, host.syscall_count,
-                host.last_api.unwrap_or(0), host.last_host_call_stage);
-            let _ = writeln!(f, "[HOST] fee_consumed_pico={} gas_left={}", host.fee_consumed_pico, host.context.gas_left);
+            let _ = writeln!(
+                f,
+                "[HOST] opcode_count={} syscall_count={} last_api=0x{:08x} last_host_call_stage={}",
+                host.opcode_count,
+                host.syscall_count,
+                host.last_api.unwrap_or(0),
+                host.last_host_call_stage
+            );
+            let _ = writeln!(
+                f,
+                "[HOST] fee_consumed_pico={} gas_left={}",
+                host.fee_consumed_pico, host.context.gas_left
+            );
             // Read guest-side debug buffer
             if let Some(debug_bytes) = read_guest_debug(&mut instance, &mut host) {
                 let _ = writeln!(f, "[HOST] guest_debug: {} bytes", debug_bytes.len());
@@ -496,17 +509,31 @@ where
                 let mut offset = 0;
                 while offset + 23 <= debug_bytes.len() {
                     let step = debug_bytes[offset];
-                    let api = u32::from_le_bytes(debug_bytes[offset+1..offset+5].try_into().unwrap());
-                    let stack_len = u32::from_le_bytes(debug_bytes[offset+5..offset+9].try_into().unwrap());
-                    let arg_count = u32::from_le_bytes(debug_bytes[offset+9..offset+13].try_into().unwrap());
-                    let encoded_len = u32::from_le_bytes(debug_bytes[offset+13..offset+17].try_into().unwrap());
-                    let result_len = u32::from_le_bytes(debug_bytes[offset+17..offset+21].try_into().unwrap());
-                    let fault_len = u16::from_le_bytes(debug_bytes[offset+21..offset+23].try_into().unwrap());
-                    let fault = if fault_len > 0 && offset + 23 + fault_len as usize <= debug_bytes.len() {
-                        String::from_utf8_lossy(&debug_bytes[offset+23..offset+23+fault_len as usize]).to_string()
-                    } else {
-                        String::new()
-                    };
+                    let api =
+                        u32::from_le_bytes(debug_bytes[offset + 1..offset + 5].try_into().unwrap());
+                    let stack_len =
+                        u32::from_le_bytes(debug_bytes[offset + 5..offset + 9].try_into().unwrap());
+                    let arg_count = u32::from_le_bytes(
+                        debug_bytes[offset + 9..offset + 13].try_into().unwrap(),
+                    );
+                    let encoded_len = u32::from_le_bytes(
+                        debug_bytes[offset + 13..offset + 17].try_into().unwrap(),
+                    );
+                    let result_len = u32::from_le_bytes(
+                        debug_bytes[offset + 17..offset + 21].try_into().unwrap(),
+                    );
+                    let fault_len = u16::from_le_bytes(
+                        debug_bytes[offset + 21..offset + 23].try_into().unwrap(),
+                    );
+                    let fault =
+                        if fault_len > 0 && offset + 23 + fault_len as usize <= debug_bytes.len() {
+                            String::from_utf8_lossy(
+                                &debug_bytes[offset + 23..offset + 23 + fault_len as usize],
+                            )
+                            .to_string()
+                        } else {
+                            String::new()
+                        };
                     let _ = writeln!(f, "[GUEST] step={} api=0x{:08x} stack_len={} arg_count={} encoded_len={} result_len={} fault={:?}",
                         step, api, stack_len, arg_count, encoded_len, result_len, fault);
                     offset += 23 + fault_len as usize;
@@ -517,76 +544,201 @@ where
                 let _ = writeln!(f, "[HOST] pc_trace: {:?}", pc_bytes);
             }
             // Read diagnostic buffer
-            let diag_ptr_res = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_ptr", ());
-            let diag_len_res = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_len", ());
-            let _ = writeln!(f, "[HOST] diag_ptr_res={:?} diag_len_res={:?}", diag_ptr_res, diag_len_res);
+            let diag_ptr_res =
+                instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_ptr", ());
+            let diag_len_res =
+                instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_len", ());
+            let _ = writeln!(
+                f,
+                "[HOST] diag_ptr_res={:?} diag_len_res={:?}",
+                diag_ptr_res, diag_len_res
+            );
             if let (Ok(diag_ptr), Ok(diag_len)) = (diag_ptr_res, diag_len_res) {
                 if diag_len > 0 {
                     let mut diag_bytes = vec![0u8; diag_len as usize];
-                    if instance.read_memory_into(diag_ptr, &mut diag_bytes[..]).is_ok() {
+                    if instance
+                        .read_memory_into(diag_ptr, &mut diag_bytes[..])
+                        .is_ok()
+                    {
                         let _ = writeln!(f, "[HOST] diag: {} bytes", diag_bytes.len());
                         // Parse: markers 0xA0=args_after_init, 0xA1=args_before_put, 0xA2=locals, 0xA3=stack_before_put
                         let mut i = 0;
                         while i < diag_bytes.len() {
-                            let marker = diag_bytes[i]; i += 1;
+                            let marker = diag_bytes[i];
+                            i += 1;
                             if marker == 0xA0 || marker == 0xA1 {
-                                if i + 4 > diag_bytes.len() { break; }
-                                let count = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4;
-                                let label = if marker == 0xA0 { "args_init" } else { "args_pre_put" };
+                                if i + 4 > diag_bytes.len() {
+                                    break;
+                                }
+                                let count =
+                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
+                                i += 4;
+                                let label = if marker == 0xA0 {
+                                    "args_init"
+                                } else {
+                                    "args_pre_put"
+                                };
                                 let _ = write!(f, "[HOST] diag {label}({count}): ");
                                 for _ in 0..count {
-                                    if i >= diag_bytes.len() { break; }
-                                    let typ = diag_bytes[i]; i += 1;
+                                    if i >= diag_bytes.len() {
+                                        break;
+                                    }
+                                    let typ = diag_bytes[i];
+                                    i += 1;
                                     match typ {
-                                        1 => { // Integer
-                                            if i + 4 > diag_bytes.len() { break; }
-                                            let v = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4;
+                                        1 => {
+                                            // Integer
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
                                             let _ = write!(f, "Int({v}) ");
                                         }
-                                        3 => { // ByteString
-                                            if i + 4 > diag_bytes.len() { break; }
-                                            let len = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4;
+                                        3 => {
+                                            // ByteString
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let len = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
                                             let data_end = (i + len as usize).min(diag_bytes.len());
                                             let data = &diag_bytes[i..data_end];
                                             i += len as usize;
-                                            let _ = write!(f, "Bytes({len}:{:?}) ", core::str::from_utf8(data).unwrap_or("<bin>"));
+                                            let _ = write!(
+                                                f,
+                                                "Bytes({len}:{:?}) ",
+                                                core::str::from_utf8(data).unwrap_or("<bin>")
+                                            );
                                         }
-                                        4 => { // Boolean
-                                            if i >= diag_bytes.len() { break; }
-                                            let v = diag_bytes[i]; i += 1;
+                                        4 => {
+                                            // Boolean
+                                            if i >= diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = diag_bytes[i];
+                                            i += 1;
                                             let _ = write!(f, "Bool({v}) ");
                                         }
-                                        _ => { let _ = write!(f, "Unknown({typ}) "); }
+                                        _ => {
+                                            let _ = write!(f, "Unknown({typ}) ");
+                                        }
                                     }
                                 }
                                 let _ = writeln!(f, "");
                             } else if marker == 0xA2 {
-                                if i + 4 > diag_bytes.len() { break; }
-                                let count = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4;
+                                if i + 4 > diag_bytes.len() {
+                                    break;
+                                }
+                                let count =
+                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
+                                i += 4;
                                 let _ = write!(f, "[HOST] diag locals({count}): ");
                                 for _ in 0..count {
-                                    if i >= diag_bytes.len() { break; }
-                                    let typ = diag_bytes[i]; i += 1;
+                                    if i >= diag_bytes.len() {
+                                        break;
+                                    }
+                                    let typ = diag_bytes[i];
+                                    i += 1;
                                     match typ {
-                                        1 => { if i + 4 > diag_bytes.len() { break; } let v = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4; let _ = write!(f, "Int({v}) "); }
-                                        3 => { if i + 4 > diag_bytes.len() { break; } let len = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4; let data_end = (i + len as usize).min(diag_bytes.len()); let data = &diag_bytes[i..data_end]; i += len as usize; let _ = write!(f, "Bytes({len}:{:?}) ", core::str::from_utf8(data).unwrap_or("<bin>")); }
-                                        4 => { if i >= diag_bytes.len() { break; } let v = diag_bytes[i]; i += 1; let _ = write!(f, "Bool({v}) "); }
-                                        _ => { let _ = write!(f, "Unknown({typ}) "); }
+                                        1 => {
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
+                                            let _ = write!(f, "Int({v}) ");
+                                        }
+                                        3 => {
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let len = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
+                                            let data_end = (i + len as usize).min(diag_bytes.len());
+                                            let data = &diag_bytes[i..data_end];
+                                            i += len as usize;
+                                            let _ = write!(
+                                                f,
+                                                "Bytes({len}:{:?}) ",
+                                                core::str::from_utf8(data).unwrap_or("<bin>")
+                                            );
+                                        }
+                                        4 => {
+                                            if i >= diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = diag_bytes[i];
+                                            i += 1;
+                                            let _ = write!(f, "Bool({v}) ");
+                                        }
+                                        _ => {
+                                            let _ = write!(f, "Unknown({typ}) ");
+                                        }
                                     }
                                 }
                                 let _ = writeln!(f, "");
                             } else if marker == 0xA3 {
-                                if i + 4 > diag_bytes.len() { break; }
-                                let count = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4;
+                                if i + 4 > diag_bytes.len() {
+                                    break;
+                                }
+                                let count =
+                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
+                                i += 4;
                                 let _ = write!(f, "[HOST] diag stack_pre_put({count}): ");
                                 for _ in 0..count {
-                                    if i >= diag_bytes.len() { break; }
-                                    let typ = diag_bytes[i]; i += 1;
+                                    if i >= diag_bytes.len() {
+                                        break;
+                                    }
+                                    let typ = diag_bytes[i];
+                                    i += 1;
                                     match typ {
-                                        1 => { if i + 4 > diag_bytes.len() { break; } let v = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4; let _ = write!(f, "Int({v}) "); }
-                                        3 => { if i + 4 > diag_bytes.len() { break; } let len = u32::from_le_bytes(diag_bytes[i..i+4].try_into().unwrap()); i += 4; let data_end = (i + len as usize).min(diag_bytes.len()); let data = &diag_bytes[i..data_end]; i += len as usize; let _ = write!(f, "Bytes({len}:{:?}) ", core::str::from_utf8(data).unwrap_or("<bin>")); }
-                                        4 => { if i >= diag_bytes.len() { break; } let v = diag_bytes[i]; i += 1; let _ = write!(f, "Bool({v}) "); }
-                                        _ => { let _ = write!(f, "Unknown({typ}) "); }
+                                        1 => {
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
+                                            let _ = write!(f, "Int({v}) ");
+                                        }
+                                        3 => {
+                                            if i + 4 > diag_bytes.len() {
+                                                break;
+                                            }
+                                            let len = u32::from_le_bytes(
+                                                diag_bytes[i..i + 4].try_into().unwrap(),
+                                            );
+                                            i += 4;
+                                            let data_end = (i + len as usize).min(diag_bytes.len());
+                                            let data = &diag_bytes[i..data_end];
+                                            i += len as usize;
+                                            let _ = write!(
+                                                f,
+                                                "Bytes({len}:{:?}) ",
+                                                core::str::from_utf8(data).unwrap_or("<bin>")
+                                            );
+                                        }
+                                        4 => {
+                                            if i >= diag_bytes.len() {
+                                                break;
+                                            }
+                                            let v = diag_bytes[i];
+                                            i += 1;
+                                            let _ = write!(f, "Bool({v}) ");
+                                        }
+                                        _ => {
+                                            let _ = write!(f, "Unknown({typ}) ");
+                                        }
                                     }
                                 }
                                 let _ = writeln!(f, "");

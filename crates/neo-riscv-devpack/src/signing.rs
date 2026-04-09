@@ -15,10 +15,6 @@ pub fn check_witness(hash: &[u8]) -> bool {
 }
 
 /// Verify a multi-signature against a message.
-pub fn verify_multisig(
-    message: &[u8],
-    pubkeys: &[Vec<u8>],
-    signatures: &[Vec<u8>],
-) -> bool {
+pub fn verify_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[Vec<u8>]) -> bool {
     crate::syscalls::crypto_check_multisig(message, pubkeys, signatures)
 }

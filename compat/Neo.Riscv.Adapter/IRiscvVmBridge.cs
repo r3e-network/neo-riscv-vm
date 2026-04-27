@@ -25,9 +25,8 @@ namespace Neo.SmartContract.RiscV
         /// <summary>
         /// Executes a contract through the PolkaVM runtime.
         /// The request contains the contract script(s) and execution context.
-        /// PolkaVM auto-detects whether the script is a NeoVM bytecode blob
-        /// (processed by the interpreter guest) or a native RISC-V binary
-        /// (executed directly).
+        /// The adapter dispatches by contract metadata: NeoVM bytecode is routed to
+        /// the interpreter guest, while native RISC-V contracts are executed directly.
         /// </summary>
         RiscvExecutionResult Execute(RiscvExecutionRequest request);
 

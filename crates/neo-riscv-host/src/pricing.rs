@@ -1,5 +1,30 @@
 use crate::RuntimeContext;
 
+/// Hard instruction-count ceiling for a single `execute_script` call. Guards the
+/// block processor against infinite-loop bugs in the NeoVM-on-RISC-V guest that
+/// don't exhaust gas fast enough (e.g. cheap opcodes in a tight loop, or
+/// `exec_fee_factor_pico == 0`). A real transaction should not need this many
+/// NeoVM opcodes — hitting this cap FAULTs with a bounded cost instead of
+/// hanging the block indefinitely.
+///
+/// Known mainnet triggers: blocks 480,305 / 510,447 / 510,448 previously required
+/// `--skip-block` workarounds; this watchdog converts those hangs to terminating
+/// FAULTs so the validator / node can make forward progress.
+pub(crate) const NEO_INSTRUCTION_CEILING: u64 = 1_000_000_000;
+
+/// Return `Err` with a descriptive message if the running opcode count has reached
+/// the instruction ceiling. `count` is the already-incremented count for the
+/// current opcode — i.e. callers should post-increment then call this.
+pub(crate) fn check_instruction_ceiling(count: u64) -> Result<(), String> {
+    if count >= NEO_INSTRUCTION_CEILING {
+        Err(format!(
+            "execution exceeded instruction ceiling {NEO_INSTRUCTION_CEILING} (count={count})"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn charge_opcode(
     context: &mut RuntimeContext,
     fee_consumed_pico: &mut i64,
@@ -16,6 +41,56 @@ pub(crate) fn charge_opcode(
     *fee_consumed_pico = fee_consumed_pico
         .checked_add(delta)
         .ok_or_else(|| "opcode fee overflow".to_string())?;
+    let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
+    let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
+
+    context.gas_left = context
+        .gas_left
+        .checked_sub(consumed_delta)
+        .ok_or_else(|| "Insufficient GAS.".to_string())?;
+    if context.gas_left < 0 {
+        return Err("Insufficient GAS.".to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn native_instruction_limit(context: &RuntimeContext) -> i64 {
+    if context.exec_fee_factor_pico <= 0 {
+        return NEO_INSTRUCTION_CEILING as i64;
+    }
+
+    if context.gas_left <= 0 {
+        return 0;
+    }
+
+    let available_pico = i128::from(context.gas_left) * 10_000;
+    let units = available_pico / i128::from(context.exec_fee_factor_pico);
+    units
+        .min(i128::from(NEO_INSTRUCTION_CEILING))
+        .min(i128::from(i64::MAX))
+        .max(0) as i64
+}
+
+pub(crate) fn charge_native_instructions(
+    context: &mut RuntimeContext,
+    fee_consumed_pico: &mut i64,
+    instruction_count: i64,
+) -> Result<(), String> {
+    if instruction_count <= 0 || context.exec_fee_factor_pico == 0 {
+        return Ok(());
+    }
+
+    if context.exec_fee_factor_pico < 0 {
+        return Err("negative execution fee factor".to_string());
+    }
+
+    let delta = instruction_count
+        .checked_mul(context.exec_fee_factor_pico)
+        .ok_or_else(|| "native instruction fee overflow".to_string())?;
+    let previous_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
+    *fee_consumed_pico = fee_consumed_pico
+        .checked_add(delta)
+        .ok_or_else(|| "native instruction fee overflow".to_string())?;
     let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
     let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
 
@@ -140,6 +215,33 @@ mod tests {
     }
 
     #[test]
+    fn instruction_ceiling_permits_counts_below_cap() {
+        check_instruction_ceiling(1).expect("count=1 is well below ceiling");
+        check_instruction_ceiling(NEO_INSTRUCTION_CEILING - 1)
+            .expect("count=ceiling-1 is still below ceiling");
+    }
+
+    #[test]
+    fn instruction_ceiling_rejects_at_cap() {
+        let err = check_instruction_ceiling(NEO_INSTRUCTION_CEILING)
+            .expect_err("count=ceiling must trip the watchdog");
+        assert!(
+            err.contains("instruction ceiling"),
+            "error should mention instruction ceiling: {err}"
+        );
+        assert!(
+            err.contains(&NEO_INSTRUCTION_CEILING.to_string()),
+            "error should include the ceiling value: {err}"
+        );
+    }
+
+    #[test]
+    fn instruction_ceiling_rejects_above_cap() {
+        check_instruction_ceiling(NEO_INSTRUCTION_CEILING + 1_000)
+            .expect_err("counts above ceiling must trip the watchdog");
+    }
+
+    #[test]
     fn charge_opcode_skips_when_fee_factor_zero() {
         let mut ctx = RuntimeContext {
             trigger: 0x40,
@@ -152,5 +254,37 @@ mod tests {
         let mut fee = 0i64;
         charge_opcode(&mut ctx, &mut fee, 0x11).expect("should succeed with zero fee factor");
         assert_eq!(ctx.gas_left, 500, "gas_left should be unchanged");
+    }
+
+    #[test]
+    fn native_instruction_limit_uses_fee_factor() {
+        let ctx = RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 0,
+            timestamp: None,
+            gas_left: 9,
+            exec_fee_factor_pico: 30_000,
+        };
+
+        assert_eq!(native_instruction_limit(&ctx), 3);
+    }
+
+    #[test]
+    fn charge_native_instructions_reports_fee() {
+        let mut ctx = RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 0,
+            timestamp: None,
+            gas_left: 10,
+            exec_fee_factor_pico: 30_000,
+        };
+        let mut fee = 0;
+
+        charge_native_instructions(&mut ctx, &mut fee, 2).expect("native fee should charge");
+
+        assert_eq!(fee, 60_000);
+        assert_eq!(ctx.gas_left, 4);
     }
 }

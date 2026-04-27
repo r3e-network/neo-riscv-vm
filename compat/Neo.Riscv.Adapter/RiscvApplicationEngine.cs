@@ -23,8 +23,37 @@ namespace Neo.SmartContract.RiscV
         private static readonly FieldInfo StrictModeField = typeof(Script).GetField("_strictMode", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Unable to locate Neo.VM.Script strict mode field.");
 
+        /// <summary>
+        /// Backing field of <see cref="ExecutionContext.InstructionPointer"/>. The
+        /// property setter is declared <c>internal</c> and Neo.VM's
+        /// <c>InternalsVisibleTo</c> list does not grant access to this adapter, so we
+        /// reflect the private field once at class-load and write directly on fault.
+        /// Lookup is tolerant of compiler-generated field names ("InstructionPointer",
+        /// "_instructionPointer", "instructionPointer") so a future rename in Neo.VM
+        /// degrades gracefully to <see langword="null"/> rather than throwing at class load.
+        /// </summary>
+        private static readonly FieldInfo? InstructionPointerField =
+            typeof(ExecutionContext).GetField("instructionPointer", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? typeof(ExecutionContext).GetField("_instructionPointer", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? typeof(ExecutionContext).GetField("<InstructionPointer>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        /// <summary>
+        /// Backing property <see cref="ExecutionContext.LocalVariables"/> — internal setter.
+        /// Reflected once at class-load so the adapter can populate the faulting frame's
+        /// locals from the guest side-channel (fault-locals FFI) for dev-time test harnesses
+        /// like Test_Abort that assert <c>exception.CurrentContext.LocalVariables[0]</c>.
+        /// </summary>
+        private static readonly PropertyInfo? LocalVariablesProperty =
+            typeof(ExecutionContext).GetProperty("LocalVariables", BindingFlags.Instance | BindingFlags.Public);
+
         private readonly IRiscvVmBridge _bridge;
-        private bool _neoVMOnly;
+
+        /// <summary>
+        /// Optional devpack/test-framework hooks for intercepting adapter execution.
+        /// Leave <see langword="null"/> in production — adapter call sites check for null
+        /// and incur no overhead when unset.
+        /// </summary>
+        public IRiscvApplicationEngineTestingHooks? TestingHooks { get; set; }
 
         internal RiscvApplicationEngine(
             TriggerType trigger,
@@ -41,50 +70,13 @@ namespace Neo.SmartContract.RiscV
             _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         }
 
-        /// <summary>
-        /// Signal the engine to process only NeoVM contexts on the next Execute() call.
-        /// Used when the bridge needs to execute user contract contexts loaded via CallFromNativeContractAsync.
-        /// </summary>
-        internal void FlagNeoVMMode() => _neoVMOnly = true;
-        internal void ClearNeoVMMode() => _neoVMOnly = false;
-
-        /// <summary>
-        /// Execute standard NeoVM until the invocation stack returns to the specified depth.
-        /// Used to process a newly loaded context (e.g., from CallContractInternal) without
-        /// processing the outer RISC-V contexts.
-        /// </summary>
-        internal VMState ExecuteUntilStackDepth(int targetDepth)
-        {
-            // Save and restore State since the outer RISC-V execution may have set it to BREAK/NONE
-            var savedState = State;
-            State = VMState.NONE;
-            while (State != VMState.HALT && State != VMState.FAULT && InvocationStack.Count > targetDepth)
-            {
-                ExecuteNext();
-            }
-            var result = State;
-            // Restore state for the outer execution if this context completed normally
-            if (result == VMState.HALT)
-                State = savedState;
-            return result;
-        }
-
         public override VMState Execute()
         {
-            // NeoVM-only mode: skip RISC-V contexts, process only NeoVM user contracts.
-            // This is used when the bridge calls back into the engine to process
-            // contexts loaded via CallFromNativeContractAsync.
-            if (_neoVMOnly)
-            {
-                _neoVMOnly = false;
-                return base.Execute();
-            }
-
             var contexts = InvocationStack
                 .Reverse()
                 .ToArray();
 
-            Trace($"execute start contexts={contexts.Length} trigger={Trigger} neoVMOnly={_neoVMOnly}");
+            Trace($"execute start contexts={contexts.Length} trigger={Trigger}");
             var result = new RiscvExecutionResult(VMState.HALT, System.Array.Empty<StackItem>(), null);
             IReadOnlyList<StackItem> initialStack = System.Array.Empty<StackItem>();
 
@@ -92,6 +84,11 @@ namespace Neo.SmartContract.RiscV
             {
                 var context = contexts[index];
                 Trace($"bridge dispatch index={index} ip={context.InstructionPointer} scriptLen={((ReadOnlyMemory<byte>)context.Script).Length}");
+                var contextInitialStack = context.EvaluationStack.Count > 0
+                    ? Enumerable.Range(0, context.EvaluationStack.Count)
+                        .Select(context.EvaluationStack.Peek)
+                        .ToArray()
+                    : initialStack;
                 var prefix = contexts.Take(index + 1).ToArray();
                 var scripts = prefix
                     .Select(current => ((ReadOnlyMemory<byte>)current.Script).ToArray())
@@ -119,7 +116,7 @@ namespace Neo.SmartContract.RiscV
                     scriptHashes,
                     contractTypes,
                     executionFacadeHashes,
-                    initialStack,
+                    contextInitialStack,
                     context.InstructionPointer));
 
                 if (result.State != VMState.HALT)
@@ -144,6 +141,47 @@ namespace Neo.SmartContract.RiscV
             {
                 CurrentContext?.GetState<ExecutionContextState>().SnapshotCache?.Commit();
                 InvocationStack.Clear();
+            }
+            else if (result.State == VMState.FAULT && CurrentContext is not null)
+            {
+                // Restore the faulting opcode offset reported by the guest so dev-time
+                // introspection (TestException.CurrentContext.InstructionPointer) sees the
+                // real offset instead of 0. Not consensus-affecting — FAULT rolls back
+                // snapshot commits already (see the HALT branch above).
+                if (result.FaultIp is int ip && InstructionPointerField is not null)
+                {
+                    try
+                    {
+                        InstructionPointerField.SetValue(CurrentContext, ip);
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace($"failed to propagate fault IP {ip}: {ex.Message}");
+                    }
+                }
+                // Populate LocalVariables from the guest's fault-time locals snapshot so
+                // dev tests like Test_Abort/Test_Assert* that assert on
+                // exception.CurrentContext.LocalVariables[n] see the runtime state.
+                var setter = LocalVariablesProperty?.GetSetMethod(nonPublic: true);
+                if (_bridge is NativeRiscvVmBridge nativeBridge && setter is not null)
+                {
+                    var localsBytes = nativeBridge.TryReadLastFaultLocals();
+                    if (localsBytes.Length > 0)
+                    {
+                        try
+                        {
+                            var items = FastCodecReader.DecodeStack(localsBytes, ReferenceCounter);
+                            if (items.Length > 0)
+                            {
+                                setter.Invoke(CurrentContext, new object[] { new Slot(items, ReferenceCounter) });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Trace($"failed to propagate fault locals ({localsBytes.Length} bytes): {ex.Message}");
+                        }
+                    }
+                }
             }
 
             FaultException = result.FaultException;

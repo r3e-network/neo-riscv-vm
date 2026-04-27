@@ -31,7 +31,7 @@ public class UT_StateRootConsistency
     [TestCleanup]
     public void Cleanup()
     {
-        ApplicationEngine.Provider = null;
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
     }
 
     /// <summary>

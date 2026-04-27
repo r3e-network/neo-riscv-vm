@@ -4,7 +4,7 @@ namespace Neo.SmartContract.RiscV
 {
     internal enum RiscvExecutionKind : byte
     {
-        LegacyNeoVmCompatibility = 0,
+        GuestNeoVmContract = 0,
         NativeRiscvDirect = 1,
     }
 
@@ -16,9 +16,9 @@ namespace Neo.SmartContract.RiscV
 
             return contractType switch
             {
-                ContractType.NeoVM when !isPvmBinary => RiscvExecutionKind.LegacyNeoVmCompatibility,
+                ContractType.NeoVM when !isPvmBinary => RiscvExecutionKind.GuestNeoVmContract,
                 ContractType.RiscV when isPvmBinary => RiscvExecutionKind.NativeRiscvDirect,
-                ContractType.NeoVM => throw new InvalidOperationException("Legacy NeoVM contract cannot use a PolkaVM binary payload."),
+                ContractType.NeoVM => throw new InvalidOperationException("NeoVM-on-RISC-V contract cannot use a PolkaVM binary payload."),
                 ContractType.RiscV => throw new InvalidOperationException("RISC-V contract must use a PolkaVM binary payload."),
                 _ => throw new InvalidOperationException($"Unsupported contract execution kind: {contractType}."),
             };

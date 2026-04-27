@@ -174,20 +174,20 @@ fn run_with_timeout(binary: &[u8], method: &str, timeout: Duration) -> MethodOut
 
 #[test]
 fn parity_assignment() {
-    if let Some(_) = assert_halts("contract_assignment", "testAssignment", vec![]) {
+    if assert_halts("contract_assignment", "testAssignment", vec![]).is_some() {
         eprintln!("OK    contract_assignment.testAssignment");
     }
-    if let Some(_) = assert_halts("contract_assignment", "testCoalesceAssignment", vec![]) {
+    if assert_halts("contract_assignment", "testCoalesceAssignment", vec![]).is_some() {
         eprintln!("OK    contract_assignment.testCoalesceAssignment");
     }
 }
 
 #[test]
 fn parity_binary_expression() {
-    if let Some(_) = assert_halts("contract_binaryexpression", "binaryIs", vec![]) {
+    if assert_halts("contract_binaryexpression", "binaryIs", vec![]).is_some() {
         eprintln!("OK    contract_binaryexpression.binaryIs");
     }
-    if let Some(_) = assert_halts("contract_binaryexpression", "binaryAs", vec![]) {
+    if assert_halts("contract_binaryexpression", "binaryAs", vec![]).is_some() {
         eprintln!("OK    contract_binaryexpression.binaryAs");
     }
 }
@@ -335,7 +335,7 @@ fn parity_foreach() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_foreach", method, vec![]) {
+        if assert_halts("contract_foreach", method, vec![]).is_some() {
             pass += 1;
             eprintln!("OK    contract_foreach.{}", method);
         }
@@ -365,7 +365,7 @@ fn parity_inc_dec() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_inc_dec", method, vec![]) {
+        if assert_halts("contract_inc_dec", method, vec![]).is_some() {
             pass += 1;
             eprintln!("OK    contract_inc_dec.{}", method);
         }
@@ -540,7 +540,7 @@ fn parity_out_variables() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_out", method, vec![]) {
+        if assert_halts("contract_out", method, vec![]).is_some() {
             pass += 1;
         }
     }
@@ -588,7 +588,7 @@ fn parity_complex_assign() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_complexassign", method, vec![]) {
+        if assert_halts("contract_complexassign", method, vec![]).is_some() {
             pass += 1;
         }
     }
@@ -610,7 +610,7 @@ fn parity_property() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_property", method, vec![]) {
+        if assert_halts("contract_property", method, vec![]).is_some() {
             pass += 1;
         }
     }
@@ -622,7 +622,7 @@ fn parity_string() {
     let methods = vec!["testMain", "testEqual", "testSubstring", "testEmpty"];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_string", method, vec![]) {
+        if assert_halts("contract_string", method, vec![]).is_some() {
             pass += 1;
             eprintln!("OK    contract_string.{}", method);
         }
@@ -718,7 +718,7 @@ fn parity_partial_cross_file() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_partialcrossfile", method, vec![]) {
+        if assert_halts("contract_partialcrossfile", method, vec![]).is_some() {
             pass += 1;
         }
     }
@@ -785,7 +785,7 @@ fn parity_property_method() {
     ];
     let mut pass = 0;
     for method in &methods {
-        if let Some(_) = assert_halts("contract_propertymethod", method, vec![]) {
+        if assert_halts("contract_propertymethod", method, vec![]).is_some() {
             pass += 1;
         }
     }

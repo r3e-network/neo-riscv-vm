@@ -28,8 +28,11 @@ namespace Neo.SmartContract.RiscV
 
         public override void Dispose()
         {
-            ApplicationEngine.Provider = null;
-            RiscvApplicationEngineProviderResolver.ResetForTesting();
+            // Do NOT dispose the shared provider here: NeoSystem.Dispose propagates to every
+            // plugin's Dispose, so clearing the provider during NeoSystem teardown would free
+            // the native library handle that other still-live NeoSystem instances are using.
+            // Tests that need a fresh provider call RiscvApplicationEngineProviderResolver.ResetForTesting
+            // explicitly from their own [TestCleanup].
             base.Dispose();
         }
     }

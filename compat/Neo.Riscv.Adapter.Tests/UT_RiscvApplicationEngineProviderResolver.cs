@@ -6,6 +6,7 @@ using System.IO;
 namespace Neo.Riscv.Adapter.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public class UT_RiscvApplicationEngineProviderResolver
 {
     [TestMethod]
@@ -25,8 +26,8 @@ public class UT_RiscvApplicationEngineProviderResolver
             File.WriteAllText(expected, string.Empty);
             try
             {
-                var actual = RiscvApplicationEngineProviderResolver.ResolveLibraryPathForTesting();
-                Assert.AreEqual(expected, actual);
+                var candidates = RiscvApplicationEngineProviderResolver.GetDefaultCandidatesForTesting();
+                Assert.AreEqual(expected, candidates[0]);
             }
             finally
             {
@@ -41,7 +42,7 @@ public class UT_RiscvApplicationEngineProviderResolver
     }
 
     [TestMethod]
-    public void ResolveLibraryPath_PrefersPluginFolder_WhenEnvVarPointsToAnotherExistingLibrary()
+    public void ResolveLibraryPath_PrefersEnvVar_WhenEnvVarPointsToAnotherExistingLibrary()
     {
         var previous = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
         var pluginRoot = Path.Combine(AppContext.BaseDirectory, "Plugins", "Neo.Riscv.Adapter");
@@ -59,8 +60,11 @@ public class UT_RiscvApplicationEngineProviderResolver
             Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, external);
             RiscvApplicationEngineProviderResolver.ResetForTesting();
 
+            var configuredActual = RiscvApplicationEngineProviderResolver.ResolveConfiguredLibraryPathForTesting(external);
+            Assert.AreEqual(external, configuredActual);
+
             var actual = RiscvApplicationEngineProviderResolver.ResolveLibraryPathForTesting();
-            Assert.AreEqual(bundled, actual);
+            Assert.AreEqual(external, actual);
         }
         finally
         {

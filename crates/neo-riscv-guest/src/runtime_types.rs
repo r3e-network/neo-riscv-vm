@@ -173,6 +173,34 @@ pub(crate) fn to_abi_value(value: &StackValue) -> AbiStackValue {
     }
 }
 
+pub(crate) fn structurally_equal(left: &StackValue, right: &StackValue) -> bool {
+    match (left, right) {
+        (StackValue::Integer(l), StackValue::Integer(r)) => l == r,
+        (StackValue::BigInteger(l), StackValue::BigInteger(r)) => l == r,
+        (StackValue::ByteString(l), StackValue::ByteString(r)) => l == r,
+        (StackValue::Boolean(l), StackValue::Boolean(r)) => l == r,
+        (StackValue::Pointer(l), StackValue::Pointer(r)) => l == r,
+        (StackValue::Null, StackValue::Null) => true,
+        (StackValue::Interop(l), StackValue::Interop(r)) => l == r,
+        (StackValue::Iterator(l), StackValue::Iterator(r)) => l == r,
+        (StackValue::Buffer(_, l), StackValue::Buffer(_, r)) => l == r,
+        (StackValue::Array(_, l), StackValue::Array(_, r))
+        | (StackValue::Struct(_, l), StackValue::Struct(_, r)) => {
+            l.len() == r.len()
+                && l.iter()
+                    .zip(r.iter())
+                    .all(|(l, r)| structurally_equal(l, r))
+        }
+        (StackValue::Map(_, l), StackValue::Map(_, r)) => {
+            l.len() == r.len()
+                && l.iter().zip(r.iter()).all(|((lk, lv), (rk, rv))| {
+                    structurally_equal(lk, rk) && structurally_equal(lv, rv)
+                })
+        }
+        _ => false,
+    }
+}
+
 #[inline]
 fn clone_bytes(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
@@ -220,6 +248,7 @@ pub(crate) fn propagate_update(
     updated: &StackValue,
     stack: &mut [StackValue],
     locals: &mut [StackValue],
+    args: &mut [StackValue],
     static_fields: &mut [StackValue],
     affected_stack_indices: Option<&[usize]>,
 ) {
@@ -241,6 +270,9 @@ pub(crate) fn propagate_update(
         }
     }
     for value in locals {
+        replace_alias(value, updated);
+    }
+    for value in args {
         replace_alias(value, updated);
     }
     for value in static_fields {

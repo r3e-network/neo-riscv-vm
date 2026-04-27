@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 
 pub mod callback_codec;
 pub mod fast_codec;
+pub mod result_codec;
 
 /// VM execution state after script completion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +77,21 @@ pub struct ExecutionResult {
     /// When present, this is the user-facing error string without internal trace.
     #[serde(default)]
     pub fault_message: Option<String>,
+    /// Instruction pointer (NEF script offset) at the moment a FAULT was raised.
+    /// `None` for HALT or when the faulting IP cannot be attributed. Used by the
+    /// C# adapter to populate `ExecutionContext.InstructionPointer` on fault so
+    /// that dev-time test harnesses asserting exact fault offsets (e.g., Test_Abort)
+    /// see the real opcode offset instead of 0. `#[serde(default)]` keeps the
+    /// codec wire-compatible with older guest/host pairs.
+    #[serde(default)]
+    pub fault_ip: Option<u32>,
+    /// Local variables of the faulting frame, serialized via `fast_codec`. `None` for
+    /// HALT or when the guest did not capture a locals snapshot. Used by the C# adapter
+    /// to populate `ExecutionContext.LocalVariables` on fault so dev-time test harnesses
+    /// (Test_Abort, Test_Assert*) that introspect local values see the runtime state
+    /// instead of `null`. `#[serde(default)]` keeps the codec wire-compatible.
+    #[serde(default)]
+    pub fault_locals: Option<Vec<u8>>,
 }
 
 /// Returns the number of stack arguments consumed by a NeoVM syscall.
@@ -122,7 +138,7 @@ pub fn syscall_arg_count(api: u32) -> usize {
         0x8418_3fe6 => 3, // System.Storage.Put
         0xedc5_582f => 2, // System.Storage.Delete
         // System.Crypto
-        0x27b3_e756 => 2, // System.Crypto.CheckSig
+        0x27b3_e756 => 2,          // System.Crypto.CheckSig
         0x3adc_d09e => usize::MAX, // System.Crypto.CheckMultisig (count-based suffix)
         // System.Iterator
         0x9ced_089c => 2, // System.Iterator.Next

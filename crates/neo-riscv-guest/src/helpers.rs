@@ -1,6 +1,8 @@
 extern crate alloc;
 
-use crate::runtime_types::{to_abi_stack, to_abi_value, CompoundIds, StackValue};
+use crate::runtime_types::{
+    structurally_equal, to_abi_stack, to_abi_value, CompoundIds, StackValue,
+};
 use core::cell::UnsafeCell;
 
 const POST_SYSCALL_STACK_HEADROOM: usize = 8;
@@ -21,7 +23,7 @@ const RETAINED_TAG_NULL: u8 = 0x0A;
 const RETAINED_TAG_POINTER: u8 = 0x0B;
 const RETAINED_TAG_BUFFER: u8 = 0x0C;
 
-struct RetainedPrefixBuffer(UnsafeCell<[u8; RETAINED_PREFIX_BUF_SIZE]>);
+pub(crate) struct RetainedPrefixBuffer(UnsafeCell<[u8; RETAINED_PREFIX_BUF_SIZE]>);
 
 unsafe impl Sync for RetainedPrefixBuffer {}
 
@@ -30,19 +32,23 @@ impl RetainedPrefixBuffer {
         Self(UnsafeCell::new([0; RETAINED_PREFIX_BUF_SIZE]))
     }
 
-    unsafe fn as_mut_slice(&self) -> &mut [u8] {
+    #[allow(clippy::mut_from_ref)]
+    pub(crate) unsafe fn as_mut_slice(&self) -> &mut [u8] {
         &mut *self.0.get()
     }
 
-    unsafe fn as_slice(&self, len: usize) -> &[u8] {
+    pub(crate) unsafe fn as_slice(&self, len: usize) -> &[u8] {
         &(&*self.0.get())[..len]
     }
 }
 
 static RETAINED_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
+pub(crate) static RETAINED_ARGS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 static RETAINED_LOCALS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 static RETAINED_STATIC_FIELDS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 static RETAINED_ALT_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
+#[cfg(target_arch = "riscv32")]
+pub(crate) static RETAINED_CALL_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 
 use crate::SyscallProvider;
 use alloc::{
@@ -70,6 +76,9 @@ pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
     match stack.pop() {
         Some(StackValue::Integer(value)) => Ok(value),
         Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
+        Some(StackValue::ByteString(value)) => decode_signed_le_bytes(&value),
+        Some(StackValue::BigInteger(value)) => decode_signed_le_bytes(&value),
+        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes(&bytes),
         Some(_) => Err("expected integer on stack".to_string()),
         None => Err("stack underflow".to_string()),
     }
@@ -166,9 +175,12 @@ pub(crate) fn pop_shift_value(stack: &mut Vec<StackValue>) -> Result<ShiftValue,
 pub(crate) fn num_equal(left: &StackValue, right: &StackValue) -> Result<bool, String> {
     match (left, right) {
         (StackValue::ByteString(left), StackValue::ByteString(right)) => Ok(left == right),
+        (StackValue::Null, _) | (_, StackValue::Null) => {
+            Err("NUMEQUAL expects primitive numeric or byte string values".to_string())
+        }
         (
-            StackValue::Integer(_) | StackValue::Boolean(_) | StackValue::Null,
-            StackValue::Integer(_) | StackValue::Boolean(_) | StackValue::Null,
+            StackValue::Integer(_) | StackValue::Boolean(_),
+            StackValue::Integer(_) | StackValue::Boolean(_),
         ) => Ok(integer_value_for_equality(left)? == integer_value_for_equality(right)?),
         _ => Err("NUMEQUAL expects primitive numeric or byte string values".to_string()),
     }
@@ -370,22 +382,10 @@ pub(crate) fn convert_value(
     }
 }
 
-pub(crate) fn apply_abi_stack(
-    stack: &mut Vec<StackValue>,
-    abi_stack: Vec<neo_riscv_abi::StackValue>,
-    ids: &mut CompoundIds,
-) {
-    let retired = core::mem::take(stack);
-    core::mem::forget(retired);
-
-    let mut next_stack = Vec::with_capacity(abi_stack.len().max(POST_SYSCALL_STACK_HEADROOM));
-    for item in abi_stack {
-        next_stack.push(ids.import_abi(item));
-    }
-    *stack = next_stack;
-}
-
-fn encode_retained_prefix_to_slice(stack: &[StackValue], buf: &mut [u8]) -> Result<usize, String> {
+pub(crate) fn encode_retained_prefix_to_slice(
+    stack: &[StackValue],
+    buf: &mut [u8],
+) -> Result<usize, String> {
     if buf.len() < 4 {
         return Err("retained prefix buffer too small".to_string());
     }
@@ -403,7 +403,7 @@ fn encode_retained_prefix_to_slice(stack: &[StackValue], buf: &mut [u8]) -> Resu
     Ok(pos)
 }
 
-fn encode_retained_value_to_slice(
+pub(crate) fn encode_retained_value_to_slice(
     value: &StackValue,
     buf: &mut [u8],
     mut pos: usize,
@@ -530,7 +530,11 @@ fn encode_retained_tag_id_len(
     Ok(pos + 13)
 }
 
-fn ensure_retained_capacity(buf: &[u8], pos: usize, needed: usize) -> Result<(), String> {
+pub(crate) fn ensure_retained_capacity(
+    buf: &[u8],
+    pos: usize,
+    needed: usize,
+) -> Result<(), String> {
     if buf.len().saturating_sub(pos) < needed {
         Err("retained prefix buffer too small".to_string())
     } else {
@@ -545,7 +549,10 @@ fn decode_retained_prefix(bytes: &[u8]) -> Result<Vec<StackValue>, String> {
     Ok(stack)
 }
 
-fn decode_retained_prefix_into(bytes: &[u8], stack: &mut Vec<StackValue>) -> Result<(), String> {
+pub(crate) fn decode_retained_prefix_into(
+    bytes: &[u8],
+    stack: &mut Vec<StackValue>,
+) -> Result<(), String> {
     if bytes.len() < 4 {
         return Err("truncated retained prefix length".to_string());
     }
@@ -729,11 +736,20 @@ fn ensure_retained_input(bytes: &[u8], pos: usize, needed: usize) -> Result<(), 
     }
 }
 
+#[inline]
+fn stabilize_allocator_after_host_call() {
+    if cfg!(target_arch = "riscv32") {
+        let _scratch = Vec::<u8>::with_capacity(4096);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn invoke_syscall<H: SyscallProvider>(
     host: &mut H,
     api: u32,
     ip: usize,
     stack: &mut Vec<StackValue>,
+    args: &mut Vec<StackValue>,
     locals: &mut Vec<StackValue>,
     static_fields: &mut Vec<StackValue>,
     alt_stack: &mut Vec<StackValue>,
@@ -759,27 +775,38 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
     } else {
         None
     };
-    let retained_static_fields_len =
-        if cfg!(target_arch = "riscv32") && !static_fields.is_empty() {
-            let buf = unsafe { RETAINED_STATIC_FIELDS_BUF.as_mut_slice() };
-            Some(encode_retained_prefix_to_slice(static_fields, buf)?)
-        } else {
-            None
-        };
+    let retained_args_len = if cfg!(target_arch = "riscv32") && !args.is_empty() {
+        let buf = unsafe { RETAINED_ARGS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(args, buf)?)
+    } else {
+        None
+    };
+    let retained_static_fields_len = if cfg!(target_arch = "riscv32") && !static_fields.is_empty() {
+        let buf = unsafe { RETAINED_STATIC_FIELDS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(static_fields, buf)?)
+    } else {
+        None
+    };
     let retained_alt_stack_len = if cfg!(target_arch = "riscv32") && !alt_stack.is_empty() {
         let buf = unsafe { RETAINED_ALT_STACK_BUF.as_mut_slice() };
         Some(encode_retained_prefix_to_slice(alt_stack, buf)?)
     } else {
         None
     };
-
     match host.syscall(api, ip, &mut abi_args) {
         Ok(()) => {
+            stabilize_allocator_after_host_call();
             if let Some(retained_len) = retained_stack_len {
                 restore_retained_values(
                     locals,
                     retained_locals_len,
                     &RETAINED_LOCALS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
+                restore_retained_values(
+                    args,
+                    retained_args_len,
+                    &RETAINED_ARGS_BUF,
                     POST_SYSCALL_STACK_HEADROOM,
                 )?;
                 restore_retained_values(
@@ -798,7 +825,8 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
                     stack,
                     Some(retained_len),
                     &RETAINED_STACK_BUF,
-                    keep.saturating_add(abi_args.len()).max(POST_SYSCALL_STACK_HEADROOM),
+                    keep.saturating_add(abi_args.len())
+                        .max(POST_SYSCALL_STACK_HEADROOM),
                 )?;
                 stack.truncate(keep);
                 stack.reserve(abi_args.len());
@@ -821,6 +849,12 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
                     locals,
                     retained_locals_len,
                     &RETAINED_LOCALS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
+                    args,
+                    retained_args_len,
+                    &RETAINED_ARGS_BUF,
                     POST_SYSCALL_STACK_HEADROOM,
                 );
                 let _ = restore_retained_values(
@@ -868,20 +902,146 @@ fn restore_retained_values(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn invoke_callt<H: SyscallProvider>(
     host: &mut H,
     token: u16,
     ip: usize,
     stack: &mut Vec<StackValue>,
+    args: &mut Vec<StackValue>,
+    locals: &mut Vec<StackValue>,
+    static_fields: &mut Vec<StackValue>,
+    alt_stack: &mut Vec<StackValue>,
     ids: &mut CompoundIds,
 ) -> Result<(), String> {
     let mut abi_stack = to_abi_stack(stack);
+    let retained_stack_len = if cfg!(target_arch = "riscv32") {
+        let buf = unsafe { RETAINED_STACK_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(stack, buf)?)
+    } else {
+        None
+    };
+    let retained_locals_len = if cfg!(target_arch = "riscv32") && !locals.is_empty() {
+        let buf = unsafe { RETAINED_LOCALS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(locals, buf)?)
+    } else {
+        None
+    };
+    let retained_args_len = if cfg!(target_arch = "riscv32") && !args.is_empty() {
+        let buf = unsafe { RETAINED_ARGS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(args, buf)?)
+    } else {
+        None
+    };
+    let retained_static_fields_len = if cfg!(target_arch = "riscv32") && !static_fields.is_empty() {
+        let buf = unsafe { RETAINED_STATIC_FIELDS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(static_fields, buf)?)
+    } else {
+        None
+    };
+    let retained_alt_stack_len = if cfg!(target_arch = "riscv32") && !alt_stack.is_empty() {
+        let buf = unsafe { RETAINED_ALT_STACK_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(alt_stack, buf)?)
+    } else {
+        None
+    };
     match host.callt(token, ip, &mut abi_stack) {
         Ok(()) => {
-            apply_abi_stack(stack, abi_stack, ids);
+            stabilize_allocator_after_host_call();
+            if let Some(retained_len) = retained_stack_len {
+                restore_retained_values(
+                    locals,
+                    retained_locals_len,
+                    &RETAINED_LOCALS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
+                restore_retained_values(
+                    args,
+                    retained_args_len,
+                    &RETAINED_ARGS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
+                restore_retained_values(
+                    static_fields,
+                    retained_static_fields_len,
+                    &RETAINED_STATIC_FIELDS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
+                restore_retained_values(
+                    alt_stack,
+                    retained_alt_stack_len,
+                    &RETAINED_ALT_STACK_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
+                restore_retained_values(
+                    stack,
+                    Some(retained_len),
+                    &RETAINED_STACK_BUF,
+                    stack.len().max(POST_SYSCALL_STACK_HEADROOM),
+                )?;
+            }
+
+            let preserved_stack = core::mem::take(stack);
+            let mut next_stack =
+                Vec::with_capacity(abi_stack.len().max(POST_SYSCALL_STACK_HEADROOM));
+            for item in abi_stack {
+                let imported = ids.import_abi(item);
+                let stabilized = if cfg!(target_arch = "riscv32")
+                    && matches!(
+                        imported,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&imported)
+                } else {
+                    imported
+                };
+                next_stack.push(stabilized);
+            }
+            let shared_prefix = preserved_stack
+                .iter()
+                .zip(next_stack.iter())
+                .take_while(|(left, right)| structurally_equal(left, right))
+                .count();
+            next_stack[..shared_prefix].clone_from_slice(&preserved_stack[..shared_prefix]);
+            *stack = next_stack;
             Ok(())
         }
         Err(e) => {
+            if let Some(retained_len) = retained_stack_len {
+                let _ = restore_retained_values(
+                    locals,
+                    retained_locals_len,
+                    &RETAINED_LOCALS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
+                    args,
+                    retained_args_len,
+                    &RETAINED_ARGS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
+                    static_fields,
+                    retained_static_fields_len,
+                    &RETAINED_STATIC_FIELDS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
+                    alt_stack,
+                    retained_alt_stack_len,
+                    &RETAINED_ALT_STACK_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
+                    stack,
+                    Some(retained_len),
+                    &RETAINED_STACK_BUF,
+                    stack.len().max(POST_SYSCALL_STACK_HEADROOM),
+                );
+            }
             // Leak abi_stack on error to avoid talc free-list corruption on RISC-V/PolkaVM
             core::mem::forget(abi_stack);
             Err(e)
@@ -924,15 +1084,26 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
     if bytes.is_empty() {
         return Ok(0);
     }
-    if bytes.len() > 8 {
-        return Err("integer-compatible byte string too large".to_string());
-    }
-
     let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
         0xff
     } else {
         0x00
     };
+
+    if bytes.len() > 8 {
+        if bytes.iter().all(|byte| *byte == 0) {
+            return Ok(0);
+        }
+
+        if bytes[8..].iter().all(|byte| *byte == sign_extend) {
+            let mut buffer = [sign_extend; 8];
+            buffer.copy_from_slice(&bytes[..8]);
+            return Ok(i64::from_le_bytes(buffer));
+        }
+
+        return Ok(if sign_extend == 0xff { -1 } else { 1 });
+    }
+
     let mut buffer = [sign_extend; 8];
     buffer[..bytes.len()].copy_from_slice(bytes);
     Ok(i64::from_le_bytes(buffer))
@@ -1412,5 +1583,38 @@ mod tests {
             .expect_err("oversized retained prefixes must be rejected");
 
         assert_eq!(err, "collection length exceeds maximum");
+    }
+
+    #[test]
+    fn retained_prefix_codec_round_trips_block_like_struct_argument_list() {
+        let prev_hash = vec![
+            0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c,
+            0x7d, 0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4,
+            0xef, 0x1d, 0x4d, 0x1f,
+        ];
+        let block_like = StackValue::Struct(
+            42,
+            vec![
+                StackValue::ByteString(vec![0xd9; 32]),
+                StackValue::Integer(0),
+                StackValue::ByteString(prev_hash.clone()),
+                StackValue::ByteString(vec![0x72; 32]),
+                StackValue::Integer(1),
+                StackValue::Integer(2),
+                StackValue::Integer(3),
+                StackValue::Integer(4),
+                StackValue::ByteString(vec![0x6b; 20]),
+                StackValue::Integer(1),
+            ],
+        );
+        let stack = vec![block_like, StackValue::ByteString(b"PrevHash".to_vec())];
+
+        let mut buf = vec![0u8; 4096];
+        let len = encode_retained_prefix_to_slice(&stack, &mut buf)
+            .expect("block-like retained prefix should encode");
+        let decoded =
+            decode_retained_prefix(&buf[..len]).expect("block-like retained prefix should decode");
+
+        assert_eq!(decoded, stack);
     }
 }

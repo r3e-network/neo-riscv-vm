@@ -35,6 +35,9 @@ public static class RiscvTestEnvironment
             return release;
 
         var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", "libneo_riscv_host.so"));
-        return File.Exists(debug) ? debug : null;
+        if (File.Exists(debug))
+            return debug;
+
+        return null;
     }
 }

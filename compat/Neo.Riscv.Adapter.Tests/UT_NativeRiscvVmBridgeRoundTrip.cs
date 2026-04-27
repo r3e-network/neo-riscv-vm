@@ -10,13 +10,16 @@ using Neo.SmartContract.RiscV;
 using Neo.VM;
 using Neo.VM.Types;
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using VmPointer = Neo.VM.Types.Pointer;
 
 namespace Neo.Riscv.Adapter.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public class UT_NativeRiscvVmBridgeRoundTrip
 {
     private const string G1Hex =
@@ -68,47 +71,158 @@ public class UT_NativeRiscvVmBridgeRoundTrip
     }
 
     [TestMethod]
+    public void PointerRoundTripUsesCurrentScript()
+    {
+        using var bridge = CreateBridge();
+        var scope = CreateExecutionScope();
+        var script = new Script(new byte[] { (byte)OpCode.NOP, (byte)OpCode.RET }, false);
+        SetCurrentScript(scope, script);
+
+        var roundTripped = RoundTripSingleItem(bridge, scope, new VmPointer(script, 1));
+
+        Assert.IsInstanceOfType<VmPointer>(roundTripped);
+        var pointer = (VmPointer)roundTripped;
+        Assert.AreSame(script, pointer.Script);
+        Assert.AreEqual(1, pointer.Position);
+    }
+
+    [TestMethod]
     public void ContractManagementGetContractExecutionRoundTripsAllNativeContractStates()
     {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            libraryPath = ResolveWorkspaceLibraryPath();
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set to a valid library.");
+        Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, libraryPath);
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
         using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
         var snapshot = system.GetSnapshotCache().CloneCache();
-        foreach (var contract in NativeContract.Contracts)
+        try
         {
-            using var engine = ApplicationEngine.Create(
-                TriggerType.Application,
-                null,
-                snapshot,
-                CreatePersistingBlock(),
-                settings: AdapterTestProtocolSettings.Default);
-            using var script = new ScriptBuilder();
+            foreach (var contract in NativeContract.Contracts)
+            {
+                ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+                using var engine = ApplicationEngine.Create(
+                    TriggerType.Application,
+                    null,
+                    snapshot,
+                    CreatePersistingBlock(),
+                    settings: AdapterTestProtocolSettings.Default);
+                using var script = new ScriptBuilder();
 
-            script.EmitDynamicCall(NativeContract.ContractManagement.Hash, "getContract", contract.Hash);
-            engine.LoadScript(script.ToArray());
+                script.EmitDynamicCall(NativeContract.ContractManagement.Hash, "getContract", contract.Hash);
+                engine.LoadScript(script.ToArray());
 
-            Assert.AreEqual(VMState.HALT, engine.Execute(), contract.Name);
-            Assert.AreEqual(1, engine.ResultStack.Count, contract.Name);
+                Assert.AreEqual(VMState.HALT, engine.Execute(), contract.Name);
+                Assert.AreEqual(1, engine.ResultStack.Count, contract.Name);
 
-            var result = engine.ResultStack.Pop();
-            Assert.IsInstanceOfType<Neo.VM.Types.Array>(result, contract.Name);
+                var result = engine.ResultStack.Pop();
+                Assert.IsInstanceOfType<Neo.VM.Types.Array>(result, contract.Name);
 
-            var expected = NativeContract.ContractManagement.GetContract(snapshot, contract.Hash);
-            Assert.IsNotNull(expected, contract.Name);
-            AssertStackItemEquivalent(expected!.ToStackItem(null), result, contract.Name);
+                var expected = NativeContract.ContractManagement.GetContract(snapshot, contract.Hash);
+                Assert.IsNotNull(expected, contract.Name);
+                AssertStackItemEquivalent(expected!.ToStackItem(null), result, contract.Name);
 
-            var restored = (ContractState)RuntimeHelpers.GetUninitializedObject(typeof(ContractState));
-            ((IInteroperable)restored).FromStackItem(result);
+                var restored = (ContractState)RuntimeHelpers.GetUninitializedObject(typeof(ContractState));
+                ((IInteroperable)restored).FromStackItem(result);
 
-            Assert.AreEqual(expected.ToJson().ToString(), restored.ToJson().ToString(), contract.Name);
+                Assert.AreEqual(expected.ToJson().ToString(), restored.ToJson().ToString(), contract.Name);
+            }
         }
+        finally
+        {
+            ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        }
+    }
+
+    [TestMethod]
+    public void FaultIpPropagates_AbortAtNonZeroOffset()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            libraryPath = ResolveWorkspaceLibraryPath();
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set to a valid library.");
+        Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, libraryPath);
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        var snapshot = system.GetSnapshotCache().CloneCache();
+        using var engine = ApplicationEngine.Create(
+            TriggerType.Application,
+            null,
+            snapshot,
+            CreatePersistingBlock(),
+            settings: AdapterTestProtocolSettings.Default);
+
+        // Script layout: [NOP] [NOP] [NOP] [NOP] [NOP] [ABORT] — ABORT lives at offset 5.
+        // Guest interpreter must report fault_ip = 5 and the adapter must write it onto
+        // CurrentContext.InstructionPointer via the side-channel FFI + reflection path.
+        var script = new byte[] { (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.ABORT };
+        engine.LoadScript(script);
+
+        Assert.AreEqual(VMState.FAULT, engine.Execute());
+        Assert.IsNotNull(engine.CurrentContext);
+        Assert.AreEqual(5, engine.CurrentContext!.InstructionPointer,
+            "fault IP must match the ABORT opcode's offset in the script");
+    }
+
+    [TestMethod]
+    public void FaultIpPropagates_AssertAtNonZeroOffset()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            libraryPath = ResolveWorkspaceLibraryPath();
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set to a valid library.");
+        Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, libraryPath);
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        var snapshot = system.GetSnapshotCache().CloneCache();
+        using var engine = ApplicationEngine.Create(
+            TriggerType.Application,
+            null,
+            snapshot,
+            CreatePersistingBlock(),
+            settings: AdapterTestProtocolSettings.Default);
+
+        // Script: [PUSHF] [ASSERT] — PUSHF pushes false, then ASSERT on a false value FAULTs.
+        // ASSERT lives at offset 1.
+        var script = new byte[] { (byte)OpCode.PUSHF, (byte)OpCode.ASSERT };
+        engine.LoadScript(script);
+
+        Assert.AreEqual(VMState.FAULT, engine.Execute());
+        Assert.IsNotNull(engine.CurrentContext);
+        Assert.AreEqual(1, engine.CurrentContext!.InstructionPointer,
+            "fault IP must match the ASSERT opcode's offset in the script");
     }
 
     private static NativeRiscvVmBridge CreateBridge()
     {
         var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(libraryPath))
-            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            libraryPath = ResolveWorkspaceLibraryPath();
+        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set to a valid library.");
 
         return new NativeRiscvVmBridge(libraryPath!);
+    }
+
+    private static string? ResolveWorkspaceLibraryPath()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        var release = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "release", "libneo_riscv_host.so"));
+        if (File.Exists(release))
+            return release;
+
+        var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", "libneo_riscv_host.so"));
+        if (File.Exists(debug))
+            return debug;
+
+        return null;
     }
 
     private static object CreateExecutionScope()
@@ -116,6 +230,13 @@ public class UT_NativeRiscvVmBridgeRoundTrip
         var scopeType = typeof(NativeRiscvVmBridge).GetNestedType("ExecutionScope", BindingFlags.NonPublic);
         Assert.IsNotNull(scopeType);
         return Activator.CreateInstance(scopeType!, nonPublic: true)!;
+    }
+
+    private static void SetCurrentScript(object scope, Script script)
+    {
+        var property = scope.GetType().GetProperty("CurrentScript", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.IsNotNull(property);
+        property!.SetValue(scope, script);
     }
 
     private static StackItem RoundTripSingleItem(NativeRiscvVmBridge bridge, object scope, StackItem item)

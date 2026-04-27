@@ -1,7 +1,8 @@
 use neo_riscv_abi::{BackendKind, StackValue, VmState};
 use neo_riscv_host::{
     debug_execute_script_with_host_and_stack, execute_script, execute_script_with_context,
-    execute_script_with_host, execute_script_with_host_and_stack, execute_script_with_trigger,
+    execute_script_with_host, execute_script_with_host_and_stack,
+    execute_script_with_host_and_stack_and_ip, execute_script_with_trigger,
     neo_riscv_execute_script_with_host, neo_riscv_free_execution_result, HostCallbackResult,
     NativeExecutionResult, NativeHostResult, PolkaVmRuntime, RuntimeContext,
 };
@@ -177,6 +178,67 @@ unsafe fn copy_test_native_stack_items(
                 };
                 stack.push(StackValue::BigInteger(bytes));
             }
+            4 => {
+                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe {
+                        copy_test_native_stack_items(
+                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_len,
+                        )
+                    }?
+                };
+                stack.push(StackValue::Array(items));
+            }
+            7 => {
+                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe {
+                        copy_test_native_stack_items(
+                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_len,
+                        )
+                    }?
+                };
+                stack.push(StackValue::Struct(items));
+            }
+            8 => {
+                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe {
+                        copy_test_native_stack_items(
+                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_len,
+                        )
+                    }?
+                };
+                if items.len() % 2 != 0 {
+                    return Err("map stack item contains an odd number of entries".to_string());
+                }
+                let mut entries = Vec::with_capacity(items.len() / 2);
+                let mut iter = items.into_iter();
+                while let Some(key) = iter.next() {
+                    let value = iter.next().ok_or_else(|| {
+                        "map stack item contains an incomplete key/value pair".to_string()
+                    })?;
+                    entries.push((key, value));
+                }
+                stack.push(StackValue::Map(entries));
+            }
+            6 => stack.push(StackValue::Iterator(item.integer_value as u64)),
+            9 => stack.push(StackValue::Interop(item.integer_value as u64)),
+            10 => stack.push(StackValue::Pointer(item.integer_value)),
+            11 => {
+                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+                    Vec::new()
+                } else {
+                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
+                };
+                stack.push(StackValue::Buffer(bytes));
+            }
             other => return Err(format!("unsupported native stack item kind {other}")),
         }
     }
@@ -257,6 +319,679 @@ fn executes_runtime_get_trigger_syscall_through_host_runtime() {
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::Integer(0x20)]);
+}
+
+#[test]
+fn caller_catch_restores_locals_after_callee_throw_in_host_runtime() {
+    let script = vec![
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x3b, 0x0c, 0x00, // TRY catch=+12, finally=0
+        0x35, 0x10, 0x00, 0x00, 0x00, // CALL_L callee at ip=22
+        0x45, // DROP
+        0x08, // PUSHT
+        0x3d, 0x08, // ENDTRY +8 -> RET at ip=21
+        0x70, // STLOC0
+        0x09, // PUSHF
+        0x3d, 0x04, // ENDTRY +4 -> RET at ip=21
+        0x38, // ABORT (unreachable filler)
+        0x38, // ABORT (unreachable filler)
+        0x40, // RET
+        0x11, // PUSH1
+        0x3a, // THROW
+    ];
+
+    let result =
+        execute_script(&script).expect("host runtime should unwind into the caller catch frame");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(false)]);
+}
+
+#[test]
+fn callt_null_result_can_flow_through_two_arg_helper_in_host_runtime() {
+    let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let script = vec![
+        0x57,
+        0x01,
+        0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37,
+        0x02,
+        0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34,
+        0x03, // CALL +3 -> helper at ip=13
+        0x40, // RET
+        0x57,
+        0x00,
+        0x02, // helper: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0xd8, // ISNULL
+        0x26,
+        0x15, // JMPIFNOT +21 -> else branch at ip=39
+        0x0c,
+        0x0a,
+        b'N',
+        b'U',
+        b'L',
+        b'L',
+        b' ',
+        b'B',
+        b'l',
+        b'o',
+        b'c',
+        b'k', // PUSHDATA1 "NULL Block"
+        0x41, // SYSCALL Runtime.Log
+        (runtime_log & 0xff) as u8,
+        ((runtime_log >> 8) & 0xff) as u8,
+        ((runtime_log >> 16) & 0xff) as u8,
+        ((runtime_log >> 24) & 0xff) as u8,
+        0x0b, // PUSHNULL
+        0x40, // RET
+        0x08, // else: PUSHT
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            if api == runtime_log {
+                return Ok(HostCallbackResult { stack: Vec::new() });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("null CALLT result should flow through a two-arg helper");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn callt_null_result_can_round_trip_through_local_in_host_runtime() {
+    let script = vec![
+        0x57, 0x01, 0x01, // INITSLOT 1 local, 1 arg
+        0x78, // LDARG0
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x40, // RET
+    ];
+    let initial_stack = vec![StackValue::ByteString(vec![0x01; 32])];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("null CALLT result should survive a local store/load round-trip");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn callt_null_result_preserves_caller_args_in_host_runtime() {
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("CALLT should preserve caller args");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(Vec::new())]);
+}
+
+#[test]
+fn callt_null_result_can_flow_through_two_arg_helper_at_nonzero_ip_in_host_runtime() {
+    let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let mut script = vec![0x21; 12];
+    script.extend_from_slice(&[
+        0x57,
+        0x01,
+        0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37,
+        0x02,
+        0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34,
+        0x03, // CALL +3 -> helper at ip=25
+        0x40, // RET
+        0x57,
+        0x00,
+        0x02, // helper: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0xd8, // ISNULL
+        0x26,
+        0x15, // JMPIFNOT +21 -> else branch
+        0x0c,
+        0x0a,
+        b'N',
+        b'U',
+        b'L',
+        b'L',
+        b' ',
+        b'B',
+        b'l',
+        b'o',
+        b'c',
+        b'k',
+        0x41,
+        (runtime_log & 0xff) as u8,
+        ((runtime_log >> 8) & 0xff) as u8,
+        ((runtime_log >> 16) & 0xff) as u8,
+        ((runtime_log >> 24) & 0xff) as u8,
+        0x0b, // PUSHNULL
+        0x40, // RET
+        0x08, // else: PUSHT
+        0x40, // RET
+    ]);
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+
+    let result = execute_script_with_host_and_stack_and_ip(
+        &script,
+        initial_stack,
+        12,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            if api == runtime_log {
+                return Ok(HostCallbackResult { stack: Vec::new() });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("null CALLT helper flow should also pass from a nonzero entry point");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn callt_block_like_struct_round_trips_directly_in_host_runtime() {
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(vec![
+            0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c,
+            0x7d, 0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4,
+            0xef, 0x1d, 0x4d, 0x1f,
+        ]),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script = vec![
+        0x0c, 0x20, // PUSHDATA1 32
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x37, 0x02, 0x00, // CALLT 2
+        0x40, // RET
+    ];
+    let expected = block_like.clone();
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        move |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![expected.clone()],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("block-like struct should round-trip directly through CALLT");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![block_like]);
+}
+
+#[test]
+fn callt_block_like_struct_survives_local_pickitem_in_host_runtime() {
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(prev_hash.clone()),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script = vec![
+        0x0c, 0x20, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let expected = block_like.clone();
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        move |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![expected.clone()],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("block-like struct should survive local PICKITEM flow");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(prev_hash)]);
+}
+
+#[test]
+fn callt_block_like_struct_survives_local_pickitem_with_live_args_in_host_runtime() {
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(prev_hash.clone()),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"PrevHash".to_vec()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+    let expected = block_like.clone();
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        move |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0002 {
+                return Ok(HostCallbackResult {
+                    stack: vec![expected.clone()],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("block-like struct should survive local PICKITEM with live caller args");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(prev_hash)]);
+}
+
+#[test]
+fn helper_entry_pickitem_on_block_like_struct_arg_in_host_runtime() {
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(prev_hash.clone()),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script = vec![
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let initial_stack = vec![StackValue::ByteString(b"PrevHash".to_vec()), block_like];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |_api, _ip, _ctx, _stack| Err("unexpected callback".to_string()),
+    )
+    .expect("helper entry should read prev-hash from block-like struct arg");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(prev_hash)]);
+}
+
+#[test]
+fn tx_like_struct_hash_then_callt_signers_in_host_runtime() {
+    let tx_hash = vec![
+        0xd9, 0xe0, 0xe7, 0xe0, 0x1e, 0xe5, 0x5d, 0x33, 0xee, 0x14, 0xc0, 0xda, 0x41, 0xfa, 0xe5,
+        0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c, 0xf1, 0xc1,
+        0xa1, 0xd4,
+    ];
+    let tx_like = StackValue::Struct(vec![
+        StackValue::ByteString(tx_hash.clone()),
+        StackValue::Integer(0),
+        StackValue::Integer(0x01020304),
+        StackValue::ByteString(vec![0x11; 20]),
+        StackValue::Integer(0),
+        StackValue::Integer(0),
+        StackValue::Integer(0),
+        StackValue::ByteString(vec![0x40]),
+    ]);
+    let expected_signers = StackValue::Array(vec![StackValue::Array(vec![
+        StackValue::ByteString(vec![0x22; 20]),
+        StackValue::Integer(0x80), // Global
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+    ])]);
+    let script = vec![
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0xCE, // PICKITEM -> tx.Hash
+        0x37, 0x04, 0x00, // CALLT 4 -> getTransactionSigners
+        0x40, // RET
+    ];
+    let initial_stack = vec![StackValue::ByteString(b"Signers".to_vec()), tx_like];
+    let expected = expected_signers.clone();
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        move |api, _ip, _ctx, _stack| {
+            if api == 0x4354_0004 {
+                return Ok(HostCallbackResult {
+                    stack: vec![expected.clone()],
+                });
+            }
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("tx-like struct should survive hash extraction and CALLT signers path");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![expected_signers]);
+}
+
+#[test]
+fn callt_transaction_helper_then_callt_signers_with_live_args_in_host_runtime() {
+    let tx_hash = vec![
+        0xd9, 0xe0, 0xe7, 0xe0, 0x1e, 0xe5, 0x5d, 0x33, 0xee, 0x14, 0xc0, 0xda, 0x41, 0xfa, 0xe5,
+        0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c, 0xf1, 0xc1,
+        0xa1, 0xd4,
+    ];
+    let tx_like = StackValue::Struct(vec![
+        StackValue::ByteString(tx_hash.clone()),
+        StackValue::Integer(0),
+        StackValue::Integer(0x01020304),
+        StackValue::ByteString(vec![0x11; 20]),
+        StackValue::Integer(0),
+        StackValue::Integer(0),
+        StackValue::Integer(0),
+        StackValue::ByteString(vec![0x40]),
+    ]);
+    let expected_signers = StackValue::Array(vec![StackValue::Array(vec![
+        StackValue::ByteString(vec![0x22; 20]),
+        StackValue::Integer(0x80),
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+    ])]);
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x03, 0x00, // CALLT 3 -> getTransaction
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34, 0x06, // CALL +6 -> helper
+        0x37, 0x04, 0x00, // CALLT 4 -> getTransactionSigners
+        0x40, // RET
+        0x57, 0x00, 0x02, // helper
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0xCE, // PICKITEM -> tx.Hash
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"Signers".to_vec()),
+        StackValue::ByteString(tx_hash.clone()),
+    ];
+    let expected = expected_signers.clone();
+    let expected_tx = tx_like.clone();
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        move |api, _ip, _ctx, _stack| match api {
+            0x4354_0003 => Ok(HostCallbackResult {
+                stack: vec![expected_tx.clone()],
+            }),
+            0x4354_0004 => Ok(HostCallbackResult {
+                stack: vec![expected.clone()],
+            }),
+            _ => Err(format!("unexpected callback api 0x{api:08x}")),
+        },
+    )
+    .expect("tx helper -> CALLT signers flow should survive with live args");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![expected_signers]);
+}
+
+#[test]
+fn local_block_like_struct_then_helper_pickitem_in_host_runtime() {
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(prev_hash.clone()),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34, 0x03, // CALL +3 -> helper
+        0x40, // RET
+        0x57, 0x00, 0x02, // helper
+        0x78, // LDARG0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let initial_stack = vec![StackValue::ByteString(b"PrevHash".to_vec()), block_like];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        initial_stack,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |_api, _ip, _ctx, _stack| Err("unexpected callback".to_string()),
+    )
+    .expect("local struct -> helper PICKITEM flow should preserve prev-hash");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(prev_hash)]);
 }
 
 #[test]
@@ -1291,14 +2026,14 @@ fn contract_call_bool_result_survives_multisig_like_heap_locals_after_syscall() 
     // LOC0 = [sig0, sig1, sig2]
     for fill in [0x11_u8, 0x12, 0x13] {
         script.extend_from_slice(&[0x0c, 0x40]);
-        script.extend_from_slice(&vec![fill; 64]);
+        script.extend_from_slice(&[fill; 64]);
     }
     script.extend_from_slice(&[0x13, 0xc0, 0x70]);
 
     // LOC1 = [pub0, pub1, pub2, pub3]
     for fill in [0x21_u8, 0x22, 0x23, 0x24] {
         script.extend_from_slice(&[0x0c, 0x21]);
-        script.extend_from_slice(&vec![fill; 33]);
+        script.extend_from_slice(&[fill; 33]);
     }
     script.extend_from_slice(&[0x14, 0xc0, 0x71]);
 
@@ -1365,7 +2100,9 @@ fn contract_call_bool_result_survives_multisig_like_heap_locals_after_syscall() 
             })
         },
     )
-    .expect("guest should survive the multisig-like LDLOC continuation after contract-call callbacks");
+    .expect(
+        "guest should survive the multisig-like LDLOC continuation after contract-call callbacks",
+    );
 
     assert_eq!(callback_count, 3);
     assert_eq!(result.state, VmState::Halt);
@@ -1382,7 +2119,7 @@ fn contract_call_bool_result_survives_multisig_like_initial_stack_across_context
     script.push(0x13); // PUSH3 (m)
     for fill in [0x21_u8, 0x22, 0x23, 0x24] {
         script.extend_from_slice(&[0x0c, 0x21]);
-        script.extend_from_slice(&vec![fill; 33]);
+        script.extend_from_slice(&[fill; 33]);
     }
     script.push(0x14); // PUSH4 (n)
     script.extend_from_slice(&[0x57, 0x07, 0x00]); // INITSLOT 7 0
@@ -1478,7 +2215,7 @@ fn contract_call_bool_result_survives_multisig_like_scriptcontainer_path() {
     script.push(0x13); // PUSH3 (m)
     for fill in [0x21_u8, 0x22, 0x23, 0x24] {
         script.extend_from_slice(&[0x0c, 0x21]);
-        script.extend_from_slice(&vec![fill; 33]);
+        script.extend_from_slice(&[fill; 33]);
     }
     script.push(0x14); // PUSH4 (n)
     script.extend_from_slice(&[0x57, 0x07, 0x00]); // INITSLOT 7 0
@@ -1590,7 +2327,7 @@ fn contract_call_bool_result_survives_multisig_like_full_transaction_scriptconta
     script.push(0x13); // PUSH3 (m)
     for fill in [0x21_u8, 0x22, 0x23, 0x24] {
         script.extend_from_slice(&[0x0c, 0x21]);
-        script.extend_from_slice(&vec![fill; 33]);
+        script.extend_from_slice(&[fill; 33]);
     }
     script.push(0x14); // PUSH4 (n)
     script.extend_from_slice(&[0x57, 0x07, 0x00]); // INITSLOT 7 0
@@ -2249,7 +2986,7 @@ fn local_storage_round_trip_survives_delete_and_following_get() {
                 Ok(HostCallbackResult { stack: vec![] })
             }
             value if value == local_get => {
-                assert!(stack.len() >= 1);
+                assert!(!stack.is_empty());
                 let key = match stack.last().expect("local-get key") {
                     StackValue::ByteString(bytes) => bytes.clone(),
                     other => panic!("expected local-get key bytes, got {other:?}"),
@@ -2263,7 +3000,7 @@ fn local_storage_round_trip_survives_delete_and_following_get() {
                 Ok(HostCallbackResult { stack: vec![item] })
             }
             value if value == local_delete => {
-                assert!(stack.len() >= 1);
+                assert!(!stack.is_empty());
                 let key = match stack.last().expect("local-delete key") {
                     StackValue::ByteString(bytes) => bytes.clone(),
                     other => panic!("expected local-delete key bytes, got {other:?}"),
@@ -2741,6 +3478,188 @@ fn retained_bytestring_and_null_can_be_observed_before_ret() {
         ])
     );
     assert!(result.stack.is_empty());
+}
+
+#[test]
+fn helper_syscalls_preserve_multiple_arguments_and_order_in_host_runtime() {
+    let local_get_api = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+    let check_witness_api = neo_riscv_abi::interop_hash("System.Runtime.CheckWitness");
+    let script = vec![
+        0x57,
+        0x00,
+        0x03, // INITSLOT 0 locals, 3 args
+        0x34,
+        0x09, // CALL helper at ip 3 -> target 12
+        0x45, // DROP helper return value
+        0x7a, // LDARG2
+        0x79, // LDARG1
+        0x78, // LDARG0
+        0x13, // PUSH3
+        0xc0, // PACK
+        0x40, // RET
+        0x0c,
+        0x01,
+        0xff, // helper: PUSHDATA1 0xff
+        0xdb,
+        0x30, // CONVERT Buffer
+        0x41, // SYSCALL Storage.Local.Get
+        local_get_api.to_le_bytes()[0],
+        local_get_api.to_le_bytes()[1],
+        local_get_api.to_le_bytes()[2],
+        local_get_api.to_le_bytes()[3],
+        0x41, // SYSCALL Runtime.CheckWitness
+        check_witness_api.to_le_bytes()[0],
+        check_witness_api.to_le_bytes()[1],
+        check_witness_api.to_le_bytes()[2],
+        check_witness_api.to_le_bytes()[3],
+        0x40, // RET
+    ];
+
+    let nef = vec![0x50, 0x00, 0x83, 0x00, 0x14, 0x00, 0x00, 0x00];
+    let manifest = b"{\"name\":\"Contract\",\"abi\":{\"methods\":[]}}".to_vec();
+    let owner = vec![
+        0x41, 0xca, 0x6a, 0xbc, 0x77, 0x1a, 0x8b, 0x40, 0x75, 0x7a, 0x1a, 0x1b, 0x31, 0xd0, 0xae,
+        0x7f, 0x5c, 0xf1, 0xfe, 0xac,
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::Null,
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == local_get_api {
+                assert_eq!(stack, &[StackValue::Buffer(vec![0xff])]);
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(owner.clone())],
+                });
+            }
+            if api == check_witness_api {
+                assert_eq!(stack, &[StackValue::ByteString(owner.clone())]);
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        },
+    )
+    .expect("helper syscalls should preserve caller arguments in host runtime");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![
+            StackValue::ByteString(nef),
+            StackValue::ByteString(manifest),
+            StackValue::Null,
+        ])]
+    );
+}
+
+#[test]
+fn helper_syscalls_preserve_large_arguments_before_callt_in_host_runtime() {
+    let local_get_api = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
+    let check_witness_api = neo_riscv_abi::interop_hash("System.Runtime.CheckWitness");
+    let callt_update_api = neo_riscv_guest::CALLT_MARKER;
+    let script = vec![
+        0x57,
+        0x00,
+        0x03, // INITSLOT 0 locals, 3 args
+        0x34,
+        0x0c, // CALL helper at ip 3 -> target 15
+        0x24,
+        0x03, // JMPIF authorized path at ip 5 -> target 8
+        0x40, // RET (unauthorized)
+        0x7a, // LDARG2
+        0x79, // LDARG1
+        0x78, // LDARG0
+        0x37,
+        0x00,
+        0x00, // CALLT 0
+        0x40, // RET
+        0x0c,
+        0x01,
+        0xff, // helper: PUSHDATA1 0xff
+        0xdb,
+        0x30, // CONVERT Buffer
+        0x41,
+        local_get_api.to_le_bytes()[0],
+        local_get_api.to_le_bytes()[1],
+        local_get_api.to_le_bytes()[2],
+        local_get_api.to_le_bytes()[3],
+        0x41,
+        check_witness_api.to_le_bytes()[0],
+        check_witness_api.to_le_bytes()[1],
+        check_witness_api.to_le_bytes()[2],
+        check_witness_api.to_le_bytes()[3],
+        0x40,
+    ];
+
+    let nef = vec![0x50, 0x00, 0xa3, 0x00, 0x14, 0x00, 0x00, 0x00];
+    let manifest = vec![b'm'; 415];
+    let owner = vec![
+        0x41, 0xca, 0x6a, 0xbc, 0x77, 0x1a, 0x8b, 0x40, 0x75, 0x7a, 0x1a, 0x1b, 0x31, 0xd0, 0xae,
+        0x7f, 0x5c, 0xf1, 0xfe, 0xac,
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::Null,
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == local_get_api {
+                assert_eq!(stack, &[StackValue::Buffer(vec![0xff])]);
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(owner.clone())],
+                });
+            }
+            if api == check_witness_api {
+                assert_eq!(stack, &[StackValue::ByteString(owner.clone())]);
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+            if api == callt_update_api {
+                assert_eq!(
+                    stack,
+                    &[
+                        StackValue::Null,
+                        StackValue::ByteString(manifest.clone()),
+                        StackValue::ByteString(nef.clone()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        },
+    )
+    .expect("helper syscalls should preserve large arguments before CALLT in host runtime");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
 }
 
 #[test]
@@ -3338,6 +4257,14 @@ struct FfiStorageContextState {
     token: Vec<u8>,
 }
 
+struct FfiOracleSuccessState {
+    stored: Option<Vec<StackValue>>,
+}
+
+struct FfiAttributeState {
+    observed_checkwitness: Option<Vec<StackValue>>,
+}
+
 unsafe extern "C" fn ffi_storage_context_callback(
     user_data: *mut c_void,
     api: u32,
@@ -3413,6 +4340,108 @@ unsafe extern "C" fn ffi_storage_context_callback(
     true
 }
 
+unsafe extern "C" fn ffi_oracle_success_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiOracleSuccessState) };
+    let hash_api = neo_riscv_abi::interop_hash("System.Runtime.GetCallingScriptHash");
+    let get_context = neo_riscv_abi::interop_hash("System.Storage.GetContext");
+    let put = neo_riscv_abi::interop_hash("System.Storage.Put");
+
+    let stack = unsafe {
+        copy_test_native_stack_items(
+            input_stack_ptr as *mut neo_riscv_host::NativeStackItem,
+            input_stack_len,
+        )
+    }
+    .unwrap_or_default();
+
+    let response_stack = if api == hash_api {
+        vec![StackValue::ByteString(vec![
+            0x58, 0x87, 0x17, 0x11, 0x7e, 0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71, 0xd2, 0xdd,
+            0x89, 0xfe, 0x7c, 0x4b, 0x92, 0xfe,
+        ])]
+    } else if api == (neo_riscv_guest::CALLT_MARKER | 2) {
+        vec![StackValue::Array(vec![StackValue::ByteString(
+            b"Hello World!".to_vec(),
+        )])]
+    } else if api == get_context {
+        vec![StackValue::ByteString(storage_context_token(0, false))]
+    } else if api == put {
+        state.stored = Some(stack);
+        Vec::new()
+    } else {
+        return false;
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&response_stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_attribute_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiAttributeState) };
+    let stack = unsafe {
+        copy_test_native_stack_items(
+            input_stack_ptr as *mut neo_riscv_host::NativeStackItem,
+            input_stack_len,
+        )
+    }
+    .unwrap_or_default();
+
+    let response_stack = if api == neo_riscv_guest::CALLT_MARKER {
+        vec![
+            StackValue::Array(vec![StackValue::Null]),
+            StackValue::ByteString(vec![0; 20]),
+        ]
+    } else if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+        state.observed_checkwitness = Some(stack);
+        vec![StackValue::Boolean(true)]
+    } else {
+        return false;
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&response_stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
 unsafe extern "C" fn ffi_mixed_callback(
     user_data: *mut c_void,
     _api: u32,
@@ -3465,6 +4494,205 @@ unsafe extern "C" fn ffi_mixed_free_callback(
     }
 }
 
+unsafe extern "C" fn ffi_callt_array_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    if api != neo_riscv_guest::CALLT_MARKER {
+        return false;
+    }
+
+    let stack = vec![StackValue::Array(vec![StackValue::ByteString(
+        b"Hello World!".to_vec(),
+    )])];
+    let (stack_ptr, stack_len) = build_native_stack_items(&stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_callt_null_helper_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let stack = match api {
+        api if api == (neo_riscv_guest::CALLT_MARKER | 2) => vec![StackValue::Null],
+        api if api == runtime_log => Vec::new(),
+        _ => return false,
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_callt_block_helper_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    if api != (neo_riscv_guest::CALLT_MARKER | 2) {
+        return false;
+    }
+
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(vec![
+            0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c,
+            0x7d, 0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4,
+            0xef, 0x1d, 0x4d, 0x1f,
+        ]),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&[block_like]);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_callt_signers_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    if api != (neo_riscv_guest::CALLT_MARKER | 4) {
+        return false;
+    }
+
+    let signers = StackValue::Array(vec![StackValue::Array(vec![
+        StackValue::ByteString(vec![0x22; 20]),
+        StackValue::Integer(0x80),
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+        StackValue::Array(vec![]),
+    ])]);
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&[signers]);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_callt_transaction_then_signers_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let stack = match api {
+        value if value == (neo_riscv_guest::CALLT_MARKER | 3) => StackValue::Struct(vec![
+            StackValue::ByteString(vec![
+                0xd9, 0xe0, 0xe7, 0xe0, 0x1e, 0xe5, 0x5d, 0x33, 0xee, 0x14, 0xc0, 0xda, 0x41, 0xfa,
+                0xe5, 0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c,
+                0xf1, 0xc1, 0xa1, 0xd4,
+            ]),
+            StackValue::Integer(0),
+            StackValue::Integer(0x01020304),
+            StackValue::ByteString(vec![0x11; 20]),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::ByteString(vec![0x40]),
+        ]),
+        value if value == (neo_riscv_guest::CALLT_MARKER | 4) => {
+            StackValue::Array(vec![StackValue::Array(vec![
+                StackValue::ByteString(vec![0x22; 20]),
+                StackValue::Integer(0x80),
+                StackValue::Array(vec![]),
+                StackValue::Array(vec![]),
+                StackValue::Array(vec![]),
+            ])])
+        }
+        _ => return false,
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&[stack]);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
 #[test]
 fn ffi_host_callback_errors_fault_without_trapping() {
     let syscall = neo_riscv_abi::interop_hash("System.Runtime.Platform");
@@ -3515,6 +4743,326 @@ fn ffi_host_callback_errors_fault_without_trapping() {
     assert!(
         error.contains("ffi callback failure"),
         "ffi callback errors should be surfaced directly, got: {error}"
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn ffi_callt_null_result_can_flow_through_two_arg_helper() {
+    let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let script = vec![
+        0x57,
+        0x01,
+        0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37,
+        0x02,
+        0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34,
+        0x03, // CALL +3 -> helper at ip=13
+        0x40, // RET
+        0x57,
+        0x00,
+        0x02, // helper: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0xd8, // ISNULL
+        0x26,
+        0x15, // JMPIFNOT +21 -> else branch at ip=39
+        0x0c,
+        0x0a,
+        b'N',
+        b'U',
+        b'L',
+        b'L',
+        b' ',
+        b'B',
+        b'l',
+        b'o',
+        b'c',
+        b'k',
+        0x41,
+        (runtime_log & 0xff) as u8,
+        ((runtime_log >> 8) & 0xff) as u8,
+        ((runtime_log >> 16) & 0xff) as u8,
+        ((runtime_log >> 24) & 0xff) as u8,
+        0x0b, // PUSHNULL
+        0x40, // RET
+        0x08, // else: PUSHT
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+    let (initial_ptr, initial_len) = build_native_stack_items(&initial_stack);
+
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            0,
+            0,
+            initial_ptr,
+            initial_len,
+            ptr::null_mut(),
+            ffi_callt_null_helper_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe { free_native_stack_items(initial_ptr, initial_len) };
+    assert!(invoked, "ffi execution should be invoked");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi output stack should decode");
+    assert_eq!(output.state, 0, "ffi helper flow should HALT");
+    assert_eq!(stack, vec![StackValue::Null]);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn ffi_callt_block_like_struct_survives_local_and_helper_pickitem() {
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34, 0x03, // CALL +3 -> helper
+        0x40, // RET
+        0x57, 0x00, 0x02, // helper
+        0x78, // LDARG0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"PrevHash".to_vec()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+    let (initial_ptr, initial_len) = build_native_stack_items(&initial_stack);
+
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            0,
+            0,
+            initial_ptr,
+            initial_len,
+            ptr::null_mut(),
+            ffi_callt_block_helper_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe { free_native_stack_items(initial_ptr, initial_len) };
+    assert!(invoked, "ffi execution should be invoked");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi output stack should decode");
+    assert_eq!(output.state, 0, "ffi block helper flow should HALT");
+    assert_eq!(stack, vec![StackValue::ByteString(prev_hash)]);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn ffi_tx_like_struct_hash_then_callt_signers() {
+    let script = vec![
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0xCE, // PICKITEM -> tx.Hash
+        0x37, 0x04, 0x00, // CALLT 4 -> getTransactionSigners
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"Signers".to_vec()),
+        StackValue::Struct(vec![
+            StackValue::ByteString(vec![
+                0xd9, 0xe0, 0xe7, 0xe0, 0x1e, 0xe5, 0x5d, 0x33, 0xee, 0x14, 0xc0, 0xda, 0x41, 0xfa,
+                0xe5, 0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c,
+                0xf1, 0xc1, 0xa1, 0xd4,
+            ]),
+            StackValue::Integer(0),
+            StackValue::Integer(0x01020304),
+            StackValue::ByteString(vec![0x11; 20]),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::ByteString(vec![0x40]),
+        ]),
+    ];
+    let (initial_ptr, initial_len) = build_native_stack_items(&initial_stack);
+
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            0,
+            0,
+            initial_ptr,
+            initial_len,
+            ptr::null_mut(),
+            ffi_callt_signers_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe { free_native_stack_items(initial_ptr, initial_len) };
+    assert!(invoked, "ffi execution should be invoked");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi output stack should decode");
+    assert_eq!(output.state, 0, "ffi tx/signers flow should HALT");
+    assert_eq!(
+        stack,
+        vec![StackValue::Array(vec![StackValue::Array(vec![
+            StackValue::ByteString(vec![0x22; 20]),
+            StackValue::Integer(0x80),
+            StackValue::Array(vec![]),
+            StackValue::Array(vec![]),
+            StackValue::Array(vec![]),
+        ])])]
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn ffi_callt_transaction_helper_then_callt_signers_with_live_args() {
+    let tx_hash = vec![
+        0xd9, 0xe0, 0xe7, 0xe0, 0x1e, 0xe5, 0x5d, 0x33, 0xee, 0x14, 0xc0, 0xda, 0x41, 0xfa, 0xe5,
+        0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c, 0xf1, 0xc1,
+        0xa1, 0xd4,
+    ];
+    let script = vec![
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x03, 0x00, // CALLT 3 -> getTransaction
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34, 0x06, // CALL +6 -> helper
+        0x37, 0x04, 0x00, // CALLT 4 -> getTransactionSigners
+        0x40, // RET
+        0x57, 0x00, 0x02, // helper
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0xCE, // PICKITEM -> tx.Hash
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"Signers".to_vec()),
+        StackValue::ByteString(tx_hash),
+    ];
+    let (initial_ptr, initial_len) = build_native_stack_items(&initial_stack);
+
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            0,
+            0,
+            initial_ptr,
+            initial_len,
+            ptr::null_mut(),
+            ffi_callt_transaction_then_signers_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe { free_native_stack_items(initial_ptr, initial_len) };
+    assert!(invoked, "ffi execution should be invoked");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi output stack should decode");
+    assert_eq!(output.state, 0, "ffi tx helper/signers flow should HALT");
+    assert_eq!(
+        stack,
+        vec![StackValue::Array(vec![StackValue::Array(vec![
+            StackValue::ByteString(vec![0x22; 20]),
+            StackValue::Integer(0x80),
+            StackValue::Array(vec![]),
+            StackValue::Array(vec![]),
+            StackValue::Array(vec![]),
+        ])])]
     );
 
     unsafe {
@@ -3960,6 +5508,979 @@ fn callt_invokes_host_callback() {
 }
 
 #[test]
+fn callt_array_result_round_trips_through_locals_and_pickitem_in_host_runtime() {
+    let script = vec![
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0x37, 0x00, 0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, _stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Array(vec![StackValue::ByteString(
+                        b"Hello World!".to_vec(),
+                    )])],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("host runtime should preserve CALLT array results through locals and PICKITEM");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
+#[test]
+fn callt_array_result_round_trips_with_live_args_in_host_runtime() {
+    let script = vec![
+        0x57, 0x02, 0x04, // INITSLOT 2 locals, 4 args
+        0x37, 0x00, 0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Null,
+            StackValue::ByteString(
+                b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec(),
+            ),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, _stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Array(vec![StackValue::ByteString(
+                        b"Hello World!".to_vec(),
+                    )])],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("host runtime should preserve CALLT array results with live args");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
+#[test]
+fn callt_array_result_round_trips_with_live_args_in_ffi_host_runtime() {
+    let script = vec![
+        0x57, 0x02, 0x04, // INITSLOT 2 locals, 4 args
+        0x37, 0x00, 0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+        StackValue::Integer(0),
+        StackValue::Null,
+        StackValue::ByteString(b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            ptr::null_mut(),
+            ffi_callt_array_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn callt_array_result_survives_prior_syscall_with_live_args_in_host_runtime() {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let script = vec![
+        0x57,
+        0x02,
+        0x04, // INITSLOT 2 locals, 4 args
+        0x41, // SYSCALL
+        platform_api.to_le_bytes()[0],
+        platform_api.to_le_bytes()[1],
+        platform_api.to_le_bytes()[2],
+        platform_api.to_le_bytes()[3],
+        0x45, // DROP
+        0x37,
+        0x00,
+        0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Null,
+            StackValue::ByteString(
+                b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec(),
+            ),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, _stack| {
+            if api == platform_api {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(b"NEO".to_vec())],
+                });
+            }
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Array(vec![StackValue::ByteString(
+                        b"Hello World!".to_vec(),
+                    )])],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("host runtime should preserve CALLT array results after a prior syscall");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
+#[test]
+fn callt_array_result_survives_prior_hash_syscall_with_live_args_in_host_runtime() {
+    let hash_api = neo_riscv_abi::interop_hash("System.Runtime.GetCallingScriptHash");
+    let script = vec![
+        0x57,
+        0x02,
+        0x04, // INITSLOT 2 locals, 4 args
+        0x41, // SYSCALL
+        hash_api.to_le_bytes()[0],
+        hash_api.to_le_bytes()[1],
+        hash_api.to_le_bytes()[2],
+        hash_api.to_le_bytes()[3],
+        0x45, // DROP
+        0x37,
+        0x00,
+        0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Null,
+            StackValue::ByteString(
+                b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec(),
+            ),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, _stack| {
+            if api == hash_api {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(vec![0x58; 20])],
+                });
+            }
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Array(vec![StackValue::ByteString(
+                        b"Hello World!".to_vec(),
+                    )])],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("host runtime should preserve CALLT array results after a prior hash syscall");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
+#[test]
+fn oracle_on_response_success_path_executes_in_host_runtime() {
+    let hash_api = neo_riscv_abi::interop_hash("System.Runtime.GetCallingScriptHash");
+    let get_context = neo_riscv_abi::interop_hash("System.Storage.GetContext");
+    let put = neo_riscv_abi::interop_hash("System.Storage.Put");
+    let script = vec![
+        0x57, 0x02, 0x04, 0x41, 0x39, 0x53, 0x6e, 0x3c, 0x0c, 0x14, 0x58, 0x87, 0x17, 0x11, 0x7e,
+        0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71, 0xd2, 0xdd, 0x89, 0xfe, 0x7c, 0x4b, 0x92, 0xfe,
+        0x98, 0x26, 0x16, 0x0c, 0x11, 0x4e, 0x6f, 0x20, 0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x69,
+        0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x21, 0x3a, 0x7a, 0x10, 0x98, 0x26, 0x2e, 0x0c, 0x22,
+        0x4f, 0x72, 0x61, 0x63, 0x6c, 0x65, 0x20, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+        0x20, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20, 0x63,
+        0x6f, 0x64, 0x65, 0x20, 0x7a, 0x37, 0x01, 0x00, 0x8b, 0xdb, 0x28, 0x3a, 0x7b, 0x37, 0x02,
+        0x00, 0x70, 0x68, 0x10, 0xce, 0x71, 0x69, 0x0c, 0x08, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+        0x73, 0x65, 0x41, 0x9b, 0xf6, 0x67, 0xce, 0x41, 0xe6, 0x3f, 0x18, 0x84, 0x40,
+    ];
+    let mut stored = Vec::new();
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Null,
+            StackValue::ByteString(
+                b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec(),
+            ),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == hash_api {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(vec![
+                        0x58, 0x87, 0x17, 0x11, 0x7e, 0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71,
+                        0xd2, 0xdd, 0x89, 0xfe, 0x7c, 0x4b, 0x92, 0xfe,
+                    ])],
+                });
+            }
+            if api == (neo_riscv_guest::CALLT_MARKER | 2) {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Array(vec![StackValue::ByteString(
+                        b"Hello World!".to_vec(),
+                    )])],
+                });
+            }
+            if api == get_context {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(storage_context_token(0, false))],
+                });
+            }
+            if api == put {
+                stored = stack.to_vec();
+                return Ok(HostCallbackResult { stack: vec![] });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("oracle success callback path should execute in host runtime");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert!(result.stack.is_empty());
+    assert_eq!(
+        stored,
+        vec![
+            StackValue::ByteString(b"Hello World!".to_vec()),
+            StackValue::ByteString(b"Response".to_vec()),
+            StackValue::ByteString(storage_context_token(0, false)),
+        ]
+    );
+}
+
+#[test]
+fn oracle_on_response_success_path_executes_in_ffi_host_runtime() {
+    let script = vec![
+        0x57, 0x02, 0x04, 0x41, 0x39, 0x53, 0x6e, 0x3c, 0x0c, 0x14, 0x58, 0x87, 0x17, 0x11, 0x7e,
+        0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71, 0xd2, 0xdd, 0x89, 0xfe, 0x7c, 0x4b, 0x92, 0xfe,
+        0x98, 0x26, 0x16, 0x0c, 0x11, 0x4e, 0x6f, 0x20, 0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x69,
+        0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x21, 0x3a, 0x7a, 0x10, 0x98, 0x26, 0x2e, 0x0c, 0x22,
+        0x4f, 0x72, 0x61, 0x63, 0x6c, 0x65, 0x20, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+        0x20, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20, 0x63,
+        0x6f, 0x64, 0x65, 0x20, 0x7a, 0x37, 0x01, 0x00, 0x8b, 0xdb, 0x28, 0x3a, 0x7b, 0x37, 0x02,
+        0x00, 0x70, 0x68, 0x10, 0xce, 0x71, 0x69, 0x0c, 0x08, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+        0x73, 0x65, 0x41, 0x9b, 0xf6, 0x67, 0xce, 0x41, 0xe6, 0x3f, 0x18, 0x84, 0x40,
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+        StackValue::Integer(0),
+        StackValue::Null,
+        StackValue::ByteString(b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut state = Box::new(FfiOracleSuccessState { stored: None });
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut *state) as *mut FfiOracleSuccessState as *mut c_void,
+            ffi_oracle_success_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert!(stack.is_empty());
+    assert_eq!(
+        state.stored,
+        Some(vec![
+            StackValue::ByteString(b"Hello World!".to_vec()),
+            StackValue::ByteString(b"Response".to_vec()),
+            StackValue::ByteString(storage_context_token(0, false)),
+        ])
+    );
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn attribute_test_path_executes_in_ffi_host_runtime() {
+    let script = vec![
+        0x58, 0xd8, 0x26, 0x28, 0x0b, 0x11, 0xc0, 0x0c, 0x1c, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x3d, 0x11, 0x4d, 0x34, 0x08, 0x60, 0x58, 0x34, 0x21,
+        0x08, 0x40, 0x57, 0x00, 0x02, 0x79, 0x37, 0x00, 0x00, 0xdb, 0x30, 0xdb, 0x28, 0x4a, 0xd8,
+        0x24, 0x09, 0x4a, 0xca, 0x00, 0x14, 0x28, 0x03, 0x3a, 0x4a, 0x78, 0x10, 0x51, 0xd0, 0x45,
+        0x40, 0x57, 0x00, 0x01, 0x78, 0x10, 0xce, 0x41, 0xf8, 0x27, 0xec, 0x8c, 0x24, 0x0e, 0x0c,
+        0x09, 0x65, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x40,
+    ];
+    let mut state = Box::new(FfiAttributeState {
+        observed_checkwitness: None,
+    });
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            ptr::null(),
+            0,
+            (&mut *state) as *mut FfiAttributeState as *mut c_void,
+            ffi_attribute_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert_eq!(stack, vec![StackValue::Boolean(true)]);
+    assert_eq!(
+        state.observed_checkwitness,
+        Some(vec![StackValue::ByteString(vec![0; 20])])
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn attribute_owner_constructor_helper_updates_array_in_host_runtime() {
+    let script = vec![
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x79, // LDARG1
+        0x37, 0x00, 0x00, // CALLT 0
+        0xdb, 0x30, // CONVERT Buffer
+        0xdb, 0x28, // CONVERT ByteString
+        0x4a, // DUP
+        0xd8, // ISNULL
+        0x24, 0x09, // JMPIFNOT 9
+        0x4a, // DUP
+        0xca, // SIZE
+        0x00, 0x14, // PUSHINT8 20
+        0x28, 0x03, // JMPEQ 3
+        0x3a, // THROW
+        0x4a, // DUP
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0x51, // ROT
+        0xd0, // SETITEM
+        0x45, // DROP
+        0x49, // CLEAR
+        0x78, // LDARG0
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::Array(vec![StackValue::Null]),
+            StackValue::ByteString(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_vec()),
+            StackValue::Array(vec![StackValue::Null]),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                assert_eq!(
+                    stack,
+                    &vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_vec()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("attribute constructor helper should update the array in host runtime");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![StackValue::ByteString(vec![0; 20])])]
+    );
+}
+
+#[test]
+fn attribute_owner_constructor_helper_updates_picked_array_in_host_runtime() {
+    let mut script = vec![
+        0x0b, // PUSHNULL
+        0x11, // PUSH1
+        0xc0, // PACK
+        0x0c, 0x1c, // PUSHDATA1 length 28
+    ];
+    script.extend_from_slice(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+    script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x4d, // PICK
+        0x34, 0x03, // CALL +3 -> helper
+        0x40, // RET
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x79, // LDARG1
+        0x37, 0x00, 0x00, // CALLT 0
+        0xdb, 0x30, // CONVERT Buffer
+        0xdb, 0x28, // CONVERT ByteString
+        0x4a, // DUP
+        0xd8, // ISNULL
+        0x24, 0x09, // JMPIFNOT 9
+        0x4a, // DUP
+        0xca, // SIZE
+        0x00, 0x14, // PUSHINT8 20
+        0x28, 0x03, // JMPEQ 3
+        0x3a, // THROW
+        0x4a, // DUP
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0x51, // ROT
+        0xd0, // SETITEM
+        0x45, // DROP
+        0x40, // RET
+    ]);
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                assert_eq!(
+                    stack,
+                    &vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_vec()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("attribute constructor caller/helper path should update the picked array");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![StackValue::ByteString(vec![0; 20])])]
+    );
+}
+
+#[test]
+fn attribute_test_path_executes_in_host_runtime() {
+    let script = vec![
+        0x58, 0xd8, 0x26, 0x28, 0x0b, 0x11, 0xc0, 0x0c, 0x1c, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x3d, 0x11, 0x4d, 0x34, 0x08, 0x60, 0x58, 0x34, 0x21,
+        0x08, 0x40, 0x57, 0x00, 0x02, 0x79, 0x37, 0x00, 0x00, 0xdb, 0x30, 0xdb, 0x28, 0x4a, 0xd8,
+        0x24, 0x09, 0x4a, 0xca, 0x00, 0x14, 0x28, 0x03, 0x3a, 0x4a, 0x78, 0x10, 0x51, 0xd0, 0x45,
+        0x40, 0x57, 0x00, 0x01, 0x78, 0x10, 0xce, 0x41, 0xf8, 0x27, 0xec, 0x8c, 0x24, 0x0e, 0x0c,
+        0x09, 0x65, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x40,
+    ];
+    let mut observed_checkwitness = None;
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+            if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+                observed_checkwitness = Some(stack.to_vec());
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("attribute test path should execute in host runtime");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+    assert_eq!(
+        observed_checkwitness,
+        Some(vec![StackValue::ByteString(vec![0; 20])])
+    );
+}
+
+#[test]
+fn attribute_test_path_survives_prior_noop_call_in_host_runtime() {
+    let target = vec![
+        0x58, 0xd8, 0x26, 0x28, 0x0b, 0x11, 0xc0, 0x0c, 0x1c, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x3d, 0x11, 0x4d, 0x34, 0x08, 0x60, 0x58, 0x34, 0x21,
+        0x08, 0x40, 0x57, 0x00, 0x02, 0x79, 0x37, 0x00, 0x00, 0xdb, 0x30, 0xdb, 0x28, 0x4a, 0xd8,
+        0x24, 0x09, 0x4a, 0xca, 0x00, 0x14, 0x28, 0x03, 0x3a, 0x4a, 0x78, 0x10, 0x51, 0xd0, 0x45,
+        0x40, 0x57, 0x00, 0x01, 0x78, 0x10, 0xce, 0x41, 0xf8, 0x27, 0xec, 0x8c, 0x24, 0x0e, 0x0c,
+        0x09, 0x65, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x40,
+    ];
+    let helper = vec![0x40]; // RET
+    let helper_start = 6 + target.len();
+    let mut script = vec![0x35, 0x00, 0x00, 0x00, 0x00, 0x49];
+    script.extend_from_slice(&target);
+    script.extend_from_slice(&helper);
+    let offset = helper_start as i32;
+    script[1..5].copy_from_slice(&offset.to_le_bytes());
+
+    let mut observed_checkwitness = None;
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+            if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+                observed_checkwitness = Some(stack.to_vec());
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+            Err(format!(
+                "unexpected callback api 0x{api:08x}; stack={stack:?}"
+            ))
+        },
+    )
+    .expect("attribute test path should survive a prior noop CALL");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+    assert_eq!(
+        observed_checkwitness,
+        Some(vec![StackValue::ByteString(vec![0; 20])])
+    );
+}
+
+#[test]
+fn attribute_test_path_survives_prior_initsslot_call_in_host_runtime() {
+    let target = vec![
+        0x58, 0xd8, 0x26, 0x28, 0x0b, 0x11, 0xc0, 0x0c, 0x1c, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x3d, 0x11, 0x4d, 0x34, 0x08, 0x60, 0x58, 0x34, 0x21,
+        0x08, 0x40, 0x57, 0x00, 0x02, 0x79, 0x37, 0x00, 0x00, 0xdb, 0x30, 0xdb, 0x28, 0x4a, 0xd8,
+        0x24, 0x09, 0x4a, 0xca, 0x00, 0x14, 0x28, 0x03, 0x3a, 0x4a, 0x78, 0x10, 0x51, 0xd0, 0x45,
+        0x40, 0x57, 0x00, 0x01, 0x78, 0x10, 0xce, 0x41, 0xf8, 0x27, 0xec, 0x8c, 0x24, 0x0e, 0x0c,
+        0x09, 0x65, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x40,
+    ];
+    let helper = vec![0x56, 0x04, 0x40]; // INITSSLOT 4; RET
+    let helper_start = 6 + target.len();
+    let mut script = vec![0x35, 0x00, 0x00, 0x00, 0x00, 0x49];
+    script.extend_from_slice(&target);
+    script.extend_from_slice(&helper);
+    let offset = helper_start as i32;
+    script[1..5].copy_from_slice(&offset.to_le_bytes());
+
+    let mut observed_checkwitness = None;
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+            if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+                observed_checkwitness = Some(stack.to_vec());
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+            Err(format!(
+                "unexpected callback api 0x{api:08x}; stack={stack:?}"
+            ))
+        },
+    )
+    .expect("attribute test path should survive a prior INITSSLOT CALL");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+    assert_eq!(
+        observed_checkwitness,
+        Some(vec![StackValue::ByteString(vec![0; 20])])
+    );
+}
+
+#[test]
+fn attribute_test_path_executes_via_minimal_initialize_wrapper_in_host_runtime() {
+    let target = vec![
+        0x58, 0xd8, 0x26, 0x28, 0x0b, 0x11, 0xc0, 0x0c, 0x1c, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+        0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x3d, 0x11, 0x4d, 0x34, 0x08, 0x60, 0x58, 0x34, 0x21,
+        0x08, 0x40, 0x57, 0x00, 0x02, 0x79, 0x37, 0x00, 0x00, 0xdb, 0x30, 0xdb, 0x28, 0x4a, 0xd8,
+        0x24, 0x09, 0x4a, 0xca, 0x00, 0x14, 0x28, 0x03, 0x3a, 0x4a, 0x78, 0x10, 0x51, 0xd0, 0x45,
+        0x40, 0x57, 0x00, 0x01, 0x78, 0x10, 0xce, 0x41, 0xf8, 0x27, 0xec, 0x8c, 0x24, 0x0e, 0x0c,
+        0x09, 0x65, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x40,
+    ];
+    let init = vec![0x56, 0x04, 0x40];
+    let wrapper_len = 12usize;
+    let target_offset = wrapper_len as i32 - 6; // target CALL_L offset from wrapper CALL at ip=6
+    let init_offset = (wrapper_len + target.len()) as i32; // init CALL_L offset from wrapper start
+
+    let mut script = vec![0x35];
+    script.extend_from_slice(&init_offset.to_le_bytes());
+    script.push(0x49); // CLEAR
+    script.push(0x35);
+    script.extend_from_slice(&target_offset.to_le_bytes());
+    script.push(0x40); // RET
+    script.extend_from_slice(&target);
+    script.extend_from_slice(&init);
+
+    let mut observed_checkwitness = None;
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+            if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+                observed_checkwitness = Some(stack.to_vec());
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Boolean(true)],
+                });
+            }
+            Err(format!(
+                "unexpected callback api 0x{api:08x}; stack={stack:?}"
+            ))
+        },
+    )
+    .expect("minimal initialize wrapper should preserve attribute test semantics");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+    assert_eq!(
+        observed_checkwitness,
+        Some(vec![StackValue::ByteString(vec![0; 20])])
+    );
+}
+
+#[test]
+fn callt_array_result_survives_prior_call_with_live_stack_in_host_runtime() {
+    let mut script = vec![
+        0x34, 0x00, // CALL helper (patched below)
+        0x49, // CLEAR
+        0x0b, // PUSHNULL
+        0x11, // PUSH1
+        0xc0, // PACK
+        0x0c, 0x1c, // PUSHDATA1 length 28
+    ];
+    script.extend_from_slice(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+    script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x4d, // PICK
+        0x34, 0x00, // CALL constructor helper (patched below)
+        0x40, // RET
+    ]);
+    let helper_start = script.len();
+    script.push(0x40); // helper: RET
+    let constructor_helper_start = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x02, // constructor helper: INITSLOT 0 2
+        0x79, // LDARG1
+        0x37, 0x00, 0x00, // CALLT 0
+        0xdb, 0x30, // CONVERT Buffer
+        0xdb, 0x28, // CONVERT ByteString
+        0x4a, // DUP
+        0xd8, // ISNULL
+        0x24, 0x09, // JMPIFNOT 9
+        0x4a, // DUP
+        0xca, // SIZE
+        0x00, 0x14, // PUSHINT8 20
+        0x28, 0x03, // JMPEQ 3
+        0x3a, // THROW
+        0x4a, // DUP
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0x51, // ROT
+        0xd0, // SETITEM
+        0x45, // DROP
+        0x40, // RET
+    ]);
+    script[1] = i8::try_from(helper_start).expect("helper offset fits in i8") as u8;
+    let constructor_call_ip = 38usize;
+    script[constructor_call_ip + 1] =
+        i8::try_from(constructor_helper_start as isize - constructor_call_ip as isize)
+            .expect("constructor helper offset fits in i8") as u8;
+
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::CALLT_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: vec![
+                        StackValue::Array(vec![StackValue::Null]),
+                        StackValue::ByteString(vec![0; 20]),
+                    ],
+                });
+            }
+
+            Err(format!(
+                "unexpected callback api 0x{api:08x}; stack={stack:?}"
+            ))
+        },
+    )
+    .expect("CALLT constructor helper should survive a prior CALL");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![StackValue::ByteString(vec![0; 20])])]
+    );
+}
+
+#[test]
 fn test_try_catch_syscall_exception() {
     // Script: TRY 0x0a00, SYSCALL 0xdeaddead, ENDTRY 0x05, PUSH1, ENDTRY 0x02, PUSH2
     // TRY=0x3b, SYSCALL=0x41, ENDTRY=0x3d, PUSH1=0x11, PUSH2=0x12
@@ -4400,7 +6921,7 @@ fn test_csharp_compiled_native_contract() {
     }
     // The contract should at least load and attempt execution without panicking
     assert!(
-        result.is_ok() || result.as_ref().err().map_or(false, |e| !e.contains("Trap")),
+        result.is_ok() || result.as_ref().err().is_some_and(|e| !e.contains("Trap")),
         "Contract should not trap: {:?}",
         result
     );

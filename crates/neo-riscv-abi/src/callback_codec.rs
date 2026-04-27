@@ -2,10 +2,24 @@ extern crate alloc;
 
 use alloc::{
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 
 use crate::StackValue;
+
+const TAG_OK_STACK: u8 = 0;
+const TAG_ERR: u8 = 1;
+const TAG_OK_EMPTY: u8 = 2;
+const TAG_OK_INTEGER: u8 = 3;
+const TAG_OK_BOOLEAN: u8 = 4;
+const TAG_OK_NULL: u8 = 5;
+const TAG_OK_BYTESTRING: u8 = 6;
+const TAG_OK_BIGINTEGER: u8 = 7;
+const TAG_OK_INTEROP: u8 = 8;
+const TAG_OK_ITERATOR: u8 = 9;
+const TAG_OK_POINTER: u8 = 10;
+const TAG_OK_BUFFER: u8 = 11;
 
 #[inline]
 pub fn encode_stack_result(result: &Result<Vec<StackValue>, String>) -> Vec<u8> {
@@ -15,15 +29,51 @@ pub fn encode_stack_result(result: &Result<Vec<StackValue>, String>) -> Vec<u8> 
     };
     let mut out = Vec::with_capacity(capacity);
     match result {
-        Ok(stack) => {
-            out.push(0);
-            encode_u32(stack.len() as u32, &mut out);
-            for item in stack {
-                encode_stack_value(item, &mut out);
+        Ok(stack) => match stack.as_slice() {
+            [] => out.push(TAG_OK_EMPTY),
+            [StackValue::Integer(value)] => {
+                out.push(TAG_OK_INTEGER);
+                out.extend_from_slice(&value.to_le_bytes());
             }
-        }
+            [StackValue::Boolean(value)] => {
+                out.push(TAG_OK_BOOLEAN);
+                out.push(u8::from(*value));
+            }
+            [StackValue::Null] => out.push(TAG_OK_NULL),
+            [StackValue::ByteString(bytes)] => {
+                out.push(TAG_OK_BYTESTRING);
+                encode_bytes(bytes, &mut out);
+            }
+            [StackValue::BigInteger(bytes)] => {
+                out.push(TAG_OK_BIGINTEGER);
+                encode_bytes(bytes, &mut out);
+            }
+            [StackValue::Interop(handle)] => {
+                out.push(TAG_OK_INTEROP);
+                out.extend_from_slice(&handle.to_le_bytes());
+            }
+            [StackValue::Iterator(handle)] => {
+                out.push(TAG_OK_ITERATOR);
+                out.extend_from_slice(&handle.to_le_bytes());
+            }
+            [StackValue::Pointer(value)] => {
+                out.push(TAG_OK_POINTER);
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+            [StackValue::Buffer(bytes)] => {
+                out.push(TAG_OK_BUFFER);
+                encode_bytes(bytes, &mut out);
+            }
+            _ => {
+                out.push(TAG_OK_STACK);
+                encode_u32(stack.len() as u32, &mut out);
+                for item in stack {
+                    encode_stack_value(item, &mut out);
+                }
+            }
+        },
         Err(message) => {
-            out.push(1);
+            out.push(TAG_ERR);
             encode_bytes(message.as_bytes(), &mut out);
         }
     }
@@ -40,7 +90,7 @@ pub fn decode_stack_result_into(
     let mut cursor = Cursor::new(bytes);
     let tag = cursor.read_u8()?;
     let value = match tag {
-        0 => {
+        TAG_OK_STACK => {
             let len = cursor.read_u32()? as usize;
             if len > MAX_COLLECTION_LEN {
                 return Err("collection length exceeds maximum".to_string());
@@ -52,10 +102,59 @@ pub fn decode_stack_result_into(
             }
             Ok(())
         }
-        1 => {
+        TAG_ERR => {
             let message = cursor.read_bytes()?.to_vec();
             Err(String::from_utf8(message)
                 .map_err(|_| "invalid utf-8 error payload".to_string())?)
+        }
+        TAG_OK_EMPTY => {
+            stack.clear();
+            Ok(())
+        }
+        TAG_OK_INTEGER => {
+            stack.clear();
+            stack.push(StackValue::Integer(cursor.read_i64()?));
+            Ok(())
+        }
+        TAG_OK_BOOLEAN => {
+            stack.clear();
+            stack.push(StackValue::Boolean(cursor.read_u8()? != 0));
+            Ok(())
+        }
+        TAG_OK_NULL => {
+            stack.clear();
+            stack.push(StackValue::Null);
+            Ok(())
+        }
+        TAG_OK_BYTESTRING => {
+            stack.clear();
+            stack.push(StackValue::ByteString(cursor.read_bytes()?.to_vec()));
+            Ok(())
+        }
+        TAG_OK_BIGINTEGER => {
+            stack.clear();
+            stack.push(StackValue::BigInteger(cursor.read_bytes()?.to_vec()));
+            Ok(())
+        }
+        TAG_OK_INTEROP => {
+            stack.clear();
+            stack.push(StackValue::Interop(cursor.read_u64()?));
+            Ok(())
+        }
+        TAG_OK_ITERATOR => {
+            stack.clear();
+            stack.push(StackValue::Iterator(cursor.read_u64()?));
+            Ok(())
+        }
+        TAG_OK_POINTER => {
+            stack.clear();
+            stack.push(StackValue::Pointer(cursor.read_i64()?));
+            Ok(())
+        }
+        TAG_OK_BUFFER => {
+            stack.clear();
+            stack.push(StackValue::Buffer(cursor.read_bytes()?.to_vec()));
+            Ok(())
         }
         _ => return Err("invalid stack result tag".to_string()),
     };
@@ -67,7 +166,7 @@ pub fn decode_stack_result(bytes: &[u8]) -> Result<Result<Vec<StackValue>, Strin
     let mut cursor = Cursor::new(bytes);
     let tag = cursor.read_u8()?;
     let value = match tag {
-        0 => {
+        TAG_OK_STACK => {
             let len = cursor.read_u32()? as usize;
             if len > MAX_COLLECTION_LEN {
                 return Err("collection length exceeds maximum".to_string());
@@ -78,11 +177,21 @@ pub fn decode_stack_result(bytes: &[u8]) -> Result<Result<Vec<StackValue>, Strin
             }
             Ok(stack)
         }
-        1 => {
+        TAG_ERR => {
             let message = cursor.read_bytes()?.to_vec();
             Err(String::from_utf8(message)
                 .map_err(|_| "invalid utf-8 error payload".to_string())?)
         }
+        TAG_OK_EMPTY => Ok(Vec::new()),
+        TAG_OK_INTEGER => Ok(vec![StackValue::Integer(cursor.read_i64()?)]),
+        TAG_OK_BOOLEAN => Ok(vec![StackValue::Boolean(cursor.read_u8()? != 0)]),
+        TAG_OK_NULL => Ok(vec![StackValue::Null]),
+        TAG_OK_BYTESTRING => Ok(vec![StackValue::ByteString(cursor.read_bytes()?.to_vec())]),
+        TAG_OK_BIGINTEGER => Ok(vec![StackValue::BigInteger(cursor.read_bytes()?.to_vec())]),
+        TAG_OK_INTEROP => Ok(vec![StackValue::Interop(cursor.read_u64()?)]),
+        TAG_OK_ITERATOR => Ok(vec![StackValue::Iterator(cursor.read_u64()?)]),
+        TAG_OK_POINTER => Ok(vec![StackValue::Pointer(cursor.read_i64()?)]),
+        TAG_OK_BUFFER => Ok(vec![StackValue::Buffer(cursor.read_bytes()?.to_vec())]),
         _ => return Err("invalid stack result tag".to_string()),
     };
     cursor.expect_eof()?;

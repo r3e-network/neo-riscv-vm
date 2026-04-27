@@ -9,16 +9,90 @@ mod pricing;
 mod profiling;
 mod runtime_cache;
 
-use bridge::{
-    read_guest_debug, read_guest_panic, read_guest_trace, read_pc_trace, ClosureHost, GuestTrace,
-};
+use bridge::{read_guest_debug, read_guest_panic, read_guest_trace, ClosureHost, GuestTrace};
 use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, VmState};
+use std::cell::Cell;
+
+thread_local! {
+    /// Instruction pointer (NEF script offset) of the most recent FAULT on this
+    /// thread, or `u32::MAX` if no attributed IP is available (HALT or FAULT
+    /// without IP). Set from the fault paths in `execute_script_with_host_and_stack_and_ip`
+    /// and siblings; retrieved via the `neo_riscv_last_fault_ip` FFI export.
+    ///
+    /// Side-channel design: avoids extending the shared `NativeExecutionResult`
+    /// struct layout, which regressed multi-test sequences in C# P/Invoke.
+    static LAST_FAULT_IP: Cell<u32> = const { Cell::new(u32::MAX) };
+
+    /// Fast-codec-serialized locals snapshot of the faulting frame, retrievable via
+    /// `neo_riscv_last_fault_locals` so the C# adapter can populate
+    /// `ExecutionContext.LocalVariables` for dev-time introspection of faulted state.
+    static LAST_FAULT_LOCALS: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+
+    /// Native PolkaVM instruction fee consumed by the most recent direct
+    /// contract execution on this thread. This lets FFI error paths report the
+    /// fee even when execution aborts before producing an ExecutionResult.
+    static LAST_NATIVE_FEE_CONSUMED_PICO: Cell<i64> = const { Cell::new(0) };
+}
+
+pub(crate) fn set_last_fault_ip(ip: Option<u32>) {
+    LAST_FAULT_IP.with(|cell| cell.set(ip.unwrap_or(u32::MAX)));
+}
+
+pub(crate) fn reset_last_fault_ip() {
+    LAST_FAULT_IP.with(|cell| cell.set(u32::MAX));
+    LAST_FAULT_LOCALS.with(|cell| cell.borrow_mut().clear());
+}
+
+pub(crate) fn last_fault_ip() -> u32 {
+    LAST_FAULT_IP.with(|cell| cell.get())
+}
+
+pub(crate) fn set_last_fault_locals(bytes: &Option<Vec<u8>>) {
+    LAST_FAULT_LOCALS.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        buf.clear();
+        if let Some(ref b) = *bytes {
+            buf.extend_from_slice(b);
+        }
+    });
+}
+
+pub(crate) fn reset_last_native_fee_consumed_pico() {
+    LAST_NATIVE_FEE_CONSUMED_PICO.with(|cell| cell.set(0));
+}
+
+pub(crate) fn set_last_native_fee_consumed_pico(value: i64) {
+    LAST_NATIVE_FEE_CONSUMED_PICO.with(|cell| cell.set(value));
+}
+
+pub(crate) fn last_native_fee_consumed_pico() -> i64 {
+    LAST_NATIVE_FEE_CONSUMED_PICO.with(|cell| cell.get())
+}
+
+/// Copies the most recently captured fault-locals byte buffer into the caller's
+/// buffer. Returns the number of bytes available. If `out_capacity` is smaller
+/// than the available length, no bytes are written (callers should call with
+/// `out_capacity = 0` first to size their buffer, then allocate and re-call).
+pub(crate) fn read_last_fault_locals(out_ptr: *mut u8, out_capacity: usize) -> usize {
+    LAST_FAULT_LOCALS.with(|cell| {
+        let buf = cell.borrow();
+        let len = buf.len();
+        if out_capacity >= len && !out_ptr.is_null() && len > 0 {
+            unsafe {
+                std::ptr::copy_nonoverlapping(buf.as_ptr(), out_ptr, len);
+            }
+        }
+        len
+    })
+}
 
 /// Maximum allowed result size from guest (16 MB).
 const MAX_RESULT_SIZE: u32 = 16 * 1024 * 1024;
 
 pub use ffi::{
-    neo_riscv_execute_native_contract, neo_riscv_execute_script,
+    neo_riscv_execute_native_contract, neo_riscv_execute_native_contract_builtin,
+    neo_riscv_execute_native_contract_builtin_by_id,
+    neo_riscv_execute_native_contract_builtin_i64_by_id, neo_riscv_execute_script,
     neo_riscv_execute_script_with_host, neo_riscv_free_execution_result, NativeExecutionResult,
     NativeHostCallback, NativeHostFreeCallback, NativeHostResult, NativeStackItem,
 };
@@ -235,6 +309,18 @@ where
     // internal trace (trace is for FFI-level errors only).
     if let Ok(ref r) = result {
         if r.state == VmState::Fault {
+            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+            // `neo_riscv_last_fault_locals()`.
+            set_last_fault_ip(r.fault_ip);
+            set_last_fault_locals(&r.fault_locals);
+            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+            // instruction ceiling): the guest only saw the import's 0-return and replied
+            // with a generic "host instruction charge failed". host.charge_error preserves
+            // the specific reason.
+            if let Some(ref msg) = host.charge_error {
+                return Err(msg.clone());
+            }
             if let Some(ref msg) = r.fault_message {
                 return Err(msg.clone());
             }
@@ -360,6 +446,18 @@ where
     // internal trace (trace is for FFI-level errors only).
     if let Ok(ref r) = result {
         if r.state == VmState::Fault {
+            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+            // `neo_riscv_last_fault_locals()`.
+            set_last_fault_ip(r.fault_ip);
+            set_last_fault_locals(&r.fault_locals);
+            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+            // instruction ceiling): the guest only saw the import's 0-return and replied
+            // with a generic "host instruction charge failed". host.charge_error preserves
+            // the specific reason.
+            if let Some(ref msg) = host.charge_error {
+                return Err(msg.clone());
+            }
             if let Some(ref msg) = r.fault_message {
                 return Err(msg.clone());
             }
@@ -395,6 +493,29 @@ pub struct HostCallbackResult {
     pub stack: Vec<neo_riscv_abi::StackValue>,
 }
 
+pub(crate) fn charge_native_metered_instructions(
+    instance: &polkavm::Instance<ClosureHost, core::convert::Infallible>,
+    host: &mut ClosureHost,
+    gas_limit: i64,
+) -> Result<(), String> {
+    let gas_remaining = instance.gas().max(0);
+    let instruction_count = gas_limit.saturating_sub(gas_remaining);
+    let result = crate::pricing::charge_native_instructions(
+        &mut host.context,
+        &mut host.fee_consumed_pico,
+        instruction_count,
+    );
+    set_last_native_fee_consumed_pico(host.fee_consumed_pico);
+    result
+}
+
+pub(crate) fn native_call_error(error: &polkavm::CallError) -> Option<&'static str> {
+    match error {
+        polkavm::CallError::NotEnoughGas => Some("Insufficient GAS."),
+        _ => None,
+    }
+}
+
 /// Execute a native RISC-V contract binary directly via PolkaVM.
 ///
 /// Unlike `execute_script_*` which runs NeoVM bytecode through the cached
@@ -420,46 +541,43 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    // Prepend method name to stack so the contract can dispatch
-    let mut full_stack = Vec::with_capacity(1 + initial_stack.len());
-    full_stack.push(neo_riscv_abi::StackValue::ByteString(
+    reset_last_native_fee_consumed_pico();
+    let stack_bytes = fast_codec::encode_stack(&initial_stack);
+    let mut fallback_full_stack = Vec::with_capacity(1 + initial_stack.len());
+    fallback_full_stack.push(neo_riscv_abi::StackValue::ByteString(
         method.as_bytes().to_vec(),
     ));
-    full_stack.extend(initial_stack);
+    fallback_full_stack.extend(initial_stack.iter().cloned());
+    let fallback_stack_bytes = fast_codec::encode_stack(&fallback_full_stack);
 
-    let stack_bytes = fast_codec::encode_stack(&full_stack);
-
-    // DEBUG: log encoded stack bytes for native contract execution
-    eprintln!(
-        "[NATIVE_DEBUG] method={} encoded_stack ({} bytes): {:?}",
-        method,
-        stack_bytes.len(),
-        &stack_bytes[..std::cmp::min(128, stack_bytes.len())]
-    );
-    let aux_size = if stack_bytes.is_empty() {
+    let max_stack_len = stack_bytes.len().max(fallback_stack_bytes.len());
+    let aux_size = if max_stack_len == 0 {
         0
     } else {
         align_up_u32(
-            u32::try_from(stack_bytes.len())
+            u32::try_from(max_stack_len)
                 .map_err(|_| "native contract stack too large".to_string())?,
             8,
         )
     };
 
-    // Compile the contract binary as a fresh PolkaVM module
-    let module = runtime_cache::compile_native_module(binary, aux_size)?;
-
-    // Link with the same host functions (host_call, host_on_instruction)
-    let mut linker = polkavm::Linker::<bridge::ClosureHost, core::convert::Infallible>::new();
-    bridge::register_host_functions(&mut linker)?;
-    let instance_pre = linker.instantiate_pre(&module).map_err(|e| e.to_string())?;
-    let mut instance = instance_pre.instantiate().map_err(|e| e.to_string())?;
+    let mut cached_instance = runtime_cache::cached_native_execution_instance(binary, aux_size)?;
+    let aux_base = if !stack_bytes.is_empty() {
+        cached_instance.module().memory_map().aux_data_address()
+    } else {
+        0
+    };
+    let has_execute_method = cached_instance
+        .module()
+        .exports()
+        .any(|export| export.symbol().as_bytes() == b"execute_method");
+    let instance = cached_instance.instance_mut();
 
     let mut host = bridge::ClosureHost::new(context, &mut callback);
+    let native_gas_limit = crate::pricing::native_instruction_limit(&host.context);
 
     // Write serialized stack to aux memory
     let stack_ptr = if !stack_bytes.is_empty() {
-        let aux_base = module.memory_map().aux_data_address();
         if aux_size > 0 {
             instance
                 .set_accessible_aux_size(aux_size)
@@ -477,290 +595,92 @@ where
         .try_into()
         .map_err(|_| "native contract stack too large for u32".to_string())?;
 
-    // Call the contract's execute entry point
-    let call_result = instance.call_typed(&mut host, "execute", (stack_ptr, stack_len));
+    let method_id = native_method_id(method);
+    instance.set_gas(native_gas_limit);
+    let call_result = match instance.call_typed(
+        &mut host,
+        "execute_method",
+        (method_id, stack_ptr, stack_len),
+    ) {
+        Ok(()) => Ok(()),
+        Err(_) if !has_execute_method => {
+            let full_stack_len: u32 = fallback_stack_bytes
+                .len()
+                .try_into()
+                .map_err(|_| "native contract stack too large for u32".to_string())?;
 
-    // DEBUG: log execution diagnostics
-    {
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/neo-riscv-bridge-debug.log")
-        {
-            let _ = writeln!(f, "[HOST] execute returned: {:?}", call_result.is_ok());
-            let _ = writeln!(
-                f,
-                "[HOST] opcode_count={} syscall_count={} last_api=0x{:08x} last_host_call_stage={}",
-                host.opcode_count,
-                host.syscall_count,
-                host.last_api.unwrap_or(0),
-                host.last_host_call_stage
-            );
-            let _ = writeln!(
-                f,
-                "[HOST] fee_consumed_pico={} gas_left={}",
-                host.fee_consumed_pico, host.context.gas_left
-            );
-            // Read guest-side debug buffer
-            if let Some(debug_bytes) = read_guest_debug(&mut instance, &mut host) {
-                let _ = writeln!(f, "[HOST] guest_debug: {} bytes", debug_bytes.len());
-                // Parse debug records: each is 23 bytes + variable fault msg
-                let mut offset = 0;
-                while offset + 23 <= debug_bytes.len() {
-                    let step = debug_bytes[offset];
-                    let api =
-                        u32::from_le_bytes(debug_bytes[offset + 1..offset + 5].try_into().unwrap());
-                    let stack_len =
-                        u32::from_le_bytes(debug_bytes[offset + 5..offset + 9].try_into().unwrap());
-                    let arg_count = u32::from_le_bytes(
-                        debug_bytes[offset + 9..offset + 13].try_into().unwrap(),
-                    );
-                    let encoded_len = u32::from_le_bytes(
-                        debug_bytes[offset + 13..offset + 17].try_into().unwrap(),
-                    );
-                    let result_len = u32::from_le_bytes(
-                        debug_bytes[offset + 17..offset + 21].try_into().unwrap(),
-                    );
-                    let fault_len = u16::from_le_bytes(
-                        debug_bytes[offset + 21..offset + 23].try_into().unwrap(),
-                    );
-                    let fault =
-                        if fault_len > 0 && offset + 23 + fault_len as usize <= debug_bytes.len() {
-                            String::from_utf8_lossy(
-                                &debug_bytes[offset + 23..offset + 23 + fault_len as usize],
-                            )
-                            .to_string()
-                        } else {
-                            String::new()
-                        };
-                    let _ = writeln!(f, "[GUEST] step={} api=0x{:08x} stack_len={} arg_count={} encoded_len={} result_len={} fault={:?}",
-                        step, api, stack_len, arg_count, encoded_len, result_len, fault);
-                    offset += 23 + fault_len as usize;
-                }
+            if aux_size > 0 {
+                instance
+                    .set_accessible_aux_size(aux_size)
+                    .map_err(|e| format!("native aux setup failed: {e}"))?;
             }
-            // Read PC trace
-            if let Some(pc_bytes) = read_pc_trace(&mut instance, &mut host) {
-                let _ = writeln!(f, "[HOST] pc_trace: {:?}", pc_bytes);
-            }
-            // Read diagnostic buffer
-            let diag_ptr_res =
-                instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_ptr", ());
-            let diag_len_res =
-                instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_diag_len", ());
-            let _ = writeln!(
-                f,
-                "[HOST] diag_ptr_res={:?} diag_len_res={:?}",
-                diag_ptr_res, diag_len_res
-            );
-            if let (Ok(diag_ptr), Ok(diag_len)) = (diag_ptr_res, diag_len_res) {
-                if diag_len > 0 {
-                    let mut diag_bytes = vec![0u8; diag_len as usize];
-                    if instance
-                        .read_memory_into(diag_ptr, &mut diag_bytes[..])
-                        .is_ok()
-                    {
-                        let _ = writeln!(f, "[HOST] diag: {} bytes", diag_bytes.len());
-                        // Parse: markers 0xA0=args_after_init, 0xA1=args_before_put, 0xA2=locals, 0xA3=stack_before_put
-                        let mut i = 0;
-                        while i < diag_bytes.len() {
-                            let marker = diag_bytes[i];
-                            i += 1;
-                            if marker == 0xA0 || marker == 0xA1 {
-                                if i + 4 > diag_bytes.len() {
-                                    break;
-                                }
-                                let count =
-                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
-                                i += 4;
-                                let label = if marker == 0xA0 {
-                                    "args_init"
-                                } else {
-                                    "args_pre_put"
-                                };
-                                let _ = write!(f, "[HOST] diag {label}({count}): ");
-                                for _ in 0..count {
-                                    if i >= diag_bytes.len() {
-                                        break;
-                                    }
-                                    let typ = diag_bytes[i];
-                                    i += 1;
-                                    match typ {
-                                        1 => {
-                                            // Integer
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let _ = write!(f, "Int({v}) ");
-                                        }
-                                        3 => {
-                                            // ByteString
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let len = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let data_end = (i + len as usize).min(diag_bytes.len());
-                                            let data = &diag_bytes[i..data_end];
-                                            i += len as usize;
-                                            let _ = write!(
-                                                f,
-                                                "Bytes({len}:{:?}) ",
-                                                core::str::from_utf8(data).unwrap_or("<bin>")
-                                            );
-                                        }
-                                        4 => {
-                                            // Boolean
-                                            if i >= diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = diag_bytes[i];
-                                            i += 1;
-                                            let _ = write!(f, "Bool({v}) ");
-                                        }
-                                        _ => {
-                                            let _ = write!(f, "Unknown({typ}) ");
-                                        }
-                                    }
-                                }
-                                let _ = writeln!(f, "");
-                            } else if marker == 0xA2 {
-                                if i + 4 > diag_bytes.len() {
-                                    break;
-                                }
-                                let count =
-                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
-                                i += 4;
-                                let _ = write!(f, "[HOST] diag locals({count}): ");
-                                for _ in 0..count {
-                                    if i >= diag_bytes.len() {
-                                        break;
-                                    }
-                                    let typ = diag_bytes[i];
-                                    i += 1;
-                                    match typ {
-                                        1 => {
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let _ = write!(f, "Int({v}) ");
-                                        }
-                                        3 => {
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let len = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let data_end = (i + len as usize).min(diag_bytes.len());
-                                            let data = &diag_bytes[i..data_end];
-                                            i += len as usize;
-                                            let _ = write!(
-                                                f,
-                                                "Bytes({len}:{:?}) ",
-                                                core::str::from_utf8(data).unwrap_or("<bin>")
-                                            );
-                                        }
-                                        4 => {
-                                            if i >= diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = diag_bytes[i];
-                                            i += 1;
-                                            let _ = write!(f, "Bool({v}) ");
-                                        }
-                                        _ => {
-                                            let _ = write!(f, "Unknown({typ}) ");
-                                        }
-                                    }
-                                }
-                                let _ = writeln!(f, "");
-                            } else if marker == 0xA3 {
-                                if i + 4 > diag_bytes.len() {
-                                    break;
-                                }
-                                let count =
-                                    u32::from_le_bytes(diag_bytes[i..i + 4].try_into().unwrap());
-                                i += 4;
-                                let _ = write!(f, "[HOST] diag stack_pre_put({count}): ");
-                                for _ in 0..count {
-                                    if i >= diag_bytes.len() {
-                                        break;
-                                    }
-                                    let typ = diag_bytes[i];
-                                    i += 1;
-                                    match typ {
-                                        1 => {
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let _ = write!(f, "Int({v}) ");
-                                        }
-                                        3 => {
-                                            if i + 4 > diag_bytes.len() {
-                                                break;
-                                            }
-                                            let len = u32::from_le_bytes(
-                                                diag_bytes[i..i + 4].try_into().unwrap(),
-                                            );
-                                            i += 4;
-                                            let data_end = (i + len as usize).min(diag_bytes.len());
-                                            let data = &diag_bytes[i..data_end];
-                                            i += len as usize;
-                                            let _ = write!(
-                                                f,
-                                                "Bytes({len}:{:?}) ",
-                                                core::str::from_utf8(data).unwrap_or("<bin>")
-                                            );
-                                        }
-                                        4 => {
-                                            if i >= diag_bytes.len() {
-                                                break;
-                                            }
-                                            let v = diag_bytes[i];
-                                            i += 1;
-                                            let _ = write!(f, "Bool({v}) ");
-                                        }
-                                        _ => {
-                                            let _ = write!(f, "Unknown({typ}) ");
-                                        }
-                                    }
-                                }
-                                let _ = writeln!(f, "");
-                            } else {
-                                let _ = writeln!(f, "[HOST] diag unknown marker 0x{marker:02x}");
-                            }
-                        }
-                    }
-                }
-            }
+            instance
+                .write_memory(aux_base, &fallback_stack_bytes)
+                .map_err(|e| format!("native write_memory failed: {e:?}"))?;
+
+            instance.call_typed(&mut host, "execute", (stack_ptr, full_stack_len))
         }
+        Err(error) => Err(error),
+    };
+
+    if let Err(error) = call_result {
+        let charge_error =
+            charge_native_metered_instructions(instance, &mut host, native_gas_limit).err();
+        if let Some(message) = charge_error
+            .as_deref()
+            .or_else(|| native_call_error(&error).or(host.charge_error.as_deref()))
+        {
+            return Err(message.to_string());
+        }
+        instance.set_gas(crate::pricing::NEO_INSTRUCTION_CEILING as i64);
+        let trace = read_guest_trace(instance, &mut host);
+        let panic_msg = read_guest_panic(instance, &mut host);
+        let debug = read_guest_debug(instance, &mut host);
+        let alloc_peak = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ())
+            .unwrap_or(0);
+        let alloc_fails = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ())
+            .unwrap_or(0);
+        let alloc_fail_size = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ())
+            .unwrap_or(0);
+        return Err(format!(
+            "native contract execute failed: {error:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; trace={trace:?}; panic={panic_msg:?}; debug={debug:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+            host.last_opcode,
+            host.opcode_count,
+            host.syscall_count,
+            host.last_api,
+            host.last_ip,
+            host.last_stack_len,
+            host.last_result_cap,
+            host.last_host_call_stage
+        ));
     }
 
-    call_result.map_err(|e| format!("native contract execute failed: {e:?}"))?;
-
     // Read result back
-    let res_ptr: u32 = instance
-        .call_typed_and_get_result::<u32, ()>(&mut host, "get_result_ptr", ())
-        .map_err(|e| format!("native get_result_ptr failed: {e:?}"))?;
-    let res_len: u32 = instance
-        .call_typed_and_get_result::<u32, ()>(&mut host, "get_result_len", ())
-        .map_err(|e| format!("native get_result_len failed: {e:?}"))?;
+    let res_ptr: u32 =
+        match instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_result_ptr", ()) {
+            Ok(value) => value,
+            Err(error) => {
+                charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+                if let Some(message) = native_call_error(&error) {
+                    return Err(message.to_string());
+                }
+                return Err(format!("native get_result_ptr failed: {error:?}"));
+            }
+        };
+    let res_len: u32 =
+        match instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_result_len", ()) {
+            Ok(value) => value,
+            Err(error) => {
+                charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+                if let Some(message) = native_call_error(&error) {
+                    return Err(message.to_string());
+                }
+                return Err(format!("native get_result_len failed: {error:?}"));
+            }
+        };
 
     if res_len > MAX_RESULT_SIZE {
         return Err(format!(
@@ -772,9 +692,11 @@ where
         .read_memory_into(res_ptr, &mut res_bytes[..])
         .map_err(|e| format!("native read_memory failed: {e:?}"))?;
 
+    charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+
     // Debug: uncomment to trace RESULT_BYTES
     // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
-    let mut result: Result<ExecutionResult, String> = postcard::from_bytes(&res_bytes)
+    let mut result = neo_riscv_abi::result_codec::decode_execution_result(&res_bytes)
         .map_err(|_| "failed to decode native result".to_string())?;
 
     if let Ok(ref mut r) = result {
@@ -785,6 +707,18 @@ where
     // (consistent with execute_script_* paths).
     if let Ok(ref r) = result {
         if r.state == VmState::Fault {
+            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+            // `neo_riscv_last_fault_locals()`.
+            set_last_fault_ip(r.fault_ip);
+            set_last_fault_locals(&r.fault_locals);
+            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+            // instruction ceiling): the guest only saw the import's 0-return and replied
+            // with a generic "host instruction charge failed". host.charge_error preserves
+            // the specific reason.
+            if let Some(ref msg) = host.charge_error {
+                return Err(msg.clone());
+            }
             if let Some(ref msg) = r.fault_message {
                 return Err(msg.clone());
             }
@@ -792,6 +726,15 @@ where
     }
 
     result
+}
+
+fn native_method_id(method: &str) -> u32 {
+    let mut hash: u32 = 2166136261;
+    for byte in method.as_bytes() {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(16777619);
+    }
+    hash
 }
 
 pub fn execute_script_with_host<F>(
@@ -810,7 +753,171 @@ where
     execute_script_with_host_and_stack(script, Vec::new(), context, callback)
 }
 
-fn builtin_host_callback(
+pub fn execute_native_contract_builtin(
+    binary: &[u8],
+    method: &str,
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    context: RuntimeContext,
+) -> Result<ExecutionResult, String> {
+    execute_native_contract_builtin_by_id(binary, native_method_id(method), initial_stack, context)
+}
+
+pub fn execute_native_contract_builtin_by_id(
+    binary: &[u8],
+    method_id: u32,
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    context: RuntimeContext,
+) -> Result<ExecutionResult, String> {
+    reset_last_native_fee_consumed_pico();
+    let stack_bytes = fast_codec::encode_stack(&initial_stack);
+    let max_stack_len = stack_bytes.len();
+    let aux_size = if max_stack_len == 0 {
+        0
+    } else {
+        align_up_u32(
+            u32::try_from(max_stack_len)
+                .map_err(|_| "native contract stack too large".to_string())?,
+            8,
+        )
+    };
+
+    let mut cached_instance = runtime_cache::cached_native_execution_instance(binary, aux_size)?;
+    let aux_base = if !stack_bytes.is_empty() {
+        cached_instance.module().memory_map().aux_data_address()
+    } else {
+        0
+    };
+    let instance = cached_instance.instance_mut();
+    let mut host = bridge::ClosureHost::new_builtin(context);
+    let native_gas_limit = crate::pricing::native_instruction_limit(&host.context);
+
+    let stack_ptr = if !stack_bytes.is_empty() {
+        if aux_size > 0 {
+            instance
+                .set_accessible_aux_size(aux_size)
+                .map_err(|e| format!("native aux setup failed: {e}"))?;
+        }
+        instance
+            .write_memory(aux_base, &stack_bytes)
+            .map_err(|e| format!("native write_memory failed: {e:?}"))?;
+        aux_base
+    } else {
+        0
+    };
+    let stack_len: u32 = stack_bytes
+        .len()
+        .try_into()
+        .map_err(|_| "native contract stack too large for u32".to_string())?;
+
+    instance.set_gas(native_gas_limit);
+    let call_result = instance.call_typed(
+        &mut host,
+        "execute_method",
+        (method_id, stack_ptr, stack_len),
+    );
+
+    if let Err(error) = call_result {
+        let charge_error =
+            charge_native_metered_instructions(instance, &mut host, native_gas_limit).err();
+        if let Some(message) = charge_error
+            .as_deref()
+            .or_else(|| native_call_error(&error).or(host.charge_error.as_deref()))
+        {
+            return Err(message.to_string());
+        }
+        instance.set_gas(crate::pricing::NEO_INSTRUCTION_CEILING as i64);
+        let trace = read_guest_trace(instance, &mut host);
+        let panic_msg = read_guest_panic(instance, &mut host);
+        let debug = read_guest_debug(instance, &mut host);
+        let alloc_peak = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ())
+            .unwrap_or(0);
+        let alloc_fails = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ())
+            .unwrap_or(0);
+        let alloc_fail_size = instance
+            .call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ())
+            .unwrap_or(0);
+        return Err(format!(
+            "native contract execute failed: {error:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; trace={trace:?}; panic={panic_msg:?}; debug={debug:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+            host.last_opcode,
+            host.opcode_count,
+            host.syscall_count,
+            host.last_api,
+            host.last_ip,
+            host.last_stack_len,
+            host.last_result_cap,
+            host.last_host_call_stage
+        ));
+    }
+
+    let res_ptr: u32 =
+        match instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_result_ptr", ()) {
+            Ok(value) => value,
+            Err(error) => {
+                charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+                if let Some(message) = native_call_error(&error) {
+                    return Err(message.to_string());
+                }
+                return Err(format!("native get_result_ptr failed: {error:?}"));
+            }
+        };
+    let res_len: u32 =
+        match instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_result_len", ()) {
+            Ok(value) => value,
+            Err(error) => {
+                charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+                if let Some(message) = native_call_error(&error) {
+                    return Err(message.to_string());
+                }
+                return Err(format!("native get_result_len failed: {error:?}"));
+            }
+        };
+
+    if res_len > MAX_RESULT_SIZE {
+        return Err(format!(
+            "native result size {res_len} exceeds maximum {MAX_RESULT_SIZE}"
+        ));
+    }
+    let mut res_bytes = vec![0u8; res_len as usize];
+    instance
+        .read_memory_into(res_ptr, &mut res_bytes[..])
+        .map_err(|e| format!("native read_memory failed: {e:?}"))?;
+
+    charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
+
+    let mut result = neo_riscv_abi::result_codec::decode_execution_result(&res_bytes)
+        .map_err(|_| "failed to decode native result".to_string())?;
+
+    if let Ok(ref mut r) = result {
+        r.fee_consumed_pico = host.fee_consumed_pico;
+    }
+
+    if let Ok(ref r) = result {
+        if r.state == VmState::Fault {
+            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+            // `neo_riscv_last_fault_locals()`.
+            set_last_fault_ip(r.fault_ip);
+            set_last_fault_locals(&r.fault_locals);
+            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+            // instruction ceiling): the guest only saw the import's 0-return and replied
+            // with a generic "host instruction charge failed". host.charge_error preserves
+            // the specific reason.
+            if let Some(ref msg) = host.charge_error {
+                return Err(msg.clone());
+            }
+            if let Some(ref msg) = r.fault_message {
+                return Err(msg.clone());
+            }
+        }
+    }
+
+    result
+}
+
+#[allow(clippy::if_same_then_else)]
+pub(crate) fn builtin_host_callback(
     api: u32,
     context: RuntimeContext,
     _stack: &[neo_riscv_abi::StackValue],

@@ -22,11 +22,21 @@ namespace Neo.SmartContract.RiscV
 
         public Exception? FaultException { get; }
 
-        public RiscvExecutionResult(VMState state, IEnumerable<StackItem> resultStack, Exception? faultException)
+        /// <summary>
+        /// Instruction pointer (NEF script offset) at which the FAULT was raised, or
+        /// <see langword="null"/> for HALT / when the native side did not attribute an IP
+        /// (sentinel value <c>uint.MaxValue</c>). Used by <see cref="RiscvApplicationEngine"/>
+        /// to restore the faulting <see cref="ExecutionContext.InstructionPointer"/> so
+        /// dev-time tests asserting exact fault offsets see the real opcode offset.
+        /// </summary>
+        public int? FaultIp { get; }
+
+        public RiscvExecutionResult(VMState state, IEnumerable<StackItem> resultStack, Exception? faultException, int? faultIp = null)
         {
             State = state;
             ResultStack = resultStack?.ToArray() ?? throw new ArgumentNullException(nameof(resultStack));
             FaultException = faultException;
+            FaultIp = faultIp;
         }
     }
 }

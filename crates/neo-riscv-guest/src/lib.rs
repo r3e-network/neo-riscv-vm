@@ -17,6 +17,7 @@ use crate::runtime_types::{
 struct TryFrame {
     catch_ip: usize,
     finally_ip: usize,
+    call_depth: usize,
     caught: bool,
     in_finally: bool,
     end_ip: usize,
@@ -25,10 +26,136 @@ struct TryFrame {
 /// Fixed-capacity stack for TryFrames — avoids heap allocation to prevent
 /// PolkaVM bump allocator corruption during host_call round-trips.
 const MAX_TRY_NESTING: usize = 16;
+const MAX_CALL_DEPTH: usize = 64;
 
 struct TryStack {
     frames: [core::mem::MaybeUninit<TryFrame>; MAX_TRY_NESTING],
     len: usize,
+}
+
+struct CallFrame {
+    return_ip: usize,
+    initialized: bool,
+    #[cfg(target_arch = "riscv32")]
+    retained_offset: usize,
+    #[cfg(target_arch = "riscv32")]
+    args_len: usize,
+    #[cfg(target_arch = "riscv32")]
+    locals_len: usize,
+    #[cfg(not(target_arch = "riscv32"))]
+    locals: Vec<StackValue>,
+    #[cfg(not(target_arch = "riscv32"))]
+    args: Vec<StackValue>,
+}
+
+type RestoredCallFrame = (usize, Vec<StackValue>, Vec<StackValue>, bool);
+
+struct CallStack {
+    frames: [core::mem::MaybeUninit<CallFrame>; MAX_CALL_DEPTH],
+    len: usize,
+    #[cfg(target_arch = "riscv32")]
+    retained_len: usize,
+}
+
+impl CallStack {
+    #[inline]
+    fn new() -> Self {
+        Self {
+            // Safety: MaybeUninit does not require initialization
+            frames: unsafe { core::mem::MaybeUninit::uninit().assume_init() },
+            len: 0,
+            #[cfg(target_arch = "riscv32")]
+            retained_len: 0,
+        }
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn push_frame(
+        &mut self,
+        return_ip: usize,
+        locals: Vec<StackValue>,
+        args: Vec<StackValue>,
+        initialized: bool,
+    ) -> Result<(), String> {
+        if self.len >= MAX_CALL_DEPTH {
+            return Err("call depth exceeds maximum".to_string());
+        }
+
+        #[cfg(target_arch = "riscv32")]
+        {
+            let retained_offset = self.retained_len;
+            let buf = unsafe { RETAINED_CALL_STACK_BUF.as_mut_slice() };
+            let args_len = encode_retained_prefix_to_slice(&args, &mut buf[retained_offset..])?;
+            let locals_offset = retained_offset + args_len;
+            let locals_len = encode_retained_prefix_to_slice(&locals, &mut buf[locals_offset..])?;
+            self.retained_len = locals_offset + locals_len;
+
+            self.frames[self.len] = core::mem::MaybeUninit::new(CallFrame {
+                return_ip,
+                initialized,
+                #[cfg(target_arch = "riscv32")]
+                retained_offset,
+                #[cfg(target_arch = "riscv32")]
+                args_len,
+                #[cfg(target_arch = "riscv32")]
+                locals_len,
+            });
+        }
+        #[cfg(not(target_arch = "riscv32"))]
+        {
+            self.frames[self.len] = core::mem::MaybeUninit::new(CallFrame {
+                return_ip,
+                initialized,
+                #[cfg(not(target_arch = "riscv32"))]
+                locals,
+                #[cfg(not(target_arch = "riscv32"))]
+                args,
+            });
+        }
+        self.len += 1;
+        Ok(())
+    }
+
+    fn pop_and_restore(&mut self) -> Result<Option<RestoredCallFrame>, String> {
+        if self.len == 0 {
+            return Ok(None);
+        }
+
+        self.len -= 1;
+        // Safety: frames[self.len] was previously initialized by push_frame()
+        let frame = unsafe { self.frames[self.len].assume_init_read() };
+        #[cfg(target_arch = "riscv32")]
+        {
+            let locals_offset = frame.retained_offset + frame.args_len;
+            let end = locals_offset + frame.locals_len;
+            let bytes = unsafe { RETAINED_CALL_STACK_BUF.as_slice(end) };
+
+            let mut args = Vec::new();
+            decode_retained_prefix_into(
+                &bytes[frame.retained_offset..frame.retained_offset + frame.args_len],
+                &mut args,
+            )?;
+
+            let mut locals = Vec::new();
+            decode_retained_prefix_into(&bytes[locals_offset..end], &mut locals)?;
+
+            self.retained_len = frame.retained_offset;
+            Ok(Some((frame.return_ip, locals, args, frame.initialized)))
+        }
+        #[cfg(not(target_arch = "riscv32"))]
+        {
+            Ok(Some((
+                frame.return_ip,
+                frame.locals,
+                frame.args,
+                frame.initialized,
+            )))
+        }
+    }
 }
 
 impl TryStack {
@@ -75,16 +202,25 @@ impl TryStack {
         Some(unsafe { self.frames[self.len - 1].assume_init_mut() })
     }
 
-    /// Find the last uncaught frame (iterating in reverse)
-    fn find_uncaught_mut(&mut self) -> Option<&mut TryFrame> {
+    /// Find the last uncaught frame index (iterating in reverse)
+    fn find_uncaught_index(&self) -> Option<usize> {
         for i in (0..self.len).rev() {
             // Safety: frames[i] was previously initialized by push()
-            let frame = unsafe { &mut *self.frames[i].as_mut_ptr() };
+            let frame = unsafe { &*self.frames[i].as_ptr() };
             if !frame.caught {
-                return Some(frame);
+                return Some(i);
             }
         }
         None
+    }
+
+    #[inline]
+    fn get_mut(&mut self, index: usize) -> Option<&mut TryFrame> {
+        if index >= self.len {
+            return None;
+        }
+        // Safety: frames[index] was previously initialized by push()
+        Some(unsafe { self.frames[index].assume_init_mut() })
     }
 }
 
@@ -164,18 +300,39 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         .collect::<Vec<_>>();
     let mut ip = initial_ip;
     let mut locals: Vec<StackValue> = Vec::with_capacity(16);
+    let mut args: Vec<StackValue> = Vec::with_capacity(16);
     let mut static_fields: Vec<StackValue> = Vec::with_capacity(16);
-    let mut locals_initialized = false;
+    let mut slots_initialized = false;
     let mut static_fields_initialized = false;
     let mut alt_stack: Vec<StackValue> = Vec::with_capacity(16);
     let mut try_frames = TryStack::new();
-    let mut call_stack: Vec<(usize, Vec<StackValue>, bool)> = Vec::with_capacity(16);
+    let mut call_stack = CallStack::new();
     let mut pending_error: Option<String> = None;
+    let mut previous_opcode_was_callt = false;
 
     'main_loop: loop {
         if pending_error.is_some() {
             // Find the topmost un-caught frame
-            if let Some(frame) = try_frames.find_uncaught_mut() {
+            if let Some(frame_index) = try_frames.find_uncaught_index() {
+                let frame_call_depth = try_frames
+                    .get_mut(frame_index)
+                    .map(|frame| frame.call_depth)
+                    .unwrap_or(call_stack.len());
+                while call_stack.len() > frame_call_depth {
+                    if let Some((_, saved_locals, saved_args, saved_init)) =
+                        call_stack.pop_and_restore()?
+                    {
+                        locals = saved_locals;
+                        args = saved_args;
+                        slots_initialized = saved_init;
+                    }
+                }
+                while try_frames.len > frame_index + 1 {
+                    try_frames.pop();
+                }
+                let frame = try_frames
+                    .get_mut(frame_index)
+                    .ok_or_else(|| "missing try frame during exception unwind".to_string())?;
                 frame.caught = true;
                 // Save frame fields into locals BEFORE any allocating operations.
                 // Under PolkaVM's bump allocator, host-call round-trips can reset the
@@ -213,6 +370,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
 
         let opcode = script[ip];
         host.on_instruction(opcode)?;
+        let callt_result_pending_store = previous_opcode_was_callt;
+        previous_opcode_was_callt = false;
         match opcode {
             // =============================================================================
             // PUSH OPCODES (0x00-0x20)
@@ -425,14 +584,41 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 continue;
             }
             ABORT => {
-                // ABORT is uncatchable — always FAULT
-                return Err("ABORT".to_string());
+                // ABORT is uncatchable — always FAULT. Return via the Ok(Fault) channel
+                // so we can attribute the faulting IP; the host converts this back to an
+                // Err(String) at the FFI boundary (lib.rs fault-message override).
+                return Ok(ExecutionResult {
+                    fee_consumed_pico: 0,
+                    state: VmState::Fault,
+                    stack: to_abi_stack(&stack),
+                    fault_message: Some("ABORT".to_string()),
+                    fault_ip: Some(ip as u32),
+                    fault_locals: {
+                        let cloned = locals.clone();
+                        Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                            &cloned,
+                        )))
+                    },
+                });
             }
             ASSERT => {
                 let value = pop_boolean(&mut stack)?;
                 if !value {
-                    // ASSERT is uncatchable — always FAULT
-                    return Err("ASSERT failed".to_string());
+                    // ASSERT is uncatchable — always FAULT. Same Ok(Fault) channel as ABORT
+                    // so the faulting IP is preserved.
+                    return Ok(ExecutionResult {
+                        fee_consumed_pico: 0,
+                        state: VmState::Fault,
+                        stack: to_abi_stack(&stack),
+                        fault_message: Some("ASSERT failed".to_string()),
+                        fault_ip: Some(ip as u32),
+                        fault_locals: {
+                            let cloned = locals.clone();
+                            Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                                &cloned,
+                            )))
+                        },
+                    });
                 }
             }
             SYSCALL => {
@@ -451,6 +637,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     api,
                     ip,
                     &mut stack,
+                    &mut args,
                     &mut locals,
                     &mut static_fields,
                     &mut alt_stack,
@@ -470,13 +657,24 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("truncated CALLT operand".to_string());
                 }
                 let token = u16::from_le_bytes([script[ip + 1], script[ip + 2]]);
-                if let Err(e) = invoke_callt(host, token, ip, &mut stack, &mut ids) {
+                if let Err(e) = invoke_callt(
+                    host,
+                    token,
+                    ip,
+                    &mut stack,
+                    &mut args,
+                    &mut locals,
+                    &mut static_fields,
+                    &mut alt_stack,
+                    &mut ids,
+                ) {
                     if try_frames.is_empty() {
                         return Err(e);
                     }
                     pending_error = Some(e);
                     continue;
                 }
+                previous_opcode_was_callt = true;
                 ip += 3;
                 continue;
             }
@@ -530,28 +728,48 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if local_count == 0 && arg_count == 0 {
                     return Err("INITSLOT with 0 args and 0 locals is not allowed".to_string());
                 }
-                if locals_initialized {
+                if slots_initialized {
                     return Err("slots already initialized".to_string());
                 }
-                // Neo N3: INITSLOT allocates locals[arg_count..arg_count+local_count-1] as Null,
-                // and pops arg_count items from the eval stack into locals[0..arg_count-1].
-                let mut new_locals = Vec::with_capacity(arg_count + local_count);
-                for _ in 0..arg_count {
-                    new_locals.push(
-                        stack
+                // NeoVM keeps arguments and locals in separate slot arrays.
+                let new_locals = vec![StackValue::Null; local_count];
+                let new_args = if cfg!(target_arch = "riscv32") && arg_count > 0 {
+                    let buf = unsafe { RETAINED_ARGS_BUF.as_mut_slice() };
+                    ensure_retained_capacity(buf, 0, 4)?;
+                    buf[0..4].copy_from_slice(&(arg_count as u32).to_le_bytes());
+                    let mut pos = 4;
+                    for _ in 0..arg_count {
+                        let value = stack
                             .pop()
-                            .ok_or_else(|| "stack underflow for INITSLOT args".to_string())?,
-                    );
-                }
-                // NeoVM: args are stored in pop order (top of stack = arg0)
-                new_locals.resize(arg_count + local_count, StackValue::Null);
+                            .ok_or_else(|| "stack underflow for INITSLOT args".to_string())?;
+                        pos = encode_retained_value_to_slice(&value, buf, pos)?;
+                    }
+                    let mut restored = Vec::with_capacity(arg_count);
+                    decode_retained_prefix_into(&buf[..pos], &mut restored)?;
+                    restored
+                } else {
+                    let mut restored = Vec::with_capacity(arg_count);
+                    for _ in 0..arg_count {
+                        restored.push(
+                            stack
+                                .pop()
+                                .ok_or_else(|| "stack underflow for INITSLOT args".to_string())?,
+                        );
+                    }
+                    restored
+                };
+                args = new_args;
                 locals = new_locals;
-                locals_initialized = true;
+                slots_initialized = true;
                 ip += 3;
                 continue;
             }
             LDSFLD0..=LDSFLD6 => {
                 let index = (opcode - LDSFLD0) as usize;
+                if index >= static_fields.len() {
+                    static_fields.resize(index + 1, StackValue::Null);
+                    static_fields_initialized = true;
+                }
                 let value = static_fields
                     .get(index)
                     .cloned()
@@ -563,6 +781,10 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("truncated LDSFLD operand".to_string());
                 }
                 let index = script[ip + 1] as usize;
+                if index >= static_fields.len() {
+                    static_fields.resize(index + 1, StackValue::Null);
+                    static_fields_initialized = true;
+                }
                 let value = static_fields
                     .get(index)
                     .cloned()
@@ -595,6 +817,19 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             STLOC0..=STLOC6 => {
                 let index = (opcode - STLOC0) as usize;
                 let value = pop_item(&mut stack)?;
+                let value = if callt_result_pending_store
+                    && cfg!(target_arch = "riscv32")
+                    && matches!(
+                        value,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&value)
+                } else {
+                    value
+                };
                 let slot = locals
                     .get_mut(index)
                     .ok_or_else(|| "invalid local index".to_string())?;
@@ -603,6 +838,23 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             STSFLD0..=STSFLD6 => {
                 let index = (opcode - STSFLD0) as usize;
                 let value = pop_item(&mut stack)?;
+                let value = if callt_result_pending_store
+                    && cfg!(target_arch = "riscv32")
+                    && matches!(
+                        value,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&value)
+                } else {
+                    value
+                };
+                if index >= static_fields.len() {
+                    static_fields.resize(index + 1, StackValue::Null);
+                    static_fields_initialized = true;
+                }
                 let slot = static_fields
                     .get_mut(index)
                     .ok_or_else(|| "invalid static field index".to_string())?;
@@ -614,6 +866,10 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let index = script[ip + 1] as usize;
                 let value = pop_item(&mut stack)?;
+                if index >= static_fields.len() {
+                    static_fields.resize(index + 1, StackValue::Null);
+                    static_fields_initialized = true;
+                }
                 let slot = static_fields
                     .get_mut(index)
                     .ok_or_else(|| "invalid static field index".to_string())?;
@@ -627,6 +883,19 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let index = script[ip + 1] as usize;
                 let value = pop_item(&mut stack)?;
+                let value = if callt_result_pending_store
+                    && cfg!(target_arch = "riscv32")
+                    && matches!(
+                        value,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&value)
+                } else {
+                    value
+                };
                 let slot = locals
                     .get_mut(index)
                     .ok_or_else(|| "invalid local index".to_string())?;
@@ -780,15 +1049,15 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 ));
             }
             ADD => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 let sum = left
                     .checked_add(right)
                     .ok_or_else(|| "integer overflow for ADD".to_string())?;
                 stack.push(StackValue::Integer(sum));
             }
             INC => {
-                let value = pop_integer(&mut stack)?;
+                let value = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Integer(
                     value
                         .checked_add(1)
@@ -796,19 +1065,19 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 ));
             }
             SUB => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 let difference = left
                     .checked_sub(right)
                     .ok_or_else(|| "integer overflow for SUB".to_string())?;
                 stack.push(StackValue::Integer(difference));
             }
             POW => {
-                let exponent = pop_integer(&mut stack)?;
+                let exponent = pop_numeric_value(&mut stack)?;
                 if exponent < 0 {
                     return Err("negative exponent for POW".to_string());
                 }
-                let base = pop_integer(&mut stack)?;
+                let base = pop_numeric_value(&mut stack)?;
                 let mut result: i128 = 1;
                 for _ in 0..(exponent as u64) {
                     result = result
@@ -827,24 +1096,24 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Integer(integer_sqrt(value as u64) as i64));
             }
             MODMUL => {
-                let modulus = pop_integer(&mut stack)?;
+                let modulus = pop_numeric_value(&mut stack)?;
                 if modulus == 0 {
                     return Err("division by zero for MODMUL".to_string());
                 }
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 let result = ((left as i128) * (right as i128)) % (modulus as i128);
                 stack.push(StackValue::Integer(
                     i64::try_from(result).map_err(|_| "integer overflow for MODMUL".to_string())?,
                 ));
             }
             MODPOW => {
-                let modulus = pop_integer(&mut stack)?;
+                let modulus = pop_numeric_value(&mut stack)?;
                 if modulus == 0 {
                     return Err("division by zero for MODPOW".to_string());
                 }
-                let exponent = pop_integer(&mut stack)?;
-                let base = pop_integer(&mut stack)?;
+                let exponent = pop_numeric_value(&mut stack)?;
+                let base = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Integer(mod_pow(base, exponent, modulus)?));
             }
             SHL => {
@@ -1097,6 +1366,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1109,6 +1379,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1198,7 +1469,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             return Err("index out of range for SETITEM".to_string());
                         }
                         let byte = match value {
-                            StackValue::Integer(value) if (0..=255).contains(&value) => value as u8,
+                            StackValue::Integer(value) if (-128..=255).contains(&value) => {
+                                value as u8
+                            }
                             StackValue::ByteString(value) if value.len() == 1 => value[0],
                             _ => return Err("SETITEM on buffer expects a byte value".to_string()),
                         };
@@ -1209,6 +1482,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1225,6 +1499,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1241,6 +1516,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1261,6 +1537,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1284,6 +1561,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1300,6 +1578,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1317,6 +1596,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             Some(&affected),
                         );
@@ -1333,6 +1613,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1343,6 +1624,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1353,6 +1635,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1363,6 +1646,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1382,6 +1666,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1397,6 +1682,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1412,6 +1698,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1428,6 +1715,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1458,6 +1746,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1469,6 +1758,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1480,6 +1770,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &updated,
                             &mut stack,
                             &mut locals,
+                            &mut args,
                             &mut static_fields,
                             None,
                         );
@@ -1492,13 +1783,28 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             // =============================================================================
             THROW => {
                 let msg = pop_item(&mut stack)?;
-                let err_msg = format!("THROW: {:?}", msg);
+                let err_msg = match &msg {
+                    StackValue::ByteString(bytes) | StackValue::Buffer(_, bytes) => {
+                        match alloc::string::String::from_utf8(bytes.clone()) {
+                            Ok(text) => format!("THROW: {text}"),
+                            Err(_) => format!("THROW: {:?}", msg),
+                        }
+                    }
+                    _ => format!("THROW: {:?}", msg),
+                };
                 if try_frames.is_empty() {
                     return Ok(ExecutionResult {
                         fee_consumed_pico: 0,
                         state: VmState::Fault,
                         stack: to_abi_stack(&stack),
                         fault_message: Some(err_msg),
+                        fault_ip: Some(ip as u32),
+                        fault_locals: {
+                            let cloned = locals.clone();
+                            Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                                &cloned,
+                            )))
+                        },
                     });
                 }
                 pending_error = Some(err_msg);
@@ -1514,6 +1820,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             state: VmState::Fault,
                             stack: to_abi_stack(&stack),
                             fault_message: Some(err_msg),
+                            fault_ip: Some(ip as u32),
+                            fault_locals: {
+                                let cloned = locals.clone();
+                                Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                                    &cloned,
+                                )))
+                            },
                         });
                     }
                     pending_error = Some(err_msg);
@@ -1521,16 +1834,16 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
             }
             MUL => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 let product = left
                     .checked_mul(right)
                     .ok_or_else(|| "integer overflow for MUL".to_string())?;
                 stack.push(StackValue::Integer(product));
             }
             DIV => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 if right == 0 {
                     return Err("division by zero for DIV".to_string());
                 }
@@ -1540,8 +1853,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Integer(quotient));
             }
             MOD => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 if right == 0 {
                     return Err("division by zero for MOD".to_string());
                 }
@@ -1551,7 +1864,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Integer(remainder));
             }
             DEC => {
-                let value = pop_integer(&mut stack)?;
+                let value = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Integer(
                     value
                         .checked_sub(1)
@@ -1569,23 +1882,23 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Boolean(left || right));
             }
             NZ => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Boolean(value != 0));
+                let value = pop_item(&mut stack)?;
+                stack.push(StackValue::Boolean(helpers::boolean_value(&value)?));
             }
             MIN => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Integer(if left < right { left } else { right }));
             }
             MAX => {
-                let right = pop_integer(&mut stack)?;
-                let left = pop_integer(&mut stack)?;
+                let right = pop_numeric_value(&mut stack)?;
+                let left = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Integer(if left > right { left } else { right }));
             }
             WITHIN => {
-                let upper = pop_integer(&mut stack)?;
-                let lower = pop_integer(&mut stack)?;
-                let value = pop_integer(&mut stack)?;
+                let upper = pop_numeric_value(&mut stack)?;
+                let lower = pop_numeric_value(&mut stack)?;
+                let value = pop_numeric_value(&mut stack)?;
                 stack.push(StackValue::Boolean(value >= lower && value < upper));
             }
             RIGHT => {
@@ -1651,7 +1964,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 dst_bytes[di..di + count].copy_from_slice(&src_bytes[si..si + count]);
                 let updated = StackValue::Buffer(dst_id, dst_bytes);
-                propagate_update(&updated, &mut stack, &mut locals, &mut static_fields, None);
+                propagate_update(
+                    &updated,
+                    &mut stack,
+                    &mut locals,
+                    &mut args,
+                    &mut static_fields,
+                    None,
+                );
             }
             PUSHA => {
                 if ip + 5 > script.len() {
@@ -1801,7 +2121,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             }
             LDARG0..=LDARG6 => {
                 let index = (opcode - LDARG0) as usize;
-                let value = locals
+                let value = args
                     .get(index)
                     .cloned()
                     .ok_or_else(|| "invalid argument index".to_string())?;
@@ -1812,7 +2132,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("truncated LDARG operand".to_string());
                 }
                 let index = script[ip + 1] as usize;
-                let value = locals
+                let value = args
                     .get(index)
                     .cloned()
                     .ok_or_else(|| "invalid argument index".to_string())?;
@@ -1823,7 +2143,20 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             STARG0..=STARG6 => {
                 let index = (opcode - STARG0) as usize;
                 let value = pop_item(&mut stack)?;
-                let slot = locals
+                let value = if callt_result_pending_store
+                    && cfg!(target_arch = "riscv32")
+                    && matches!(
+                        value,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&value)
+                } else {
+                    value
+                };
+                let slot = args
                     .get_mut(index)
                     .ok_or_else(|| "invalid argument index".to_string())?;
                 *slot = value;
@@ -1834,7 +2167,20 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let index = script[ip + 1] as usize;
                 let value = pop_item(&mut stack)?;
-                let slot = locals
+                let value = if callt_result_pending_store
+                    && cfg!(target_arch = "riscv32")
+                    && matches!(
+                        value,
+                        StackValue::Array(..)
+                            | StackValue::Struct(..)
+                            | StackValue::Map(..)
+                            | StackValue::Buffer(..)
+                    ) {
+                    ids.deep_clone(&value)
+                } else {
+                    value
+                };
+                let slot = args
                     .get_mut(index)
                     .ok_or_else(|| "invalid argument index".to_string())?;
                 *slot = value;
@@ -1857,10 +2203,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     "CALL",
                 )?;
                 let return_ip = ip + advance;
-                let saved_locals = core::mem::replace(&mut locals, Vec::with_capacity(16));
-                let saved_init = locals_initialized;
-                call_stack.push((return_ip, saved_locals, saved_init));
-                locals_initialized = false;
+                let saved_locals = core::mem::take(&mut locals);
+                let saved_args = core::mem::take(&mut args);
+                let saved_init = slots_initialized;
+                call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                slots_initialized = false;
                 ip = compute_jump_target_offset(ip, offset, script.len(), "CALL")?;
                 continue;
             }
@@ -1871,10 +2218,11 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     _ => return Err("CALLA expects a pointer".to_string()),
                 };
                 let return_ip = ip + 1;
-                let saved_locals = core::mem::replace(&mut locals, Vec::with_capacity(16));
-                let saved_init = locals_initialized;
-                call_stack.push((return_ip, saved_locals, saved_init));
-                locals_initialized = false;
+                let saved_locals = core::mem::take(&mut locals);
+                let saved_args = core::mem::take(&mut args);
+                let saved_init = slots_initialized;
+                call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                slots_initialized = false;
                 if offset > script.len() {
                     return Err("CALLA target out of bounds".to_string());
                 }
@@ -1891,6 +2239,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     state: VmState::Fault,
                     stack: to_abi_stack(&stack),
                     fault_message: Some(err_msg),
+                    fault_ip: Some(ip as u32),
+                    fault_locals: {
+                        let cloned = locals.clone();
+                        Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                            &cloned,
+                        )))
+                    },
                 });
             }
             ASSERTMSG => {
@@ -1908,6 +2263,13 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         state: VmState::Fault,
                         stack: to_abi_stack(&stack),
                         fault_message: Some(err_msg),
+                        fault_ip: Some(ip as u32),
+                        fault_locals: {
+                            let cloned = locals.clone();
+                            Some(neo_riscv_abi::fast_codec::encode_stack(&to_abi_stack(
+                                &cloned,
+                            )))
+                        },
                     });
                 }
             }
@@ -2041,9 +2403,18 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 continue;
             }
             RET => {
-                if let Some((return_ip, saved_locals, saved_init)) = call_stack.pop() {
+                if let Some((return_ip, saved_locals, saved_args, saved_init)) =
+                    call_stack.pop_and_restore()?
+                {
                     locals = saved_locals;
-                    locals_initialized = saved_init;
+                    args = saved_args;
+                    slots_initialized = saved_init;
+                    while try_frames
+                        .last_mut()
+                        .is_some_and(|frame| frame.call_depth > call_stack.len())
+                    {
+                        try_frames.pop();
+                    }
                     ip = return_ip;
                     continue;
                 }
@@ -2074,6 +2445,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 try_frames.push(TryFrame {
                     catch_ip,
                     finally_ip,
+                    call_depth: call_stack.len(),
                     caught: false,
                     in_finally: false,
                     end_ip: 0,
@@ -2142,6 +2514,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 try_frames.push(TryFrame {
                     catch_ip,
                     finally_ip,
+                    call_depth: call_stack.len(),
                     caught: false,
                     in_finally: false,
                     end_ip: 0,
@@ -2209,6 +2582,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         state: VmState::Halt,
         stack: to_abi_stack(&stack),
         fault_message: None,
+        fault_ip: None,
+        fault_locals: None,
     })
 }
 

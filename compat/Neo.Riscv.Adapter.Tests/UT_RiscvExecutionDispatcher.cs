@@ -9,13 +9,13 @@ namespace Neo.Riscv.Adapter.Tests;
 public class UT_RiscvExecutionDispatcher
 {
     [TestMethod]
-    public void RoutesLegacyNeoVmContractsToCompatibilityPath()
+    public void RoutesNeoVmContractsToGuestNeoVmPath()
     {
         var kind = RiscvExecutionDispatcher.Resolve(
             ContractType.NeoVM,
             new byte[] { (byte)Neo.VM.OpCode.PUSH1, (byte)Neo.VM.OpCode.RET });
 
-        Assert.AreEqual(RiscvExecutionKind.LegacyNeoVmCompatibility, kind);
+        Assert.AreEqual(RiscvExecutionKind.GuestNeoVmContract, kind);
     }
 
     [TestMethod]
@@ -29,7 +29,7 @@ public class UT_RiscvExecutionDispatcher
     }
 
     [TestMethod]
-    public void RejectsLegacyTypeWithPvmPayload()
+    public void RejectsNeoVmTypeWithPvmPayload()
     {
         Assert.ThrowsExactly<InvalidOperationException>(() =>
             RiscvExecutionDispatcher.Resolve(
@@ -47,11 +47,11 @@ public class UT_RiscvExecutionDispatcher
     }
 
     [TestMethod]
-    public void UsesLegacyFacadeHashForNeoVmContracts()
+    public void UsesGuestFacadeHashForNeoVmContracts()
     {
         var actualHash = new UInt160(new byte[20]);
         Assert.AreEqual(
-            RiscvCompatibilityContracts.LegacyNeoVmFacadeHash,
+            RiscvCompatibilityContracts.GuestNeoVmFacadeHash,
             RiscvCompatibilityContracts.ResolveExecutionFacadeHash(ContractType.NeoVM, actualHash));
     }
 

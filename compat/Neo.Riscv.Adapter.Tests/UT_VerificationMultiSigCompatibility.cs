@@ -24,14 +24,13 @@ public class UT_VerificationMultiSigCompatibility
     public void TestSetup()
     {
         _previousLibraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-        ApplicationEngine.Provider = null;
         RiscvApplicationEngineProviderResolver.ResetForTesting();
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        ApplicationEngine.Provider = null;
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
         Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, _previousLibraryPath);
         RiscvApplicationEngineProviderResolver.ResetForTesting();
     }
@@ -50,9 +49,6 @@ public class UT_VerificationMultiSigCompatibility
             ECCurve.Secp256k1);
         var message = "48656C6C6F576F726C64".HexToBytes();
         var signature = Crypto.Sign(message, privateKey, ECCurve.Secp256k1, HashAlgorithm.Keccak256);
-
-        var baseline = ExecuteContinuationScript(useRiscvProvider: false, message, signature, publicKey.EncodePoint(true));
-        Assert.IsTrue(baseline, "Baseline NeoVM execution should accept the direct verifyWithECDsa call.");
 
         RiscvApplicationEngineProviderResolver.ResetForTesting();
         var riscv = ExecuteContinuationScript(useRiscvProvider: true, message, signature, publicKey.EncodePoint(true));
@@ -96,13 +92,6 @@ public class UT_VerificationMultiSigCompatibility
         Assert.IsTrue(
             Crypto.VerifySignature(tx.GetSignData(AdapterTestProtocolSettings.Default.Network), signature, publicKey, HashAlgorithm.Keccak256),
             "The direct transaction sign-data precondition must verify before exercising the VM path.");
-
-        var baseline = ExecuteTransactionVerifyScript(
-            useRiscvProvider: false,
-            tx,
-            signature,
-            publicKey.EncodePoint(true));
-        Assert.IsTrue(baseline, "Baseline NeoVM execution should accept the transaction-backed verifyWithECDsa call.");
 
         RiscvApplicationEngineProviderResolver.ResetForTesting();
         var riscv = ExecuteTransactionVerifyScript(

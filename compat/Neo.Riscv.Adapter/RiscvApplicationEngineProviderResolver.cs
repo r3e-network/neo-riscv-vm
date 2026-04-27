@@ -8,6 +8,7 @@
 
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace Neo.SmartContract.RiscV
 {
@@ -19,7 +20,7 @@ namespace Neo.SmartContract.RiscV
 
         public static IApplicationEngineProvider ResolveRequiredProvider()
         {
-            var libraryPath = ResolveLibraryPath()
+            var libraryPath = ResolveLoadableLibraryPath()
                 ?? throw new InvalidOperationException(
                     $"Neo requires the RISC-V host library. Set {NativeRiscvVmBridge.LibraryPathEnvironmentVariable}, " +
                     $"place the native library next to the application binaries, or ship it in Plugins/{typeof(RiscvAdapterPlugin).Assembly.GetName().Name}/.");
@@ -38,22 +39,77 @@ namespace Neo.SmartContract.RiscV
 
         private static string? ResolveLibraryPath()
         {
+            var configured = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+                return configured;
+
             foreach (var candidate in GetDefaultCandidates())
             {
                 if (File.Exists(candidate))
                     return candidate;
             }
 
+            return null;
+        }
+
+        private static string? ResolveLoadableLibraryPath()
+        {
             var configured = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+            if (!string.IsNullOrWhiteSpace(configured) && TryLoadLibrary(configured))
                 return configured;
 
+            foreach (var candidate in GetDefaultCandidates())
+            {
+                if (TryLoadLibrary(candidate))
+                    return candidate;
+            }
+
             return null;
+        }
+
+        private static bool TryLoadLibrary(string candidate)
+        {
+            if (!File.Exists(candidate))
+                return false;
+
+            try
+            {
+                var handle = NativeLibrary.Load(candidate);
+                NativeLibrary.Free(handle);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // Kept internal to allow deterministic testing of path resolution without having to
         // actually load the native library.
         internal static string? ResolveLibraryPathForTesting() => ResolveLibraryPath();
+        internal static string? ResolveConfiguredLibraryPathForTesting(string? configured)
+        {
+            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+                return configured;
+
+            foreach (var candidate in GetDefaultCandidates())
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            return null;
+        }
+        internal static string? ResolveDefaultLibraryPathForTesting()
+        {
+            foreach (var candidate in GetDefaultCandidates())
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            return null;
+        }
 
         internal static string[] GetDefaultCandidatesForTesting() => GetDefaultCandidates();
 
@@ -67,6 +123,11 @@ namespace Neo.SmartContract.RiscV
                 // This enables a "drop-in" Plugins bundle with no environment variables.
                 Path.Combine(AppContext.BaseDirectory, "Plugins", assemblyName, fileName),
                 Path.Combine(Environment.CurrentDirectory, "Plugins", assemblyName, fileName),
+                // Workspace-local Rust host build outputs.
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "target", "release", fileName)),
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "target", "debug", fileName)),
+                Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "target", "release", fileName)),
+                Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "target", "debug", fileName)),
                 Path.Combine(AppContext.BaseDirectory, fileName),
                 Path.Combine(Environment.CurrentDirectory, fileName),
             ];

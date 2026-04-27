@@ -1,26 +1,38 @@
 use crate::bridge::{register_host_functions, ClosureHost};
 use polkavm::{
-    BackendKind as PolkaBackendKind, Config, Engine, Instance, InstancePre, Linker, Module,
-    ModuleConfig, ProgramBlob,
+    BackendKind as PolkaBackendKind, Config, Engine, GasMeteringKind, Instance, InstancePre,
+    Linker, Module, ModuleConfig, ProgramBlob,
 };
 use std::{
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::Hasher,
     sync::{Mutex, OnceLock},
 };
 
 static ENGINE: OnceLock<Result<Engine, String>> = OnceLock::new();
 static GUEST_BLOB: OnceLock<Result<ProgramBlob, String>> = OnceLock::new();
 static MODULES: OnceLock<Mutex<HashMap<u32, Module>>> = OnceLock::new();
+static NATIVE_MODULES: OnceLock<Mutex<HashMap<NativeCacheKey, Module>>> = OnceLock::new();
 type CachedInstancePre = InstancePre<ClosureHost, core::convert::Infallible>;
 type ExecutionInstance = Instance<ClosureHost, core::convert::Infallible>;
 type InstancePreMap = HashMap<u32, CachedInstancePre>;
 type ExecutionInstancePool = HashMap<u32, Vec<ExecutionInstance>>;
+type NativeInstancePreMap = HashMap<NativeCacheKey, CachedInstancePre>;
+type NativeExecutionInstancePool = HashMap<NativeCacheKey, Vec<ExecutionInstance>>;
 
 /// Maximum number of cached instances per aux_size in the pool.
 const MAX_POOL_SIZE_PER_AUX: usize = 16;
 
 static INSTANCE_PRES: OnceLock<Mutex<InstancePreMap>> = OnceLock::new();
 static EXECUTION_INSTANCES: OnceLock<Mutex<ExecutionInstancePool>> = OnceLock::new();
+static NATIVE_INSTANCE_PRES: OnceLock<Mutex<NativeInstancePreMap>> = OnceLock::new();
+static NATIVE_EXECUTION_INSTANCES: OnceLock<Mutex<NativeExecutionInstancePool>> = OnceLock::new();
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct NativeCacheKey {
+    binary_hash: u64,
+    aux_size: u32,
+}
 
 pub(crate) struct CachedExecutionInstance {
     aux_size: u32,
@@ -53,6 +65,41 @@ impl Drop for CachedExecutionInstance {
                     instances.push(instance);
                 }
                 // else: pool is full, just drop the instance
+            }
+        }
+    }
+}
+
+pub(crate) struct CachedNativeExecutionInstance {
+    key: NativeCacheKey,
+    instance_pre: CachedInstancePre,
+    instance: Option<ExecutionInstance>,
+}
+
+impl CachedNativeExecutionInstance {
+    pub(crate) fn module(&self) -> &Module {
+        self.instance_pre.module()
+    }
+
+    pub(crate) fn instance_mut(&mut self) -> &mut ExecutionInstance {
+        self.instance
+            .as_mut()
+            .expect("cached native execution instance should be present")
+    }
+}
+
+impl Drop for CachedNativeExecutionInstance {
+    fn drop(&mut self) {
+        let Some(instance) = self.instance.take() else {
+            return;
+        };
+
+        if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get() {
+            if let Ok(mut guard) = pool.lock() {
+                let instances = guard.entry(self.key).or_default();
+                if instances.len() < MAX_POOL_SIZE_PER_AUX {
+                    instances.push(instance);
+                }
             }
         }
     }
@@ -170,7 +217,91 @@ pub(crate) fn compile_native_module(binary: &[u8], aux_size: u32) -> Result<Modu
     if aux_size > 0 {
         module_config.set_aux_data_size(aux_size);
     }
+    module_config.set_per_instruction_metering(true);
+    module_config.set_gas_metering(Some(GasMeteringKind::Sync));
     Module::from_blob(engine, &module_config, blob).map_err(|e| e.to_string())
+}
+
+pub(crate) fn cached_native_execution_instance(
+    binary: &[u8],
+    aux_size: u32,
+) -> Result<CachedNativeExecutionInstance, String> {
+    let key = NativeCacheKey {
+        binary_hash: hash_binary(binary),
+        aux_size,
+    };
+    let instance_pre = cached_native_instance_pre(binary, key)?;
+    let pool = NATIVE_EXECUTION_INSTANCES.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut instance = {
+        let mut guard = pool
+            .lock()
+            .map_err(|_| "native execution-instance pool poisoned".to_string())?;
+        guard.get_mut(&key).and_then(|instances| instances.pop())
+    }
+    .unwrap_or(instance_pre.instantiate().map_err(|e| e.to_string())?);
+
+    instance.reset_memory().map_err(|e| e.to_string())?;
+
+    Ok(CachedNativeExecutionInstance {
+        key,
+        instance_pre,
+        instance: Some(instance),
+    })
+}
+
+fn cached_native_instance_pre(
+    binary: &[u8],
+    key: NativeCacheKey,
+) -> Result<CachedInstancePre, String> {
+    let instance_pres = NATIVE_INSTANCE_PRES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(instance_pre) = instance_pres
+        .lock()
+        .map_err(|_| "native instance-pre cache poisoned".to_string())?
+        .get(&key)
+        .cloned()
+    {
+        return Ok(instance_pre);
+    }
+
+    let module = cached_native_module(binary, key)?;
+    let mut linker = Linker::<ClosureHost, core::convert::Infallible>::new();
+    register_host_functions(&mut linker)?;
+    let instance_pre = linker.instantiate_pre(&module).map_err(|e| e.to_string())?;
+
+    let mut guard = instance_pres
+        .lock()
+        .map_err(|_| "native instance-pre cache poisoned".to_string())?;
+    Ok(guard
+        .entry(key)
+        .or_insert_with(|| instance_pre.clone())
+        .clone())
+}
+
+fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, String> {
+    let modules = NATIVE_MODULES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(module) = modules
+        .lock()
+        .map_err(|_| "native module cache poisoned".to_string())?
+        .get(&key)
+        .cloned()
+    {
+        return Ok(module);
+    }
+
+    let module = compile_native_module(binary, key.aux_size)?;
+
+    let mut guard = modules
+        .lock()
+        .map_err(|_| "native module cache poisoned".to_string())?;
+    Ok(guard.entry(key).or_insert_with(|| module.clone()).clone())
+}
+
+fn hash_binary(binary: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    hasher.write_usize(binary.len());
+    hasher.write(binary);
+    hasher.finish()
 }
 
 fn cached_engine() -> Result<&'static Engine, String> {

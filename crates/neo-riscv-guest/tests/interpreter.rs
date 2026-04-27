@@ -207,6 +207,83 @@ fn executes_script_from_nonzero_offset() {
 }
 
 #[test]
+fn call_helper_syscall_preserves_byte_string_arguments() {
+    let platform = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let mut script = vec![
+        0x57, 0x00, 0x01, // INITSLOT 0 locals, 1 arg
+        0x34, 0x04, // CALL helper at offset 4 (ip 3 -> target 7)
+        0x78, // LDARG0
+        0x40, // RET
+        0x41, // SYSCALL System.Runtime.Platform
+    ];
+    script.extend_from_slice(&platform.to_le_bytes());
+    script.extend_from_slice(&[
+        0x45, // DROP
+        0x40, // RET
+    ]);
+
+    let arg = vec![
+        0x41, 0xca, 0x6a, 0xbc, 0x77, 0x1a, 0x8b, 0x40, 0x75, 0x7a, 0x1a, 0x1b, 0x31, 0xd0, 0xae,
+        0x7f, 0x5c, 0xf1, 0xfe, 0xac,
+    ];
+
+    let result = interpret_with_stack_and_syscalls(
+        &script,
+        vec![StackValue::ByteString(arg.clone())],
+        &mut PlatformHost,
+    )
+    .expect("helper syscall should preserve call frame arguments");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(arg)]);
+}
+
+#[test]
+fn call_helper_syscall_preserves_multiple_arguments_and_order() {
+    let platform = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let mut script = vec![
+        0x57, 0x00, 0x03, // INITSLOT 0 locals, 3 args
+        0x34, 0x07, // CALL helper at offset 7 (ip 3 -> target 10)
+        0x7a, // LDARG2
+        0x79, // LDARG1
+        0x78, // LDARG0
+        0x13, // PUSH3
+        0xc0, // PACK
+        0x40, // RET
+        0x41, // helper: SYSCALL System.Runtime.Platform
+    ];
+    script.extend_from_slice(&platform.to_le_bytes());
+    script.extend_from_slice(&[
+        0x45, // DROP
+        0x40, // RET
+    ]);
+
+    let nef = vec![0x50, 0x00, 0x83, 0x00, 0x14, 0x00, 0x00, 0x00];
+    let manifest = b"{\"name\":\"Contract\"}".to_vec();
+
+    let result = interpret_with_stack_and_syscalls(
+        &script,
+        vec![
+            StackValue::Null,
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        &mut PlatformHost,
+    )
+    .expect("helper syscall should preserve multiple call-frame arguments");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![
+            StackValue::ByteString(nef),
+            StackValue::ByteString(manifest),
+            StackValue::Null,
+        ])]
+    );
+}
+
+#[test]
 fn executes_pushint8_and_pushint16() {
     let result = interpret(&[0x00, 0x1c, 0x01, 0x84, 0x00, 0x40])
         .expect("guest interpreter should support integer immediates");
@@ -655,6 +732,15 @@ fn executes_sub_and_inc() {
         .expect("guest interpreter should support SUB and INC");
 
     assert_eq!(result.stack, vec![StackValue::Integer(3)]);
+}
+
+#[test]
+fn executes_sub_and_inc_on_integer_compatible_bytestrings() {
+    // PUSHDATA1 0x0a, PUSH1, SUB → 9, INC → 10, RET
+    let result = interpret(&[0x0c, 0x01, 0x0a, 0x11, 0x9f, 0x9c, 0x40])
+        .expect("guest interpreter should treat integer-compatible byte strings as numeric");
+
+    assert_eq!(result.stack, vec![StackValue::Integer(10)]);
 }
 
 #[test]
@@ -1611,6 +1697,22 @@ fn nz_nonzero() {
 }
 
 #[test]
+fn nz_accepts_uint160_sized_bytestring() {
+    let mut script = vec![0x0c, 0x14];
+    script.extend_from_slice(&[
+        0x41, 0xca, 0x6a, 0xbc, 0x77, 0x1a, 0x8b, 0x40, 0x75, 0x7a, 0x1a, 0x1b, 0x31, 0xd0, 0xae,
+        0x7f, 0x5c, 0xf1, 0xfe, 0xac,
+    ]);
+    script.extend_from_slice(&[0xb1, 0x40]);
+
+    let result = interpret(&script)
+        .expect("guest interpreter should support NZ on UInt160-sized byte strings");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
 fn substr_extracts_middle() {
     // PUSHDATA1 "hello world", PUSH6, PUSH5, SUBSTR → "world"
     let result = interpret(&[
@@ -2487,6 +2589,119 @@ fn callt_invokes_host() {
     assert_eq!(result.stack, vec![StackValue::Integer(101)]);
 }
 
+struct CalltArrayHost;
+
+impl SyscallProvider for CalltArrayHost {
+    fn syscall(
+        &mut self,
+        api: u32,
+        _ip: usize,
+        _stack: &mut Vec<StackValue>,
+    ) -> Result<(), String> {
+        Err(format!("unexpected syscall 0x{api:08x}"))
+    }
+
+    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
+        assert_eq!(token, 0, "expected CALLT token 0");
+        stack.clear();
+        stack.push(StackValue::Array(vec![StackValue::ByteString(
+            b"Hello World!".to_vec(),
+        )]));
+        Ok(())
+    }
+}
+
+#[test]
+fn callt_array_result_round_trips_through_locals_and_pickitem() {
+    let script: &[u8] = &[
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0x37, 0x00, 0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+    let mut host = CalltArrayHost;
+    let result = interpret_with_syscalls(script, &mut host)
+        .expect("CALLT array result should survive locals and PICKITEM");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
+struct CalltArrayAfterSyscallHost;
+
+impl SyscallProvider for CalltArrayAfterSyscallHost {
+    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
+        let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+        if api != platform_api {
+            return Err(format!("unexpected syscall 0x{api:08x}"));
+        }
+        stack.clear();
+        stack.push(StackValue::ByteString(b"NEO".to_vec()));
+        Ok(())
+    }
+
+    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
+        assert_eq!(token, 0, "expected CALLT token 0");
+        stack.clear();
+        stack.push(StackValue::Array(vec![StackValue::ByteString(
+            b"Hello World!".to_vec(),
+        )]));
+        Ok(())
+    }
+}
+
+#[test]
+fn callt_array_result_survives_prior_syscall_with_live_args_in_interpreter() {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let script: &[u8] = &[
+        0x57,
+        0x02,
+        0x04, // INITSLOT 2 locals, 4 args
+        0x41,
+        platform_api.to_le_bytes()[0],
+        platform_api.to_le_bytes()[1],
+        platform_api.to_le_bytes()[2],
+        platform_api.to_le_bytes()[3],
+        0x45, // DROP
+        0x37,
+        0x00,
+        0x00, // CALLT 0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x71, // STLOC1
+        0x69, // LDLOC1
+        0x40, // RET
+    ];
+    let mut host = CalltArrayAfterSyscallHost;
+    let result = interpret_with_stack_and_syscalls(
+        script,
+        vec![
+            StackValue::ByteString(b"[\"Hello World!\"]".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Null,
+            StackValue::ByteString(
+                b"https://api.jsonbin.io/v3/qs/6520ad3c12a5d3765988542a".to_vec(),
+            ),
+        ],
+        &mut host,
+    )
+    .expect("CALLT array result should survive a prior syscall with live args");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(b"Hello World!".to_vec())]
+    );
+}
+
 #[test]
 fn syscall_invokes_host_provider() {
     // Explicit SYSCALL test: PUSH1, SYSCALL "System.Runtime.Platform" → "NEO"
@@ -2692,6 +2907,215 @@ fn call_ret_preserves_caller_locals() {
     assert_eq!(result.state, VmState::Halt);
     // The subroutine stored 99 in its own LDLOC0, but caller's local should still be 5.
     assert_eq!(result.stack, vec![StackValue::Integer(5)]);
+}
+
+#[test]
+fn caller_catch_restores_locals_after_callee_throw() {
+    // Caller frame:
+    //   0: INITSLOT 1 local, 0 args
+    //   3: TRY catch=+12
+    //   6: CALL_L callee
+    //  11: DROP
+    //  12: PUSHT
+    //  13: ENDTRY +8 -> RET
+    //  15: STLOC0      (catch handler stores thrown message)
+    //  16: PUSHF
+    //  17: ENDTRY +4 -> RET
+    //  21: RET
+    // Callee:
+    //  22: PUSH1
+    //  23: THROW
+    //
+    // Without unwinding the call frame first, the catch handler runs with the
+    // callee's empty locals and faults on STLOC0 with "invalid local index".
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x3b, 0x0c, 0x00, // TRY catch=+12, finally=0
+        0x35, 0x10, 0x00, 0x00, 0x00, // CALL_L callee at ip=22
+        0x45, // DROP
+        0x08, // PUSHT
+        0x3d, 0x08, // ENDTRY +8 -> RET at ip=21
+        0x70, // STLOC0
+        0x09, // PUSHF
+        0x3d, 0x04, // ENDTRY +4 -> RET at ip=21
+        0x38, // ABORT (unreachable filler)
+        0x38, // ABORT (unreachable filler)
+        0x40, // RET
+        0x11, // PUSH1
+        0x3a, // THROW
+    ];
+    let result =
+        interpret(script).expect("caller catch should restore its locals after callee throw");
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(false)]);
+}
+
+#[test]
+fn callt_null_result_can_flow_through_two_arg_helper() {
+    struct CalltNullHost {
+        runtime_log: u32,
+    }
+
+    impl SyscallProvider for CalltNullHost {
+        fn syscall(
+            &mut self,
+            api: u32,
+            _ip: usize,
+            stack: &mut Vec<StackValue>,
+        ) -> Result<(), String> {
+            if api == self.runtime_log {
+                stack.clear();
+                return Ok(());
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        }
+
+        fn callt(
+            &mut self,
+            token: u16,
+            _ip: usize,
+            stack: &mut Vec<StackValue>,
+        ) -> Result<(), String> {
+            if token == 2 {
+                stack.clear();
+                stack.push(StackValue::Null);
+                return Ok(());
+            }
+            Err(format!("unexpected callt token {token}"))
+        }
+    }
+
+    let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
+    let script: &[u8] = &[
+        0x57,
+        0x01,
+        0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37,
+        0x02,
+        0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34,
+        0x03, // CALL +3 -> helper at ip=13
+        0x40, // RET
+        0x57,
+        0x00,
+        0x02, // helper: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0xd8, // ISNULL
+        0x26,
+        0x15, // JMPIFNOT +21 -> else branch at ip=39
+        0x0c,
+        0x0a,
+        b'N',
+        b'U',
+        b'L',
+        b'L',
+        b' ',
+        b'B',
+        b'l',
+        b'o',
+        b'c',
+        b'k', // PUSHDATA1 "NULL Block"
+        0x41, // SYSCALL Runtime.Log
+        (runtime_log & 0xff) as u8,
+        ((runtime_log >> 8) & 0xff) as u8,
+        ((runtime_log >> 16) & 0xff) as u8,
+        ((runtime_log >> 24) & 0xff) as u8,
+        0x0b, // PUSHNULL
+        0x40, // RET
+        0x08, // else: PUSHT
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+    let mut host = CalltNullHost { runtime_log };
+
+    let result = interpret_with_stack_and_syscalls(script, initial_stack, &mut host)
+        .expect("null CALLT result should flow through a two-arg helper");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn callt_block_like_struct_survives_local_and_helper_pickitem_in_interpreter() {
+    struct BlockLikeHost {
+        block_like: StackValue,
+    }
+
+    impl SyscallProvider for BlockLikeHost {
+        fn syscall(
+            &mut self,
+            api: u32,
+            _ip: usize,
+            _stack: &mut Vec<StackValue>,
+        ) -> Result<(), String> {
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        }
+
+        fn callt(
+            &mut self,
+            token: u16,
+            _ip: usize,
+            stack: &mut Vec<StackValue>,
+        ) -> Result<(), String> {
+            if token != 2 {
+                return Err(format!("unexpected callt token {token}"));
+            }
+            stack.clear();
+            stack.push(self.block_like.clone());
+            Ok(())
+        }
+    }
+
+    let prev_hash = vec![
+        0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
+        0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
+        0x4d, 0x1f,
+    ];
+    let block_like = StackValue::Struct(vec![
+        StackValue::ByteString(vec![0xd9; 32]),
+        StackValue::Integer(0),
+        StackValue::ByteString(prev_hash.clone()),
+        StackValue::ByteString(vec![0x72; 32]),
+        StackValue::Integer(1),
+        StackValue::Integer(2),
+        StackValue::Integer(3),
+        StackValue::Integer(4),
+        StackValue::ByteString(vec![0x6b; 20]),
+        StackValue::Integer(1),
+    ]);
+    let script: &[u8] = &[
+        0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x37, 0x02, 0x00, // CALLT 2
+        0x70, // STLOC0
+        0x79, // LDARG1
+        0x68, // LDLOC0
+        0x34, 0x03, // CALL +3 -> helper
+        0x40, // RET
+        0x57, 0x00, 0x02, // helper
+        0x78, // LDARG0
+        0x12, // PUSH2
+        0xCE, // PICKITEM
+        0x40, // RET
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"PrevHash".to_vec()),
+        StackValue::ByteString(vec![0x01; 32]),
+    ];
+    let mut host = BlockLikeHost { block_like };
+
+    let result = interpret_with_stack_and_syscalls(script, initial_stack, &mut host)
+        .expect("block-like struct should survive local/helper PICKITEM flow in interpreter");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::ByteString(prev_hash)]);
 }
 
 #[test]

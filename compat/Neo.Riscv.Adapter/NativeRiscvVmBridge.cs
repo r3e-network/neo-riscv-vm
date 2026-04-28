@@ -402,6 +402,21 @@ namespace Neo.SmartContract.RiscV
             task.GetResult();
         }
 
+        internal static uint ResolveNativeContractSnapshotIndex(ApplicationEngine engine)
+        {
+            if (engine.PersistingBlock is not null)
+                return engine.PersistingBlock.Index;
+
+            try
+            {
+                return NativeContract.Ledger.CurrentIndex(engine.SnapshotCache);
+            }
+            catch (KeyNotFoundException)
+            {
+                return 0;
+            }
+        }
+
         private static StackItem[] HandleContractCallNative(RiscvExecutionRequest request, ExecutionScope scope, nuint instructionPointer, StackItem[] inputStack)
         {
             if (inputStack.Length == 0)
@@ -412,7 +427,7 @@ namespace Neo.SmartContract.RiscV
 
             var currentContract = NativeContract.GetContract(request.ScriptHashes[^1])
                 ?? throw new InvalidOperationException("It is not allowed to use \"System.Contract.CallNative\" directly.");
-            if (!currentContract.IsActive(request.Engine.ProtocolSettings, NativeContract.Ledger.CurrentIndex(request.Engine.SnapshotCache)))
+            if (!currentContract.IsActive(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine)))
                 throw new InvalidOperationException($"The native contract {currentContract.Name} is not active.");
 
             var versionRaw = versionItem.GetInteger();
@@ -454,7 +469,7 @@ namespace Neo.SmartContract.RiscV
             }
 
             var currentContractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, currentContract.Hash)
-                ?? currentContract.GetContractState(request.Engine.ProtocolSettings, request.Engine.PersistingBlock?.Index ?? NativeContract.Ledger.CurrentIndex(request.Engine.SnapshotCache));
+                ?? currentContract.GetContractState(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine));
 
             object? returnValue = request.Engine.ExecuteInNativeContractContext(
                 currentContract.Hash,
@@ -612,7 +627,7 @@ namespace Neo.SmartContract.RiscV
             if (!skipCache && !scope.ContractCallCache.TryGetValue(cacheKey, out cacheEntry))
             {
                 var contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, contractHash)
-                    ?? NativeContract.GetContract(contractHash)?.GetContractState(request.Engine.ProtocolSettings, request.Engine.PersistingBlock?.Index ?? 0);
+                    ?? NativeContract.GetContract(contractHash)?.GetContractState(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine));
                 if (contractState == null)
                     throw new InvalidOperationException($"Called Contract Does Not Exist: {contractHash}.{method}");
                 var methodDescriptor = contractState.Manifest.Abi.GetMethod(method, argsArray.Count)
@@ -627,7 +642,7 @@ namespace Neo.SmartContract.RiscV
             if (skipCache)
             {
                 var contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, contractHash)
-                    ?? NativeContract.GetContract(contractHash)?.GetContractState(request.Engine.ProtocolSettings, request.Engine.PersistingBlock?.Index ?? 0);
+                    ?? NativeContract.GetContract(contractHash)?.GetContractState(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine));
                 if (contractState == null)
                     throw new InvalidOperationException($"Called Contract Does Not Exist: {contractHash}.{method}");
                 var methodDescriptor = contractState.Manifest.Abi.GetMethod(method, argsArray.Count)

@@ -3,6 +3,7 @@ using Neo.Network.P2P.Payloads;
 using Neo.Persistence.Providers;
 using Neo.SmartContract;
 using Neo.SmartContract.Manifest;
+using Neo.SmartContract.Native;
 using Neo.SmartContract.RiscV;
 using Neo.VM;
 using Neo.VM.Types;
@@ -69,6 +70,52 @@ public class UT_RiscvApplicationEngineMethodDispatch
         Assert.AreEqual(VMState.FAULT, fault!.State);
         Assert.AreEqual(0, fault.ResultStack.Count);
         Assert.IsInstanceOfType<InvalidOperationException>(fault.FaultException);
+    }
+
+    [TestMethod]
+    public void NativeContractSnapshotIndexUsesPersistingBlockWhenAvailable()
+    {
+        var block = new Block
+        {
+            Header = new Header
+            {
+                Index = 42,
+                PrevHash = UInt256.Zero,
+                MerkleRoot = UInt256.Zero,
+                NextConsensus = UInt160.Zero,
+                Witness = Witness.Empty,
+            },
+            Transactions = [],
+        };
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+        using var engine = new RiscvApplicationEngine(
+            TriggerType.Application,
+            null,
+            snapshot,
+            block,
+            AdapterTestProtocolSettings.Default,
+            ApplicationEngine.TestModeGas,
+            new CapturingBridge());
+
+        Assert.AreEqual(42u, NativeRiscvVmBridge.ResolveNativeContractSnapshotIndex(engine));
+    }
+
+    [TestMethod]
+    public void NativeContractSnapshotIndexFallsBackToLedgerWhenNoPersistingBlockExists()
+    {
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+        using var engine = new RiscvApplicationEngine(
+            TriggerType.Application,
+            null,
+            snapshot,
+            null,
+            AdapterTestProtocolSettings.Default,
+            ApplicationEngine.TestModeGas,
+            new CapturingBridge());
+
+        Assert.AreEqual(NativeContract.Ledger.CurrentIndex(snapshot), NativeRiscvVmBridge.ResolveNativeContractSnapshotIndex(engine));
     }
 
     private static ContractState CreateRiscVContract()

@@ -145,11 +145,15 @@ namespace Neo.SmartContract.RiscV
 
             if (result.State == VMState.HALT)
             {
-                CurrentContext?.GetState<ExecutionContextState>().SnapshotCache?.Commit();
-                InvocationStack.Clear();
+                while (InvocationStack.Count > 0)
+                {
+                    var context = InvocationStack.Pop();
+                    ContextUnloaded(context);
+                }
             }
             else if (result.State == VMState.FAULT && CurrentContext is not null)
             {
+                RollbackContextNotifications(CurrentContext);
                 // Restore the faulting opcode offset reported by the guest so dev-time
                 // introspection (TestException.CurrentContext.InstructionPointer) sees the
                 // real offset instead of 0. Not consensus-affecting — FAULT rolls back

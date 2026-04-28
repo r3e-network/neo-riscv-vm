@@ -157,6 +157,8 @@ impl Context {
             state: self.state,
             stack,
             fault_message: self.fault_message,
+            fault_ip: None,
+            fault_locals: None,
         }
     }
 

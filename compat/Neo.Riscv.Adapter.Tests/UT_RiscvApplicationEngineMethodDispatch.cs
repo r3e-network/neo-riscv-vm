@@ -18,26 +18,34 @@ public class UT_RiscvApplicationEngineMethodDispatch
     public void DirectRiscVExecutionRequestCarriesLoadedMethodName()
     {
         var bridge = new CapturingBridge();
+        var previousProvider = ApplicationEngine.Provider;
         using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
         using var snapshot = system.GetSnapshotCache();
-        using var engine = new RiscvApplicationEngine(
-            TriggerType.Application,
-            null,
-            snapshot,
-            null,
-            AdapterTestProtocolSettings.Default,
-            gas: ApplicationEngine.TestModeGas,
-            bridge);
-        var contract = CreateRiscVContract();
-        var method = contract.Manifest.Abi.GetMethod("main", 0);
 
-        Assert.IsNotNull(method);
-        engine.LoadContract(contract, method!, CallFlags.All);
-        var state = engine.Execute();
+        try
+        {
+            ApplicationEngine.Provider = new RiscvApplicationEngineProvider(bridge);
+            using var engine = (RiscvApplicationEngine)ApplicationEngine.Create(
+                TriggerType.Application,
+                null,
+                snapshot,
+                settings: AdapterTestProtocolSettings.Default,
+                gas: ApplicationEngine.TestModeGas);
+            var contract = CreateRiscVContract();
+            var method = contract.Manifest.Abi.GetMethod("main", 0);
 
-        Assert.AreEqual(VMState.HALT, state);
-        Assert.IsNotNull(bridge.LastRequest);
-        Assert.AreEqual("main", bridge.LastRequest!.Method);
+            Assert.IsNotNull(method);
+            engine.LoadContract(contract, method!, CallFlags.All);
+            var state = engine.Execute();
+
+            Assert.AreEqual(VMState.HALT, state);
+            Assert.IsNotNull(bridge.LastRequest);
+            Assert.AreEqual("main", bridge.LastRequest!.Method);
+        }
+        finally
+        {
+            ApplicationEngine.Provider = previousProvider;
+        }
     }
 
     [TestMethod]

@@ -120,19 +120,9 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
-                if (nativeResult.FeeConsumedPico > 0)
-                {
-                    try
-                    {
-                        request.Engine.AddFee(nativeResult.FeeConsumedPico);
-                    }
-                    catch (InvalidOperationException gasEx) when (gasEx.Message.Contains("Insufficient GAS"))
-                    {
-                        Trace($"execute gas exhaustion: {gasEx.Message}");
-                        return new RiscvExecutionResult(VMState.FAULT, System.Array.Empty<Neo.VM.Types.StackItem>(),
-                            gasEx);
-                    }
-                }
+                var gasFault = TryChargeExecutionFee(request.Engine, nativeResult.FeeConsumedPico, "execute");
+                if (gasFault is not null)
+                    return gasFault;
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
                     ? "Native Neo RISC-V execution fault."
@@ -203,10 +193,9 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"native execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
-                if (nativeResult.FeeConsumedPico > 0)
-                {
-                    request.Engine.AddFee(nativeResult.FeeConsumedPico);
-                }
+                var gasFault = TryChargeExecutionFee(request.Engine, nativeResult.FeeConsumedPico, "native execute");
+                if (gasFault is not null)
+                    return gasFault;
                 var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
                     ? "Native RISC-V contract execution fault."
@@ -243,6 +232,24 @@ namespace Neo.SmartContract.RiscV
             {
                 NativeLibrary.Free(_libraryHandle);
                 _libraryHandle = IntPtr.Zero;
+            }
+        }
+
+        internal static RiscvExecutionResult? TryChargeExecutionFee(ApplicationEngine engine, long feeConsumedPico, string operation)
+        {
+            if (engine is null) throw new ArgumentNullException(nameof(engine));
+            if (feeConsumedPico <= 0)
+                return null;
+
+            try
+            {
+                engine.AddFee(feeConsumedPico);
+                return null;
+            }
+            catch (InvalidOperationException gasEx) when (gasEx.Message.Contains("Insufficient GAS", StringComparison.Ordinal))
+            {
+                Trace($"{operation} gas exhaustion: {gasEx.Message}");
+                return new RiscvExecutionResult(VMState.FAULT, System.Array.Empty<StackItem>(), gasEx);
             }
         }
     }

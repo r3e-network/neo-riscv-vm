@@ -32,7 +32,6 @@ namespace Neo.SmartContract.RiscV
         public const string LibraryPathEnvironmentVariable = "NEO_RISCV_HOST_LIB";
         private const string TraceEnvironmentVariable = "NEO_RISCV_TRACE_HOST";
         private const string ProfileEnvironmentVariable = "NEO_RISCV_PROFILE_HOST";
-        private static readonly byte[] StorageContextTokenMagic = [0x4E, 0x52, 0x53, 0x43];
         private static readonly ConcurrentDictionary<uint, HostProfileStat> HostProfileStats = new();
         private static readonly ConcurrentDictionary<string, PhaseProfileStat> CallContractPhaseStats = new();
         private static int s_profileDumped;
@@ -475,16 +474,11 @@ namespace Neo.SmartContract.RiscV
                 Trace($"callnative task-result method={method.Descriptor.Name} valueType={returnValue?.GetType().FullName ?? "null"}");
             }
 
-            var pushed = method.Descriptor.ReturnType != ContractParameterType.Void
-                ? request.Engine.Convert(returnValue)
-                : StackItem.Null;
-            Trace($"callnative pushed method={method.Descriptor.Name} pushed={DescribeStackItem(pushed)}");
-            var next = new StackItem[inputStack.Length - parameterCount - 1 + 1];
-            if (inputStack.Length > parameterCount + 1)
-            {
-                System.Array.Copy(inputStack, next, inputStack.Length - parameterCount - 1);
-            }
-            next[^1] = pushed;
+            var returnedStack = method.Descriptor.ReturnType == ContractParameterType.Void
+                ? System.Array.Empty<StackItem>()
+                : new[] { request.Engine.Convert(returnValue) };
+            Trace($"callnative pushed method={method.Descriptor.Name} count={returnedStack.Length}");
+            var next = BuildContractCallReturnStack(inputStack, parameterCount + 1, method.Descriptor.ReturnType, returnedStack);
             if (currentContract.Hash == NativeContract.ContractManagement.Hash)
                 scope.ContractCallCache.Clear();
             return next;

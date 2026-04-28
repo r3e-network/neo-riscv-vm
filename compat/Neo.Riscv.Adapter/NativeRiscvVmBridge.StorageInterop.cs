@@ -10,11 +10,7 @@ namespace Neo.SmartContract.RiscV
     {
         private static StackItem CreateStorageContextItem(StorageContext context)
         {
-            var payload = new byte[StorageContextTokenMagic.Length + sizeof(int) + 1];
-            System.Array.Copy(StorageContextTokenMagic, payload, StorageContextTokenMagic.Length);
-            System.BitConverter.GetBytes(context.Id).CopyTo(payload, StorageContextTokenMagic.Length);
-            payload[^1] = context.IsReadOnly ? (byte)1 : (byte)0;
-            return new ByteString(payload);
+            return StackItem.FromInterface(context);
         }
 
         private static StackItem[] HandleStorageGet(RiscvExecutionRequest request, StackItem[] inputStack)
@@ -278,25 +274,9 @@ namespace Neo.SmartContract.RiscV
 
         private static bool TryParseStorageContextItem(StackItem item, out StorageContext context)
         {
-            if (item is ByteString encoded && TryParseStorageContextToken(encoded.GetSpan(), out var encodedContext))
+            if (item is InteropInterface interop && interop.GetInterface<object>() is StorageContext storageContext)
             {
-                context = encodedContext;
-                return true;
-            }
-
-            if (item is Neo.VM.Types.Buffer buffer && TryParseStorageContextToken(buffer.GetSpan(), out encodedContext))
-            {
-                context = encodedContext;
-                return true;
-            }
-
-            if (item is Neo.VM.Types.Array array && array.Count == 2)
-            {
-                context = new StorageContext
-                {
-                    Id = (int)array[0].GetInteger(),
-                    IsReadOnly = array[1].GetBoolean(),
-                };
+                context = storageContext;
                 return true;
             }
 
@@ -313,25 +293,10 @@ namespace Neo.SmartContract.RiscV
             {
                 ByteString bytes => $"bytes:{Convert.ToHexString(bytes.GetSpan())}",
                 Neo.VM.Types.Buffer bytes => $"buffer:{Convert.ToHexString(bytes.GetSpan())}",
+                InteropInterface interop => $"interop:{interop.GetInterface<object>()?.GetType().Name ?? "null"}",
                 _ => item.GetType().Name
             };
-            throw new InvalidOperationException($"Storage context must be a token or a two-item array, got {detail}.");
-        }
-
-        private static bool TryParseStorageContextToken(ReadOnlySpan<byte> bytes, out StorageContext context)
-        {
-            context = new StorageContext();
-            if (bytes.Length != StorageContextTokenMagic.Length + sizeof(int) + 1)
-                return false;
-            if (!bytes[..StorageContextTokenMagic.Length].SequenceEqual(StorageContextTokenMagic))
-                return false;
-
-            context = new StorageContext
-            {
-                Id = System.BitConverter.ToInt32(bytes.Slice(StorageContextTokenMagic.Length, sizeof(int))),
-                IsReadOnly = bytes[^1] != 0,
-            };
-            return true;
+            throw new InvalidOperationException($"Storage context must be an opaque interop handle, got {detail}.");
         }
 
         private static bool TryGetByteLikeBytes(StackItem item, out byte[] bytes)
@@ -350,13 +315,5 @@ namespace Neo.SmartContract.RiscV
             }
         }
 
-        private static StackItem CreateStorageContextArray(StorageContext context)
-        {
-            return new Neo.VM.Types.Array(new StackItem[]
-            {
-                new Integer(context.Id),
-                context.IsReadOnly ? StackItem.True : StackItem.False,
-            });
-        }
     }
 }

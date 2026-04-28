@@ -124,6 +124,8 @@ namespace Neo.SmartContract.RiscV
                 Path.Combine(AppContext.BaseDirectory, "Plugins", assemblyName, fileName),
                 Path.Combine(Environment.CurrentDirectory, "Plugins", assemblyName, fileName),
                 // Workspace-local Rust host build outputs.
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "target", "release", fileName)),
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "target", "debug", fileName)),
                 Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "target", "release", fileName)),
                 Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "target", "debug", fileName)),
                 Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "target", "release", fileName)),

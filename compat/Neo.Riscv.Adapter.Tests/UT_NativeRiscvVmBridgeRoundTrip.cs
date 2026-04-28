@@ -26,6 +26,80 @@ public class UT_NativeRiscvVmBridgeRoundTrip
         "97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb";
 
     [TestMethod]
+    public void StorageContextRejectsGuestFabricatedArray()
+    {
+        var forged = new Neo.VM.Types.Array(new StackItem[]
+        {
+            new Integer(123),
+            StackItem.False,
+        });
+
+        Assert.IsFalse(TryParseStorageContext(forged, out _));
+    }
+
+    [TestMethod]
+    public void StorageContextAcceptsOpaqueInteropHandle()
+    {
+        var expected = new StorageContext
+        {
+            Id = 123,
+            IsReadOnly = true,
+        };
+
+        Assert.IsTrue(TryParseStorageContext(StackItem.FromInterface(expected), out var actual));
+        Assert.AreEqual(expected.Id, actual.Id);
+        Assert.AreEqual(expected.IsReadOnly, actual.IsReadOnly);
+    }
+
+    [TestMethod]
+    public void VoidContractCallConsumesArgumentsWithoutPushingNull()
+    {
+        var keep = new Integer(99);
+        var inputStack = new StackItem[]
+        {
+            keep,
+            new ByteString(UInt160.Zero.ToArray()),
+            new ByteString("method"u8.ToArray()),
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+        };
+
+        var next = NativeRiscvVmBridge.BuildContractCallReturnStack(
+            inputStack,
+            consumedArgumentCount: 4,
+            ContractParameterType.Void,
+            System.Array.Empty<StackItem>());
+
+        Assert.AreEqual(1, next.Length);
+        Assert.AreSame(keep, next[0]);
+    }
+
+    [TestMethod]
+    public void NonVoidContractCallPushesActualResultOnly()
+    {
+        var keep = new Integer(99);
+        var result = new Integer(42);
+        var inputStack = new StackItem[]
+        {
+            keep,
+            new ByteString(UInt160.Zero.ToArray()),
+            new ByteString("method"u8.ToArray()),
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+        };
+
+        var next = NativeRiscvVmBridge.BuildContractCallReturnStack(
+            inputStack,
+            consumedArgumentCount: 4,
+            ContractParameterType.Integer,
+            new StackItem[] { result });
+
+        Assert.AreEqual(2, next.Length);
+        Assert.AreSame(keep, next[0]);
+        Assert.AreSame(result, next[1]);
+    }
+
+    [TestMethod]
     public void NonIteratorInteropRoundTripsThroughNativeStack()
     {
         using var bridge = CreateBridge();
@@ -223,6 +297,17 @@ public class UT_NativeRiscvVmBridgeRoundTrip
             return debug;
 
         return null;
+    }
+
+    private static bool TryParseStorageContext(StackItem item, out StorageContext context)
+    {
+        var method = typeof(NativeRiscvVmBridge).GetMethod("TryParseStorageContextItem", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.IsNotNull(method);
+
+        object?[] args = [item, null];
+        var result = (bool)method!.Invoke(null, args)!;
+        context = args[1] is StorageContext parsed ? parsed : new StorageContext();
+        return result;
     }
 
     private static object CreateExecutionScope()

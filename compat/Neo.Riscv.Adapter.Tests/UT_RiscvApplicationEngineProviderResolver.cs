@@ -42,6 +42,26 @@ public class UT_RiscvApplicationEngineProviderResolver
     }
 
     [TestMethod]
+    public void DefaultCandidatesIncludeAdapterWorkspaceTargetFromTestBin()
+    {
+        var fileName = GetPlatformFileName();
+        var expectedRelease = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "target",
+            "release",
+            fileName));
+
+        var candidates = RiscvApplicationEngineProviderResolver.GetDefaultCandidatesForTesting();
+
+        CollectionAssert.Contains(candidates, expectedRelease);
+    }
+
+    [TestMethod]
     public void ResolveLibraryPath_PrefersEnvVar_WhenEnvVarPointsToAnotherExistingLibrary()
     {
         var previous = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);

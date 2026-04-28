@@ -134,19 +134,33 @@ namespace Neo.SmartContract.RiscV
 
             Trace($"contract.call nested exit method={descriptor.Name} resultCount={nestedResult.ResultStack.Count}");
 
-            var returnedCount = nestedResult.ResultStack.Count == 0 ? 1 : nestedResult.ResultStack.Count;
-            var next = new StackItem[inputStack.Length - 4 + returnedCount];
-            if (inputStack.Length > 4)
+            return BuildContractCallReturnStack(inputStack, 4, descriptor.ReturnType, nestedResult.ResultStack);
+        }
+
+        internal static StackItem[] BuildContractCallReturnStack(
+            StackItem[] inputStack,
+            int consumedArgumentCount,
+            ContractParameterType returnType,
+            System.Collections.Generic.IReadOnlyList<StackItem> resultStack)
+        {
+            if (inputStack is null) throw new ArgumentNullException(nameof(inputStack));
+            if (resultStack is null) throw new ArgumentNullException(nameof(resultStack));
+            if (consumedArgumentCount < 0 || inputStack.Length < consumedArgumentCount)
+                throw new ArgumentOutOfRangeException(nameof(consumedArgumentCount));
+
+            var returnedCount = returnType == ContractParameterType.Void ? 0 : resultStack.Count;
+            if (returnType != ContractParameterType.Void && returnedCount == 0)
+                throw new InvalidOperationException("Contract.Call target did not return a value for a non-void method.");
+
+            var prefixLength = inputStack.Length - consumedArgumentCount;
+            var next = new StackItem[prefixLength + returnedCount];
+            if (prefixLength > 0)
             {
-                System.Array.Copy(inputStack, next, inputStack.Length - 4);
+                System.Array.Copy(inputStack, next, prefixLength);
             }
-            if (nestedResult.ResultStack.Count == 0)
+            for (var index = 0; index < returnedCount; index++)
             {
-                next[^1] = StackItem.Null;
-            }
-            for (var index = 0; index < nestedResult.ResultStack.Count; index++)
-            {
-                next[inputStack.Length - 4 + index] = nestedResult.ResultStack[index];
+                next[prefixLength + index] = resultStack[index];
             }
 
             return next;

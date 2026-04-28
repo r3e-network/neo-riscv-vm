@@ -83,6 +83,7 @@ namespace Neo.SmartContract.RiscV
             for (var index = contexts.Length - 1; index >= 0; index--)
             {
                 var context = contexts[index];
+                var contextState = context.GetState<ExecutionContextState>();
                 Trace($"bridge dispatch index={index} ip={context.InstructionPointer} scriptLen={((ReadOnlyMemory<byte>)context.Script).Length}");
                 var contextInitialStack = context.EvaluationStack.Count > 0
                     ? Enumerable.Range(0, context.EvaluationStack.Count)
@@ -103,6 +104,10 @@ namespace Neo.SmartContract.RiscV
                     .Zip(scriptHashes, (contractType, scriptHash) =>
                         RiscvCompatibilityContracts.ResolveExecutionFacadeHash(contractType, scriptHash))
                     .ToArray();
+                var methodName = contextState.MethodName
+                    ?? contextState.Contract?.Manifest.Abi.Methods
+                        .FirstOrDefault(method => method.Offset == context.InstructionPointer)
+                        ?.Name;
 
                 result = _bridge.Execute(new RiscvExecutionRequest(
                     this,
@@ -117,7 +122,8 @@ namespace Neo.SmartContract.RiscV
                     contractTypes,
                     executionFacadeHashes,
                     contextInitialStack,
-                    context.InstructionPointer));
+                    context.InstructionPointer,
+                    methodName));
 
                 if (result.State != VMState.HALT)
                     break;

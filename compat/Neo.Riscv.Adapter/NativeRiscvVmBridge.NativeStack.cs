@@ -395,16 +395,14 @@ namespace Neo.SmartContract.RiscV
             };
         }
 
-        private static StackItem ReadByteString(NativeStackItem nativeItem, bool decodeStorageContextTokens)
+        private static StackItem ReadByteString(NativeStackItem nativeItem)
         {
             if (nativeItem.BytesPtr == IntPtr.Zero)
                 return ByteString.Empty;
 
             var bytes = new byte[checked((int)nativeItem.BytesLen)];
             Marshal.Copy(nativeItem.BytesPtr, bytes, 0, bytes.Length);
-            return decodeStorageContextTokens && TryParseStorageContextToken(bytes, out var context)
-                ? CreateStorageContextArray(context)
-                : new ByteString(bytes);
+            return new ByteString(bytes);
         }
 
         private static StackItem ReadBuffer(NativeStackItem nativeItem)
@@ -445,7 +443,7 @@ namespace Neo.SmartContract.RiscV
                 {
                     0 => new Integer(nativeItem.IntegerValue),
                     5 => ReadBigInteger(nativeItem),
-                    1 => ReadByteString(nativeItem, decodeStorageContextTokens),
+                    1 => ReadByteString(nativeItem),
                     11 => ReadBuffer(nativeItem),
                     3 => nativeItem.IntegerValue != 0 ? StackItem.True : StackItem.False,
                     4 => ReadArray(nativeItem, referenceCounter, scope),

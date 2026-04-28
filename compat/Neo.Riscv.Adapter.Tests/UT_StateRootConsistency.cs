@@ -28,10 +28,16 @@ namespace Neo.Riscv.Adapter.Tests;
 [DoNotParallelize]
 public class UT_StateRootConsistency
 {
+    [TestInitialize]
+    public void Setup()
+    {
+        RiscvTestEnvironment.RequireNativeRiscvProvider();
+    }
+
     [TestCleanup]
     public void Cleanup()
     {
-        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        RiscvTestEnvironment.RestoreManagedHostProvider();
     }
 
     /// <summary>

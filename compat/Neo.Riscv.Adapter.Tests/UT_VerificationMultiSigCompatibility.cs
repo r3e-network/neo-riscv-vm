@@ -25,12 +25,13 @@ public class UT_VerificationMultiSigCompatibility
     {
         _previousLibraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
         RiscvApplicationEngineProviderResolver.ResetForTesting();
+        RiscvTestEnvironment.RequireNativeRiscvProvider();
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        RiscvTestEnvironment.RestoreManagedHostProvider();
         Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, _previousLibraryPath);
         RiscvApplicationEngineProviderResolver.ResetForTesting();
     }

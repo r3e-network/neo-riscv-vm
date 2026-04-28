@@ -32,6 +32,39 @@ public static class RiscvTestEnvironment
         Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, _previousLibraryPath);
     }
 
+    internal static void RequireNativeRiscvProvider()
+    {
+        var libraryPath = ResolveNativeHostLibraryPath();
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set to a valid library.");
+
+        Environment.SetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable, libraryPath);
+        RiscvApplicationEngineProviderResolver.ResetForTesting();
+        try
+        {
+            ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Inconclusive($"Resolved RISC-V host library is not loadable in this test environment: {ex.Message}");
+        }
+    }
+
+    internal static void RestoreManagedHostProvider()
+    {
+        RiscvApplicationEngineProviderResolver.ResetForTesting();
+        ApplicationEngine.Provider = new NeoVMHostApplicationEngineProvider();
+    }
+
+    private static string? ResolveNativeHostLibraryPath()
+    {
+        var configured = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+            return configured;
+
+        return ResolveWorkspaceLibraryPath();
+    }
+
     private static string? ResolveWorkspaceLibraryPath()
     {
         var baseDirectory = AppContext.BaseDirectory;

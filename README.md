@@ -34,7 +34,7 @@ Latest committed verification passed with:
 |------|----------|
 | VM workspace tests | `cargo test --workspace --all-targets` passed (`376` Rust/devpack tests) |
 | JSON compatibility | full corpus runner passed over `161` copied NeoVM JSON files |
-| Adapter tests | `NEO_RISCV_HOST_LIB=... dotnet test compat/Neo.Riscv.Adapter.Tests/...` passed (`10` tests) |
+| Adapter tests | `NEO_RISCV_HOST_LIB=... dotnet test dotnet/Neo.Riscv.Adapter.Tests/...` passed (`10` tests) |
 | Core matrix | `1,169` tests passed across `Neo.Extensions.Tests` (89), `Neo.Json.UnitTests` (92), and `Neo.UnitTests` (988) |
 | Node matrix | `477` tests passed across `13` node/plugin test projects |
 | Smoke coverage | VM E2E, FFI resolution, and `neo-cli` smoke all passed |
@@ -106,7 +106,7 @@ neo-riscv-vm/
 │   ├── neo-riscv-guest-module/
 │   ├── neo-riscv-host/
 │   └── neo-riscv-devpack/
-├── compat/
+├── dotnet/
 │   ├── Neo.Riscv.Adapter/
 │   ├── Neo.Riscv.Adapter.Tests/
 │   └── Neo.VM.Riscv.Tests/

@@ -15,7 +15,7 @@
 			<Aliases>scfx</Aliases>
 		</ProjectReference>
 		<ProjectReference Include="..\..\src\Neo.SmartContract.Testing\Neo.SmartContract.Testing.csproj" />
-		<ProjectReference Include="..\..\..\compat\Neo.Riscv.Adapter\Neo.Riscv.Adapter.csproj" />
+		<ProjectReference Include="..\..\..\dotnet\Neo.Riscv.Adapter\Neo.Riscv.Adapter.csproj" />
 	</ItemGroup>
 
 	<!-- RISC-V native library for direct P/Invoke testing -->

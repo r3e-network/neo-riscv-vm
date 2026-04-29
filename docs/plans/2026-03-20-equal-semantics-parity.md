@@ -11,13 +11,13 @@
 ### Task 1: Reproduce and capture the failing behavior
 
 **Files:**
-- Inspect: `compat/Neo.VM.Riscv.Tests/Corpus/Tests/OpCodes/BitwiseLogic/EQUAL.json`
+- Inspect: `dotnet/Neo.VM.Riscv.Tests/Corpus/Tests/OpCodes/BitwiseLogic/EQUAL.json`
 - Inspect: `crates/neo-riscv-guest/src/lib.rs`
 - Inspect: `crates/neo-riscv-guest/src/helpers.rs`
 
 **Step 1: Run the copied compatibility file**
 
-Run: `NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so NEO_RISCV_VM_JSON_FILTER=/OpCodes/BitwiseLogic/EQUAL.json dotnet test /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj --filter FullyQualifiedName~TestCopiedNeoVmJsonFinalStates`
+Run: `NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so NEO_RISCV_VM_JSON_FILTER=/OpCodes/BitwiseLogic/EQUAL.json dotnet test /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj --filter FullyQualifiedName~TestCopiedNeoVmJsonFinalStates`
 
 Expected: `Array=false`, `Map=false`, and `Buffer=false` cases fail while the other `EQUAL` cases stay green.
 
@@ -73,7 +73,7 @@ Expected: the new tests pass.
 
 **Step 1: Run the copied NeoVM compatibility file again**
 
-Run: `NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so NEO_RISCV_VM_JSON_FILTER=/OpCodes/BitwiseLogic/EQUAL.json dotnet test /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj --filter FullyQualifiedName~TestCopiedNeoVmJsonFinalStates`
+Run: `NEO_RISCV_HOST_LIB=/home/neo/git/neo-riscv-vm/target/debug/libneo_riscv_host.so NEO_RISCV_VM_JSON_FILTER=/OpCodes/BitwiseLogic/EQUAL.json dotnet test /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj --filter FullyQualifiedName~TestCopiedNeoVmJsonFinalStates`
 
 Expected: green.
 

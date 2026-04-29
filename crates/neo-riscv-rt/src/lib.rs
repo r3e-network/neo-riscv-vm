@@ -388,10 +388,9 @@ impl Context {
 
     /// Pushes the value of static field `index` onto the stack.
     pub fn load_static(&mut self, index: usize) {
-        // Auto-extend static fields if needed (mirrors NeoVM behavior where
-        // INITSSLOT may not have been called for this index yet).
         if index >= self.static_fields.len() {
-            self.static_fields.resize(index + 1, StackValue::Null);
+            self.fault("invalid static field index");
+            return;
         }
         let val = self.static_fields[index].clone();
         self.stack.push(val);
@@ -399,10 +398,11 @@ impl Context {
 
     /// Pops the top of the stack into static field `index`.
     pub fn store_static(&mut self, index: usize) {
-        let val = self.pop();
         if index >= self.static_fields.len() {
-            self.static_fields.resize(index + 1, StackValue::Null);
+            self.fault("invalid static field index");
+            return;
         }
+        let val = self.pop();
         self.static_fields[index] = val;
     }
 
@@ -772,11 +772,18 @@ mod tests {
     #[test]
     fn load_store_static() {
         let mut ctx = Context::from_abi_stack(vec![]);
+        ctx.static_fields = vec![StackValue::Null; 6];
+
         ctx.push_int(99);
         ctx.store_static(5);
         assert_eq!(ctx.static_fields.len(), 6);
         ctx.load_static(5);
         assert_eq!(ctx.pop(), StackValue::Integer(99));
+
+        let mut invalid = Context::from_abi_stack(vec![]);
+        invalid.push_int(1);
+        invalid.store_static(0);
+        assert_eq!(invalid.state, VmState::Fault);
     }
 
     #[test]

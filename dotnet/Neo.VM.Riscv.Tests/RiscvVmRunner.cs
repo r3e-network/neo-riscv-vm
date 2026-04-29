@@ -11,7 +11,6 @@ namespace Neo.Test;
 internal sealed class RiscvVmRunner : IDisposable
 {
     private const string LibraryPathEnvironmentVariable = "NEO_RISCV_HOST_LIB";
-    private const string DefaultLibraryName = "libneo_riscv_host.so";
     private const string PreferDebugLibraryEnvironmentVariable = "NEO_RISCV_TEST_PREFER_DEBUG_LIB";
 
     [StructLayout(LayoutKind.Sequential)]
@@ -195,25 +194,35 @@ internal sealed class RiscvVmRunner : IDisposable
     private static IEnumerable<string> CandidateLibraryPaths()
     {
         var baseDir = AppContext.BaseDirectory;
+        var defaultLibraryName = GetPlatformFileName();
         if (!string.IsNullOrWhiteSpace(baseDir))
         {
-            yield return Path.Combine(baseDir, DefaultLibraryName);
+            yield return Path.Combine(baseDir, defaultLibraryName);
         }
 
-        yield return Path.Combine(Environment.CurrentDirectory, DefaultLibraryName);
+        yield return Path.Combine(Environment.CurrentDirectory, defaultLibraryName);
 
         // Common Rust build outputs when running `dotnet test` from the repo root.
         foreach (var root in EnumerateCandidateRoots(Environment.CurrentDirectory))
         {
-            yield return Path.Combine(root, "target", "release", DefaultLibraryName);
-            yield return Path.Combine(root, "target", "debug", DefaultLibraryName);
+            yield return Path.Combine(root, "target", "release", defaultLibraryName);
+            yield return Path.Combine(root, "target", "debug", defaultLibraryName);
         }
 
         foreach (var root in EnumerateCandidateRoots(AppContext.BaseDirectory))
         {
-            yield return Path.Combine(root, "target", "release", DefaultLibraryName);
-            yield return Path.Combine(root, "target", "debug", DefaultLibraryName);
+            yield return Path.Combine(root, "target", "release", defaultLibraryName);
+            yield return Path.Combine(root, "target", "debug", defaultLibraryName);
         }
+    }
+
+    private static string GetPlatformFileName()
+    {
+        if (OperatingSystem.IsWindows())
+            return "neo_riscv_host.dll";
+        if (OperatingSystem.IsMacOS())
+            return "libneo_riscv_host.dylib";
+        return "libneo_riscv_host.so";
     }
 
     private static IEnumerable<string> EnumerateCandidateRoots(string? startDir)

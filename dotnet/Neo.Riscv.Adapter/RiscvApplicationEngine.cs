@@ -37,6 +37,10 @@ namespace Neo.SmartContract.RiscV
             ?? typeof(ExecutionContext).GetField("_instructionPointer", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? typeof(ExecutionContext).GetField("<InstructionPointer>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        private static readonly FieldInfo CurrentContextField =
+            typeof(ExecutionEngine).GetField("<CurrentContext>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Unable to locate Neo.VM.ExecutionEngine current context field.");
+
         /// <summary>
         /// Backing property <see cref="ExecutionContext.LocalVariables"/> — internal setter.
         /// Reflected once at class-load so the adapter can populate the faulting frame's
@@ -148,7 +152,7 @@ namespace Neo.SmartContract.RiscV
                 while (InvocationStack.Count > 0)
                 {
                     var context = InvocationStack.Pop();
-                    ContextUnloaded(context);
+                    UnloadContextFromBridge(context);
                 }
             }
             else if (result.State == VMState.FAULT && CurrentContext is not null)
@@ -173,17 +177,16 @@ namespace Neo.SmartContract.RiscV
                 ResultStack.Pop();
             }
 
-            foreach (var item in result.ResultStack)
-            {
-                ResultStack.Push(item);
-            }
-
             if (result.State == VMState.HALT)
             {
-                if (InvocationStack.Count == 0)
+                if (InvocationStack.Count == 0 || CurrentContext is null)
                     throw new InvalidOperationException("No current execution context is available.");
 
+                var currentContext = CurrentContext;
+                ReplaceEvaluationStack(currentContext, result.ResultStack);
                 var context = InvocationStack.Pop();
+                if (!ReferenceEquals(context, currentContext))
+                    throw new InvalidOperationException("The completed RISC-V context is not current.");
                 ContextUnloaded(context);
             }
             else if (CurrentContext is not null)
@@ -199,22 +202,19 @@ namespace Neo.SmartContract.RiscV
         internal void UnloadNestedContextFromBridge(ExecutionContext nestedContext, RiscvExecutionResult result)
         {
             if (InvocationStack.Count == 0 || !ReferenceEquals(CurrentContext, nestedContext))
+            {
+                Trace($"nested unload mismatch count={InvocationStack.Count} current={DescribeContext(CurrentContext)} nested={DescribeContext(nestedContext)}");
                 throw new InvalidOperationException("The nested RISC-V context is not current.");
+            }
 
             var callerContext = nestedContext.GetState<ExecutionContextState>().CallingContext;
             var callerStackDepth = callerContext?.EvaluationStack.Count ?? 0;
 
-            while (nestedContext.EvaluationStack.Count > 0)
-            {
-                nestedContext.EvaluationStack.Pop();
-            }
-
-            foreach (var item in result.ResultStack)
-            {
-                nestedContext.EvaluationStack.Push(item);
-            }
+            ReplaceEvaluationStack(nestedContext, result.ResultStack);
 
             var context = InvocationStack.Pop();
+            if (!ReferenceEquals(context, nestedContext))
+                throw new InvalidOperationException("The nested RISC-V context is not current.");
             ContextUnloaded(context);
 
             if (callerContext is not null)
@@ -260,6 +260,66 @@ namespace Neo.SmartContract.RiscV
                     }
                 }
             }
+        }
+
+        private void UnloadContextFromBridge(ExecutionContext context)
+        {
+            if (!IsRiscvContext(context))
+            {
+                ContextUnloaded(context);
+                return;
+            }
+
+            SetCurrentContextFromInvocationStack();
+            var state = context.GetState<ExecutionContextState>();
+            if (UncaughtException is null)
+            {
+                state.SnapshotCache?.Commit();
+                if (CurrentContext is not null)
+                    CurrentContext.GetState<ExecutionContextState>().NotificationCount += state.NotificationCount;
+            }
+            else
+            {
+                RollbackContextNotifications(context);
+            }
+
+            Diagnostic?.ContextUnloaded(context);
+        }
+
+        private void SetCurrentContextFromInvocationStack()
+        {
+            CurrentContextField.SetValue(this, InvocationStack.Count > 0 ? InvocationStack.Peek() : null);
+        }
+
+        private static void ReplaceEvaluationStack(ExecutionContext context, IReadOnlyList<StackItem> stack)
+        {
+            while (context.EvaluationStack.Count > 0)
+                context.EvaluationStack.Pop();
+
+            foreach (var item in stack)
+                context.EvaluationStack.Push(item);
+        }
+
+        private static bool IsRiscvContext(ExecutionContext context)
+        {
+            if (context.GetState<ExecutionContextState>().Contract?.Type == ContractType.RiscV)
+                return true;
+
+            var script = ((ReadOnlyMemory<byte>)context.Script).Span;
+            return script.Length >= 4
+                && script[0] == 0x50
+                && script[1] == 0x56
+                && script[2] == 0x4D
+                && script[3] == 0x00;
+        }
+
+        private static string DescribeContext(ExecutionContext? context)
+        {
+            if (context is null)
+                return "<null>";
+
+            var state = context.GetState<ExecutionContextState>();
+            return $"{state.Contract?.Manifest.Name ?? "<script>"}:{state.MethodName ?? "<none>"}:{state.ScriptHash?.ToString() ?? "<no-hash>"}";
         }
 
         internal void RollbackCurrentContextNotificationsTo(int notificationCount)

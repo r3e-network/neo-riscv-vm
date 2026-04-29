@@ -12,12 +12,12 @@ using Neo.VM.Types;
 namespace Neo.SmartContract.RiscV
 {
     /// <summary>
-    /// Interface for the RISC-V VM bridge that executes contracts on PolkaVM.
-    /// Supports two execution paths:
-    /// - NeoVM contracts (ContractType.NeoVM): Script is NeoVM bytecode, interpreted
-    ///   by the NeoVM interpreter running as a PolkaVM guest binary.
-    /// - RISC-V contracts (ContractType.RiscV): Script is a PolkaVM binary (PVM\0 magic),
-    ///   executed directly by PolkaVM without an interpreter layer.
+    /// Interface for the RISC-V VM bridge that executes contracts on the single PolkaVM runtime.
+    /// Supports two contract payload modes:
+    /// - NeoVM contracts (ContractType.NeoVM): script is NeoVM bytecode, interpreted
+    ///   by the NeoVM compatibility contract running inside RiscvVM.
+    /// - RISC-V contracts (ContractType.RiscV): script is a PolkaVM binary (PVM\0 magic),
+    ///   executed directly by RiscvVM without the compatibility layer.
     /// Both paths share the same host callback for SYSCALL/CALLT interop.
     /// </summary>
     public interface IRiscvVmBridge
@@ -26,7 +26,7 @@ namespace Neo.SmartContract.RiscV
         /// Executes a contract through the PolkaVM runtime.
         /// The request contains the contract script(s) and execution context.
         /// The adapter dispatches by contract metadata: NeoVM bytecode is routed to
-        /// the interpreter guest, while native RISC-V contracts are executed directly.
+        /// the NeoVM compatibility contract, while native RISC-V contracts are executed directly.
         /// </summary>
         RiscvExecutionResult Execute(RiscvExecutionRequest request);
 

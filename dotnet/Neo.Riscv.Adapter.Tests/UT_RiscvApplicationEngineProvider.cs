@@ -120,7 +120,7 @@ public class UT_RiscvApplicationEngineProvider
 
         var pluginRoot = Path.Combine(AppContext.BaseDirectory, "Plugins", "Neo.Riscv.Adapter");
         Directory.CreateDirectory(pluginRoot);
-        var bundledPath = Path.Combine(pluginRoot, "libneo_riscv_host.so");
+        var bundledPath = Path.Combine(pluginRoot, GetPlatformFileName());
         var hadBundled = File.Exists(bundledPath);
         byte[]? originalBytes = hadBundled ? File.ReadAllBytes(bundledPath) : null;
 
@@ -145,15 +145,25 @@ public class UT_RiscvApplicationEngineProvider
     private static string? ResolveWorkspaceLibraryPath()
     {
         var baseDirectory = AppContext.BaseDirectory;
-        var release = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "release", "libneo_riscv_host.so"));
+        var fileName = GetPlatformFileName();
+        var release = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "release", fileName));
         if (File.Exists(release))
             return release;
 
-        var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", "libneo_riscv_host.so"));
+        var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", fileName));
         if (File.Exists(debug))
             return debug;
 
         return null;
+    }
+
+    private static string GetPlatformFileName()
+    {
+        if (OperatingSystem.IsWindows())
+            return "neo_riscv_host.dll";
+        if (OperatingSystem.IsMacOS())
+            return "libneo_riscv_host.dylib";
+        return "libneo_riscv_host.so";
     }
 
     private static bool CanLoadLibrary(string path)

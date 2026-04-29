@@ -18,10 +18,10 @@ cargo build -p neo-riscv-host --release
 
 NEO_RISCV_HOST_LIB="${HOST_LIB}" \
 NEO_RISCV_VM_JSON_MODE=full \
-dotnet test "${ROOT_DIR}/compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj"
+dotnet test "${ROOT_DIR}/dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj"
 
 NEO_RISCV_HOST_LIB="${HOST_LIB}" \
-dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+dotnet test "${ROOT_DIR}/dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
 
 if [[ -z "${NEO_TEST_PROJECT}" ]]; then
   if [[ -f "${PREFERRED_NEO_TEST_PROJECT}" ]]; then

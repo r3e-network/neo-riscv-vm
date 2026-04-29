@@ -35,7 +35,7 @@ cp "$NATIVE_LIB" "$VALIDATOR_DIR/bin/Release/net10.0/Plugins/Neo.Riscv.Adapter/l
 
 # Ensure adapter DLL is in place
 if [ ! -f "$VALIDATOR_DIR/bin/Release/net10.0/Neo.Riscv.Adapter.dll" ]; then
-    cp "$PROJECT_DIR/compat/Neo.Riscv.Adapter/obj/Release/net10.0/Neo.Riscv.Adapter.dll" \
+    cp "$PROJECT_DIR/dotnet/Neo.Riscv.Adapter/obj/Release/net10.0/Neo.Riscv.Adapter.dll" \
        "$VALIDATOR_DIR/bin/Release/net10.0/Neo.Riscv.Adapter.dll" 2>/dev/null || true
 fi
 

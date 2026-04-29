@@ -47,9 +47,9 @@ if [[ -z "${HOST_LIB}" ]]; then
 fi
 
 echo "[package] building managed adapter plugin (Release)…"
-dotnet build "${ROOT_DIR}/compat/Neo.Riscv.Adapter/Neo.Riscv.Adapter.csproj" -c Release
+dotnet build "${ROOT_DIR}/dotnet/Neo.Riscv.Adapter/Neo.Riscv.Adapter.csproj" -c Release
 
-ADAPTER_DLL="${ROOT_DIR}/compat/Neo.Riscv.Adapter/bin/Release/net10.0/Neo.Riscv.Adapter.dll"
+ADAPTER_DLL="${ROOT_DIR}/dotnet/Neo.Riscv.Adapter/bin/Release/net10.0/Neo.Riscv.Adapter.dll"
 if [[ ! -f "${ADAPTER_DLL}" ]]; then
   echo "[package] ERROR: adapter DLL not found at ${ADAPTER_DLL}" >&2
   exit 1

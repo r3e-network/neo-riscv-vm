@@ -265,8 +265,8 @@ public class UT_StateRootConsistency
 
     /// <summary>
     /// Validates state consistency when blocks include Application-trigger script execution.
-    /// Executes read-only native contract calls (balanceOf, symbol, decimals) through
-    /// the RISC-V VM to validate the execution pipeline does not corrupt state.
+    /// Executes representative read-only native contract calls through the RISC-V VM
+    /// to validate every active native contract is reachable without corrupting state.
     /// </summary>
     [TestMethod]
     public void ApplicationTrigger_NativeContractCalls_StateConsistent()
@@ -286,23 +286,37 @@ public class UT_StateRootConsistency
 
         string preExecFingerprint = ComputeStateFingerprint(snapshot);
 
-        // Execute a series of read-only native contract calls through ApplicationEngine
-        var readOnlyCalls = new (UInt160 hash, string method, object?[] args)[]
+        // Execute one representative read-only native contract call per active native contract.
+        var readOnlyCalls = new (NativeContract contract, string method, object?[] args)[]
         {
-            (NativeContract.NEO.Hash, "symbol", []),
-            (NativeContract.NEO.Hash, "decimals", []),
-            (NativeContract.NEO.Hash, "balanceOf", new object[] { committeeHash.ToArray() }),
-            (NativeContract.GAS.Hash, "symbol", []),
-            (NativeContract.GAS.Hash, "decimals", []),
-            (NativeContract.GAS.Hash, "balanceOf", new object[] { committeeHash.ToArray() }),
-            (NativeContract.Policy.Hash, "getFeePerByte", []),
-            (NativeContract.Policy.Hash, "getExecFeeFactor", []),
+            (NativeContract.ContractManagement, "getContract", [NativeContract.NEO.Hash]),
+            (NativeContract.StdLib, "base64Encode", [new byte[] { 0x01, 0x02, 0x03 }]),
+            (NativeContract.CryptoLib, "sha256", [new byte[] { 0x01, 0x02, 0x03 }]),
+            (NativeContract.Ledger, "currentHash", []),
+            (NativeContract.NEO, "balanceOf", [committeeHash]),
+            (NativeContract.GAS, "balanceOf", [committeeHash]),
+            (NativeContract.Policy, "getExecFeeFactor", []),
+            (NativeContract.RoleManagement, "getDesignatedByRole", [(int)Role.Oracle, 0]),
+            (NativeContract.Oracle, "getPrice", []),
+            (NativeContract.Notary, "balanceOf", [committeeHash]),
+            (NativeContract.Treasury, "verify", []),
         };
 
-        foreach (var (hash, method, args) in readOnlyCalls)
+        var expectedContracts = NativeContract.Contracts
+            .Where(contract => contract.IsActive(AdapterTestProtocolSettings.Default, 1))
+            .Select(contract => contract.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        var coveredContracts = readOnlyCalls
+            .Select(call => call.contract.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        CollectionAssert.AreEqual(expectedContracts, coveredContracts);
+
+        foreach (var (contract, method, args) in readOnlyCalls)
         {
             using var sb = new ScriptBuilder();
-            sb.EmitDynamicCall(hash, method, args);
+            sb.EmitDynamicCall(contract.Hash, method, args);
 
             var block = CreateEmptyBlock(system, 1); // block context for execution
             using var engine = ApplicationEngine.Create(
@@ -319,10 +333,10 @@ public class UT_StateRootConsistency
             var state = engine.Execute();
 
             Assert.AreEqual(VMState.HALT, state,
-                $"Native call {method} on {NativeContract.GetContract(hash)?.Name} should HALT, " +
+                $"Native call {method} on {contract.Name} should HALT, " +
                 $"got {state}: {engine.FaultException?.Message}");
 
-            Console.WriteLine($"[StateRoot] {NativeContract.GetContract(hash)?.Name}.{method}() = " +
+            Console.WriteLine($"[StateRoot] {contract.Name}.{method}() = " +
                 $"{(engine.ResultStack.Count > 0 ? engine.ResultStack.Peek() : "void")}");
         }
 

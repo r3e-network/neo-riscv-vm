@@ -190,7 +190,7 @@ Expected: exits without crashes or parity failures.
 - Modify: `fuzz/src/whole_system_parity.rs`
 - Reference: `crates/neo-riscv-host/src/lib.rs`
 - Reference: `crates/neo-riscv-host/tests/runtime.rs`
-- Reference: `compat/Neo.Riscv.Adapter/NativeRiscvVmBridge.cs`
+- Reference: `dotnet/Neo.Riscv.Adapter/NativeRiscvVmBridge.cs`
 
 **Step 1: Write the failing native-contract regression tests**
 

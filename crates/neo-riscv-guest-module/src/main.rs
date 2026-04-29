@@ -3,6 +3,9 @@
 
 extern crate alloc;
 
+#[cfg(target_arch = "riscv32")]
+mod mem_intrinsics;
+
 use alloc::vec::Vec;
 use core::alloc::{GlobalAlloc, Layout};
 

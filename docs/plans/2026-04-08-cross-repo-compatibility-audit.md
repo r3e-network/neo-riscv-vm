@@ -13,7 +13,7 @@
 **Files:**
 - Modify: `docs/plans/2026-04-08-cross-repo-compatibility-audit.md`
 - Reference: `scripts/regenerate-guest-blob.sh`
-- Reference: `compat/Neo.Riscv.Adapter/NativeRiscvVmBridge.cs`
+- Reference: `dotnet/Neo.Riscv.Adapter/NativeRiscvVmBridge.cs`
 - Reference: `/home/neo/git/neo-riscv/neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj`
 - Reference: `/home/neo/git/neo-riscv/neo-riscv-devpack/tests/Neo.Compiler.CSharp.UnitTests/Neo.Compiler.CSharp.UnitTests.csproj`
 - Reference: `/home/neo/git/neo-riscv/neo-riscv-devpack/tests/Neo.SmartContract.Testing.UnitTests/Neo.SmartContract.Testing.UnitTests.csproj`

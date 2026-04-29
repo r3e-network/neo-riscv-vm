@@ -8,7 +8,7 @@
 The current committed implementation is a validated three-repo workspace integration:
 
 - `neo-riscv-vm` provides the Rust runtime, NeoVM-on-RISC-V guest, adapter plugin, compatibility tests, fuzz harnesses, and orchestration scripts.
-- `neo-riscv-core` no longer contains its own `Neo.SmartContract.RiscV` bridge layer. That code now lives in `neo-riscv-vm/compat/Neo.Riscv.Adapter`.
+- `neo-riscv-core` no longer contains its own `Neo.SmartContract.RiscV` bridge layer. That code now lives in `neo-riscv-vm/dotnet/Neo.Riscv.Adapter`.
 - `neo-riscv-node` is validated against the packaged adapter bundle, including CLI smoke coverage.
 - Existing C# syscall and native-contract implementations remain the only source of truth.
 - `neo-riscv-core` test compilation no longer requires a direct sibling `ProjectReference` to the adapter project.

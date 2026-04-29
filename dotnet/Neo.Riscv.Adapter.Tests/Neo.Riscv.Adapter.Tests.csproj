@@ -16,9 +16,12 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <RiscvHostLibRelease>..\..\target\release\libneo_riscv_host.so</RiscvHostLibRelease>
-    <RiscvHostLibDebug>..\..\target\debug\libneo_riscv_host.so</RiscvHostLibDebug>
-    <RiscvHostLibStaged>$(OutDir)Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</RiscvHostLibStaged>
+    <RiscvHostLibFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">neo_riscv_host.dll</RiscvHostLibFileName>
+    <RiscvHostLibFileName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libneo_riscv_host.dylib</RiscvHostLibFileName>
+    <RiscvHostLibFileName Condition="'$(RiscvHostLibFileName)' == ''">libneo_riscv_host.so</RiscvHostLibFileName>
+    <RiscvHostLibRelease>..\..\target\release\$(RiscvHostLibFileName)</RiscvHostLibRelease>
+    <RiscvHostLibDebug>..\..\target\debug\$(RiscvHostLibFileName)</RiscvHostLibDebug>
+    <RiscvHostLibStaged>$(OutDir)Plugins\Neo.Riscv.Adapter\$(RiscvHostLibFileName)</RiscvHostLibStaged>
   </PropertyGroup>
 
   <Target Name="StageNativeRiscvHostForAdapterTests" AfterTargets="Build">

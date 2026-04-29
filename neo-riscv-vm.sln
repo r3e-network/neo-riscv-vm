@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "compat", "compat", "{8DAABD4A-9466-E508-005B-9984CD970E9A}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dotnet", "dotnet", "{8DAABD4A-9466-E508-005B-9984CD970E9A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.VM.Riscv.Tests", "compat\Neo.VM.Riscv.Tests\Neo.VM.Riscv.Tests.csproj", "{F14D8FF6-7A64-5AC6-E000-FC392A654E40}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.VM.Riscv.Tests", "dotnet\Neo.VM.Riscv.Tests\Neo.VM.Riscv.Tests.csproj", "{F14D8FF6-7A64-5AC6-E000-FC392A654E40}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.Riscv.Adapter", "compat\Neo.Riscv.Adapter\Neo.Riscv.Adapter.csproj", "{28B6BF7B-D0DC-4433-943E-AA8619AD8A4B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.Riscv.Adapter", "dotnet\Neo.Riscv.Adapter\Neo.Riscv.Adapter.csproj", "{28B6BF7B-D0DC-4433-943E-AA8619AD8A4B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo", "..\neo-riscv-core\src\Neo\Neo.csproj", "{47CED90D-AEC1-45E1-9BD0-1C174A789FF3}"
 EndProject
@@ -17,7 +17,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.IO", "..\neo-riscv-core
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.Json", "..\neo-riscv-core\src\Neo.Json\Neo.Json.csproj", "{2A4541DF-60A1-4E35-A744-AC0D44A5821D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.Riscv.Adapter.Tests", "compat\Neo.Riscv.Adapter.Tests\Neo.Riscv.Adapter.Tests.csproj", "{D120A45E-A1A1-427E-B27E-4C4704F5F1C8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Neo.Riscv.Adapter.Tests", "dotnet\Neo.Riscv.Adapter.Tests\Neo.Riscv.Adapter.Tests.csproj", "{D120A45E-A1A1-427E-B27E-4C4704F5F1C8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

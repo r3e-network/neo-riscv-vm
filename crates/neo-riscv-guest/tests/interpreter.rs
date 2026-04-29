@@ -1021,6 +1021,39 @@ fn append_updates_static_field_alias() {
 }
 
 #[test]
+fn ldsfld_without_static_slot_faults() {
+    let error = interpret(&[0x58]).expect_err("LDSFLD0 without INITSSLOT should fault");
+    assert!(
+        error.contains("invalid static field index"),
+        "error should mention invalid static field index: {error}"
+    );
+}
+
+#[test]
+fn ldsfld_out_of_range_faults() {
+    let error =
+        interpret(&[0x56, 0x01, 0x5f, 0x01]).expect_err("LDSFLD 1 with one slot should fault");
+    assert!(
+        error.contains("invalid static field index"),
+        "error should mention invalid static field index: {error}"
+    );
+}
+
+#[test]
+fn stsfld_out_of_range_faults() {
+    let error = interpret(&[
+        0x56, 0x01, // INITSSLOT 1
+        0x11, // PUSH1
+        0x67, 0x01, // STSFLD 1
+    ])
+    .expect_err("STSFLD 1 with one slot should fault");
+    assert!(
+        error.contains("invalid static field index"),
+        "error should mention invalid static field index: {error}"
+    );
+}
+
+#[test]
 fn clearitems_updates_static_field_alias() {
     let result = interpret(&[
         0x56, 0x01, // INITSSLOT 1
@@ -1582,6 +1615,20 @@ fn newbuffer_rejects_over_max_item_size() {
     assert!(
         result.contains("FAULT") || result.contains("size") || result.contains("MaxItemSize"),
         "error should indicate size violation: {result}"
+    );
+}
+
+#[test]
+fn newbuffer_rejects_i256_length_over_i64_range() {
+    let mut script = vec![0x05]; // PUSHINT256
+    script.extend_from_slice(&[0xff; 31]);
+    script.push(0x7f);
+    script.push(0x88); // NEWBUFFER
+
+    let error = interpret(&script).expect_err("huge PUSHINT256 NEWBUFFER length should fault");
+    assert!(
+        error.contains("range") || error.contains("integer"),
+        "error should mention integer range: {error}"
     );
 }
 
@@ -2188,6 +2235,25 @@ fn convert_integer_to_bytestring() {
         result.stack,
         vec![StackValue::ByteString(vec![5])],
         "CONVERT 5 to ByteString should produce [5]"
+    );
+}
+
+#[test]
+fn convert_buffer_larger_than_max_integer_size_faults() {
+    let mut script = vec![
+        0x0c, // PUSHDATA1
+        0x21, // 33-byte payload
+    ];
+    script.extend_from_slice(&[0xaa; 33]);
+    script.extend_from_slice(&[
+        0xdb, 0x30, // CONVERT Buffer
+        0xdb, 0x21, // CONVERT Integer
+    ]);
+
+    let error = interpret(&script).expect_err("33-byte Buffer to Integer should fault");
+    assert!(
+        error.contains("integer size exceeds maximum"),
+        "error should mention integer size: {error}"
     );
 }
 

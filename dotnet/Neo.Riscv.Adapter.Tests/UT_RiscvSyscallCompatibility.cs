@@ -5,7 +5,9 @@ using Neo.SmartContract;
 using Neo.SmartContract.RiscV;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Neo.Riscv.Adapter.Tests;
 
@@ -62,6 +64,19 @@ public class UT_RiscvSyscallCompatibility
         Assert.AreEqual(
             ApplicationEngine.System_Runtime_Platform.Name,
             NativeRiscvVmBridge.GetHostProfileNameForTesting(ApplicationEngine.System_Runtime_Platform.Hash));
+    }
+
+    [TestMethod]
+    public void AllApplicationEngineSyscallsAreHandledByRiscvHostBridge()
+    {
+        var unsupported = ApplicationEngine.Services.Values
+            .OrderBy(descriptor => descriptor.Name)
+            .Where(descriptor => !NativeRiscvVmBridge.IsSyscallHandledForTesting(descriptor.Hash))
+            .Select(descriptor => descriptor.Name)
+            .ToArray();
+
+        CollectionAssert.AreEqual(System.Array.Empty<string>(), unsupported);
+        Assert.IsTrue(ApplicationEngine.Services.Count >= 41);
     }
 
     private sealed class NoopBridge : IRiscvVmBridge

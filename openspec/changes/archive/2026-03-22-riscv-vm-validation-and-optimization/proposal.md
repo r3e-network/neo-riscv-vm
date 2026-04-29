@@ -38,7 +38,7 @@ The Neo RISC-V VM is functionally complete with 258/258 Rust tests and 2/2 C# co
 
 - Guest interpreter (crates/neo-riscv-guest): Performance optimizations
 - Host runtime (crates/neo-riscv-host): Memory management improvements
-- C# adapter (compat/Neo.Riscv.Adapter): Integration test coverage
+- C# adapter (dotnet/Neo.Riscv.Adapter): Integration test coverage
 - Build system: Cross-repo test orchestration scripts
 
 **Dependencies:**

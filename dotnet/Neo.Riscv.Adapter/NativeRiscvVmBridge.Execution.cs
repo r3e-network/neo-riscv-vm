@@ -24,7 +24,7 @@ namespace Neo.SmartContract.RiscV
 
             return executionKind switch
             {
-                RiscvExecutionKind.GuestNeoVmContract =>
+                RiscvExecutionKind.NeoVmCompatibilityContract =>
                     ExecuteScriptInternal(request, script, request.InitialStack.ToArray(), request.InitialInstructionPointer, scope),
                 RiscvExecutionKind.NativeRiscvDirect =>
                     ExecuteNativeContractInternal(request, script, request.InitialStack.ToArray(), request.Method ?? throw new InvalidOperationException("Method is required for native RISC-V contract execution."), scope),

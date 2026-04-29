@@ -11,7 +11,7 @@ Key facts:
 
 - NeoVM compatibility runs through the Rust guest interpreter on PolkaVM.
 - Existing C# syscalls and native contracts remain the source of truth.
-- The RISC-V bridge/provider code now lives in `neo-riscv-vm/compat/Neo.Riscv.Adapter`, not in `neo-riscv-core`.
+- The RISC-V bridge/provider code now lives in `neo-riscv-vm/dotnet/Neo.Riscv.Adapter`, not in `neo-riscv-core`.
 - Full integrated validation passed across `neo-riscv-vm`, `neo-riscv-core`, and `neo-riscv-node`.
 - Core test compilation no longer depends on a direct sibling adapter project reference.
 - Plugin startup no longer aborts the process when a config watcher cannot be allocated.
@@ -39,7 +39,7 @@ Additional VM-local checks that passed:
 `./scripts/verify-all.sh` passed with:
 
 - full JSON corpus mode enabled
-- `161` copied NeoVM JSON corpus files available under `compat/Neo.VM.Riscv.Tests/Corpus/Tests`
+- `161` copied NeoVM JSON corpus files available under `dotnet/Neo.VM.Riscv.Tests/Corpus/Tests`
 - compatibility runner tests passing
 - adapter tests passing (`10`)
 

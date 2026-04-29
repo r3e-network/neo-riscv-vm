@@ -28,10 +28,24 @@ namespace Neo.SmartContract.RiscV
             if (inputStack.Length < 2)
                 throw new InvalidOperationException("Runtime.Notify requires event name and state.");
 
-            if (inputStack[^1] is not ByteString eventName)
-                throw new InvalidOperationException("Runtime.Notify requires a byte string event name.");
-            if (inputStack[^2] is not Neo.VM.Types.Array state)
-                throw new InvalidOperationException("Runtime.Notify requires an array state.");
+            ByteString eventName;
+            Neo.VM.Types.Array state;
+            if (inputStack[^1] is ByteString eventNameAtTop &&
+                inputStack[^2] is Neo.VM.Types.Array stateAtBottom)
+            {
+                eventName = eventNameAtTop;
+                state = stateAtBottom;
+            }
+            else if (inputStack[^2] is ByteString eventNameAtBottom &&
+                     inputStack[^1] is Neo.VM.Types.Array stateAtTop)
+            {
+                eventName = eventNameAtBottom;
+                state = stateAtTop;
+            }
+            else
+            {
+                throw new InvalidOperationException("Runtime.Notify requires a byte string event name and an array state.");
+            }
 
             request.Engine.RuntimeNotify(eventName.GetSpan().ToArray(), state);
 

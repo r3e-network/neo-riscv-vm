@@ -208,6 +208,7 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
+    reset_last_native_fee_consumed_pico();
     let script_len: u32 = script
         .len()
         .try_into()
@@ -257,6 +258,7 @@ where
             (script_ptr, script_len, stack_ptr, stack_len, 0u32),
         )
         .map_err(|e| {
+            set_last_native_fee_consumed_pico(host.fee_consumed_pico);
             let trace = read_guest_trace(instance, &mut host);
             // Read guest panic message if available
             let panic_msg = read_guest_panic(instance, &mut host);
@@ -300,6 +302,7 @@ where
     // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
     let mut result: Result<ExecutionResult, String> =
         postcard::from_bytes(&res_bytes).map_err(|_| "Failed to decode result".to_string())?;
+    set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 
     if let Ok(ref mut r) = result {
         r.fee_consumed_pico = host.fee_consumed_pico;
@@ -348,6 +351,7 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
+    reset_last_native_fee_consumed_pico();
     let script_len: u32 = script
         .len()
         .try_into()
@@ -397,6 +401,7 @@ where
             (script_ptr, script_len, stack_ptr, stack_len, initial_ip as u32),
         )
         .map_err(|e| {
+            set_last_native_fee_consumed_pico(host.fee_consumed_pico);
             let trace = read_guest_trace(instance, &mut host);
             let panic_msg = read_guest_panic(instance, &mut host);
             {
@@ -437,6 +442,7 @@ where
     // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
     let mut result: Result<ExecutionResult, String> =
         postcard::from_bytes(&res_bytes).map_err(|_| "Failed to decode result".to_string())?;
+    set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 
     if let Ok(ref mut r) = result {
         r.fee_consumed_pico = host.fee_consumed_pico;
@@ -519,7 +525,7 @@ pub(crate) fn native_call_error(error: &polkavm::CallError) -> Option<&'static s
 /// Execute a native RISC-V contract binary directly via PolkaVM.
 ///
 /// Unlike `execute_script_*` which runs NeoVM bytecode through the cached
-/// interpreter guest, this compiles the contract binary itself as a PolkaVM
+/// compatibility contract, this compiles the contract binary itself as a PolkaVM
 /// module and executes it directly. The contract must export `execute(u32, u32)`,
 /// `get_result_ptr()`, and `get_result_len()` functions, and may import
 /// `host_call` for syscalls.

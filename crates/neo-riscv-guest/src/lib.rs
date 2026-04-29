@@ -767,8 +767,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             LDSFLD0..=LDSFLD6 => {
                 let index = (opcode - LDSFLD0) as usize;
                 if index >= static_fields.len() {
-                    static_fields.resize(index + 1, StackValue::Null);
-                    static_fields_initialized = true;
+                    return Err("invalid static field index".to_string());
                 }
                 let value = static_fields
                     .get(index)
@@ -782,8 +781,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let index = script[ip + 1] as usize;
                 if index >= static_fields.len() {
-                    static_fields.resize(index + 1, StackValue::Null);
-                    static_fields_initialized = true;
+                    return Err("invalid static field index".to_string());
                 }
                 let value = static_fields
                     .get(index)
@@ -852,8 +850,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     value
                 };
                 if index >= static_fields.len() {
-                    static_fields.resize(index + 1, StackValue::Null);
-                    static_fields_initialized = true;
+                    return Err("invalid static field index".to_string());
                 }
                 let slot = static_fields
                     .get_mut(index)
@@ -867,8 +864,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let index = script[ip + 1] as usize;
                 let value = pop_item(&mut stack)?;
                 if index >= static_fields.len() {
-                    static_fields.resize(index + 1, StackValue::Null);
-                    static_fields_initialized = true;
+                    return Err("invalid static field index".to_string());
                 }
                 let slot = static_fields
                     .get_mut(index)

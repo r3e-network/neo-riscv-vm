@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HOST_LIB="${VM_DIR}/target/release/libneo_riscv_host.so"
-TEST_PROJECT="${VM_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+TEST_PROJECT="${VM_DIR}/dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
 FILTER="ClassName=Neo.Riscv.Adapter.Tests.UT_StateRootConsistency"
 
 if [[ ! -f "${HOST_LIB}" ]]; then

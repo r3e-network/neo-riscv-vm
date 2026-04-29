@@ -11,7 +11,7 @@ neo-riscv-core
   -> generic ApplicationEngine.Provider hook
   -> no in-core Neo.SmartContract.RiscV bridge subtree
 
-neo-riscv-vm/compat/Neo.Riscv.Adapter
+neo-riscv-vm/dotnet/Neo.Riscv.Adapter
   -> plugin entry point
   -> provider resolver
   -> ApplicationEngine implementation

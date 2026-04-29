@@ -9,6 +9,7 @@ const POST_SYSCALL_STACK_HEADROOM: usize = 8;
 const RETAINED_PREFIX_BUF_SIZE: usize = 2 * 1024 * 1024;
 const MAX_RETAINED_DECODE_DEPTH: usize = 64;
 const MAX_RETAINED_COLLECTION_LEN: usize = 4096;
+const MAX_INTEGER_SIZE: usize = 32;
 
 const RETAINED_TAG_INTEGER: u8 = 0x01;
 const RETAINED_TAG_BIGINTEGER: u8 = 0x02;
@@ -1102,6 +1103,10 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
     if bytes.is_empty() {
         return Ok(0);
     }
+    if bytes.len() > MAX_INTEGER_SIZE {
+        return Err("integer size exceeds maximum".to_string());
+    }
+
     let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
         0xff
     } else {
@@ -1113,13 +1118,15 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
             return Ok(0);
         }
 
-        if bytes[8..].iter().all(|byte| *byte == sign_extend) {
+        if bytes[8..].iter().all(|byte| *byte == sign_extend)
+            && ((bytes[7] & 0x80) == (sign_extend & 0x80))
+        {
             let mut buffer = [sign_extend; 8];
             buffer.copy_from_slice(&bytes[..8]);
             return Ok(i64::from_le_bytes(buffer));
         }
 
-        return Ok(if sign_extend == 0xff { -1 } else { 1 });
+        return Err("integer exceeds i64 range".to_string());
     }
 
     let mut buffer = [sign_extend; 8];
@@ -1130,6 +1137,9 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
 pub(crate) fn decode_signed_le_bytes_i128(bytes: &[u8]) -> Result<i128, String> {
     if bytes.is_empty() {
         return Ok(0);
+    }
+    if bytes.len() > MAX_INTEGER_SIZE {
+        return Err("integer size exceeds maximum".to_string());
     }
 
     let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
@@ -1230,7 +1240,6 @@ pub(crate) fn pop_boolean(stack: &mut Vec<StackValue>) -> Result<bool, String> {
 /// Convert a StackValue to boolean via the integer path (NeoVM GetBoolean).
 /// ByteString/BigInteger > 32 bytes will FAULT, matching NeoVM's MaxSize check.
 pub(crate) fn item_to_boolean_strict(item: &StackValue) -> Result<bool, String> {
-    const MAX_INTEGER_SIZE: usize = 32;
     match item {
         StackValue::Boolean(value) => Ok(*value),
         StackValue::Integer(value) => Ok(*value != 0),

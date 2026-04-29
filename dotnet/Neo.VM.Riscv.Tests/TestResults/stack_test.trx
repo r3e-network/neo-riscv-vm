@@ -10,8 +10,8 @@
         <ErrorInfo>
           <Message>Assert.Inconclusive failed. NEO_RISCV_HOST_LIB is not set.</Message>
           <StackTrace>   at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.Inconclusive(String message) in /_/src/TestFramework/TestFramework/Assertions/Assert.Inconclusive.cs:line 27
-   at Neo.Test.RiscvVmRunner.CreateFromEnvironment() in /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/RiscvVmRunner.cs:line 114
-   at Neo.Test.UT_RiscvVmJson.TestDirectSmoke() in /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/UT_RiscvVmJson.cs:line 20
+   at Neo.Test.RiscvVmRunner.CreateFromEnvironment() in /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/RiscvVmRunner.cs:line 114
+   at Neo.Test.UT_RiscvVmJson.TestDirectSmoke() in /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/UT_RiscvVmJson.cs:line 20
    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
         </ErrorInfo>
@@ -22,8 +22,8 @@
         <ErrorInfo>
           <Message>Assert.Inconclusive failed. NEO_RISCV_HOST_LIB is not set.</Message>
           <StackTrace>   at Microsoft.VisualStudio.TestTools.UnitTesting.Assert.Inconclusive(String message) in /_/src/TestFramework/TestFramework/Assertions/Assert.Inconclusive.cs:line 27
-   at Neo.Test.RiscvVmRunner.CreateFromEnvironment() in /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/RiscvVmRunner.cs:line 114
-   at Neo.Test.UT_RiscvVmJson.TestCopiedNeoVmJsonFinalStates() in /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/UT_RiscvVmJson.cs:line 35
+   at Neo.Test.RiscvVmRunner.CreateFromEnvironment() in /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/RiscvVmRunner.cs:line 114
+   at Neo.Test.UT_RiscvVmJson.TestCopiedNeoVmJsonFinalStates() in /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/UT_RiscvVmJson.cs:line 35
    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
         </ErrorInfo>
@@ -31,13 +31,13 @@
     </UnitTestResult>
   </Results>
   <TestDefinitions>
-    <UnitTest name="TestCopiedNeoVmJsonFinalStates" storage="/home/neo/git/neo-riscv-vm/compat/neo.vm.riscv.tests/bin/release/net10.0/neo.vm.riscv.tests.dll" id="13c8b32d-59f9-805c-a45b-2fdec6cc5888">
+    <UnitTest name="TestCopiedNeoVmJsonFinalStates" storage="/home/neo/git/neo-riscv-vm/dotnet/neo.vm.riscv.tests/bin/release/net10.0/neo.vm.riscv.tests.dll" id="13c8b32d-59f9-805c-a45b-2fdec6cc5888">
       <Execution id="4e3a8124-7c90-4714-9da5-59e1e30be08a" />
-      <TestMethod codeBase="/home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="Neo.Test.UT_RiscvVmJson" name="TestCopiedNeoVmJsonFinalStates" />
+      <TestMethod codeBase="/home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="Neo.Test.UT_RiscvVmJson" name="TestCopiedNeoVmJsonFinalStates" />
     </UnitTest>
-    <UnitTest name="TestDirectSmoke" storage="/home/neo/git/neo-riscv-vm/compat/neo.vm.riscv.tests/bin/release/net10.0/neo.vm.riscv.tests.dll" id="14fd2dfe-4bee-8109-932c-0f4ac3bbfe69">
+    <UnitTest name="TestDirectSmoke" storage="/home/neo/git/neo-riscv-vm/dotnet/neo.vm.riscv.tests/bin/release/net10.0/neo.vm.riscv.tests.dll" id="14fd2dfe-4bee-8109-932c-0f4ac3bbfe69">
       <Execution id="c6f21e28-a4bc-4cc0-bacf-232a2ffb358c" />
-      <TestMethod codeBase="/home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="Neo.Test.UT_RiscvVmJson" name="TestDirectSmoke" />
+      <TestMethod codeBase="/home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="Neo.Test.UT_RiscvVmJson" name="TestDirectSmoke" />
     </UnitTest>
   </TestDefinitions>
   <TestEntries>
@@ -51,7 +51,7 @@
   <ResultSummary outcome="Completed">
     <Counters total="2" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
     <Output>
-      <StdOut>Test Parallelization enabled for /home/neo/git/neo-riscv-vm/compat/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll (Workers: 8, Scope: MethodLevel)
+      <StdOut>Test Parallelization enabled for /home/neo/git/neo-riscv-vm/dotnet/Neo.VM.Riscv.Tests/bin/Release/net10.0/Neo.VM.Riscv.Tests.dll (Workers: 8, Scope: MethodLevel)
 Test 'TestDirectSmoke' was skipped in the test run.
 Test 'TestCopiedNeoVmJsonFinalStates' was skipped in the test run.
 </StdOut>

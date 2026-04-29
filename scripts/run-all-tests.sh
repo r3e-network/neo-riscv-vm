@@ -19,10 +19,10 @@ run_quick() {
 
   NEO_RISCV_HOST_LIB="${HOST_LIB}" \
   NEO_RISCV_VM_JSON_MODE=smoke \
-  dotnet test "${ROOT_DIR}/compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj"
+  dotnet test "${ROOT_DIR}/dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj"
 
   NEO_RISCV_HOST_LIB="${HOST_LIB}" \
-  dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+  dotnet test "${ROOT_DIR}/dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
 
   NEO_RISCV_HOST_LIB="${HOST_LIB}" \
   "${ROOT_DIR}/scripts/test-ffi-resolution.sh"

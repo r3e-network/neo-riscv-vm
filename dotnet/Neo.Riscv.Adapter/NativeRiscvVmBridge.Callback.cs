@@ -78,12 +78,63 @@ namespace Neo.SmartContract.RiscV
             ValidateSyscall(engine, ApplicationEngine.GetInteropDescriptor(api), currentCallFlags);
         }
 
+        internal static bool IsSyscallHandledForTesting(uint api) => IsSyscallHandled(api);
+
         private static void ValidateSyscall(ApplicationEngine engine, InteropDescriptor descriptor, CallFlags currentCallFlags)
         {
             if (descriptor.Hardfork is not null && !engine.IsHardforkEnabled(descriptor.Hardfork.Value))
                 throw new KeyNotFoundException();
             if (!currentCallFlags.HasFlag(descriptor.RequiredCallFlags))
                 throw new InvalidOperationException($"Cannot call this SYSCALL with the flag {currentCallFlags}.");
+        }
+
+        private static bool IsSyscallHandled(uint api)
+        {
+            return api switch
+            {
+                uint hash when hash == ApplicationEngine.System_Runtime_Platform => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetTrigger => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetNetwork => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetAddressVersion => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GasLeft => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetRandom => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetScriptContainer => true,
+                uint hash when hash == ApplicationEngine.System_Storage_GetContext => true,
+                uint hash when hash == ApplicationEngine.System_Storage_GetReadOnlyContext => true,
+                uint hash when hash == ApplicationEngine.System_Storage_AsReadOnly => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Local_Get => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Local_Find => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Local_Put => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Local_Delete => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Find => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Get => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Put => true,
+                uint hash when hash == ApplicationEngine.System_Storage_Delete => true,
+                uint hash when hash == ApplicationEngine.System_Crypto_CheckSig => true,
+                uint hash when hash == ApplicationEngine.System_Crypto_CheckMultisig => true,
+                uint hash when hash == ApplicationEngine.System_Contract_NativeOnPersist => true,
+                uint hash when hash == ApplicationEngine.System_Contract_NativePostPersist => true,
+                uint hash when hash == ApplicationEngine.System_Contract_CallNative => true,
+                uint hash when hash == ApplicationEngine.System_Contract_Call => true,
+                uint hash when hash == ApplicationEngine.System_Contract_GetCallFlags => true,
+                uint hash when hash == ApplicationEngine.System_Contract_CreateStandardAccount => true,
+                uint hash when hash == ApplicationEngine.System_Contract_CreateMultisigAccount => true,
+                uint hash when hash == ApplicationEngine.System_Iterator_Next => true,
+                uint hash when hash == ApplicationEngine.System_Iterator_Value => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetInvocationCounter => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_CurrentSigners => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_BurnGas => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_CheckWitness => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetCallingScriptHash => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetNotifications => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetTime => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetExecutingScriptHash => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_GetEntryScriptHash => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_LoadScript => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_Notify => true,
+                uint hash when hash == ApplicationEngine.System_Runtime_Log => true,
+                _ => false
+            };
         }
 
         private bool HandleHostCallback(RiscvExecutionRequest request, ExecutionScope scope, uint api, nuint instructionPointer, long gasLeft, StackItem[] inputStack, out NativeHostResult result)
@@ -102,6 +153,8 @@ namespace Neo.SmartContract.RiscV
                 var descriptor = ApplicationEngine.GetInteropDescriptor(api);
                 Trace($"syscall enter name={descriptor.Name} api=0x{api:x8} ip={instructionPointer} gasLeft={gasLeft} stackLen={inputStack.Length}");
                 ValidateSyscall(request.Engine, descriptor, request.CurrentCallFlags);
+                if (!IsSyscallHandled(api))
+                    throw new InvalidOperationException($"Unsupported syscall 0x{api:x8}.");
                 if (descriptor.FixedPrice != 0)
                 {
                     request.Engine.AddFee(descriptor.FixedPrice * request.Engine.ExecFeePicoFactor);

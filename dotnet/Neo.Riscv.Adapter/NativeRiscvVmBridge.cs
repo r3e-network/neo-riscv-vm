@@ -524,6 +524,7 @@ namespace Neo.SmartContract.RiscV
                 var contexts = request.Engine.InvocationStack.Reverse().ToArray();
                 var context = contexts[^1];
                 var contextState = context.GetState<ExecutionContextState>();
+                Trace($"pending context enter depth={request.Engine.InvocationStack.Count} context={contextState.Contract?.Manifest.Name ?? "<script>"}.{contextState.MethodName ?? "<none>"}");
                 var initialStack = context.EvaluationStack.Count > 0
                     ? Enumerable.Range(0, context.EvaluationStack.Count)
                         .Select(context.EvaluationStack.Peek)
@@ -566,13 +567,15 @@ namespace Neo.SmartContract.RiscV
                 var executionKind = RiscvExecutionDispatcher.Resolve(contractType, script);
                 result = executionKind switch
                 {
-                    RiscvExecutionKind.GuestNeoVmContract =>
+                    RiscvExecutionKind.NeoVmCompatibilityContract =>
                         ExecuteScriptInternal(nestedRequest, script, initialStack, context.InstructionPointer, scope),
                     RiscvExecutionKind.NativeRiscvDirect =>
                         ExecuteNativeContractInternal(nestedRequest, script, initialStack, methodName ?? throw new InvalidOperationException("Method is required for native RISC-V contract execution."), scope),
                     _ => throw new InvalidOperationException($"Unsupported execution kind: {executionKind}."),
                 };
+                Trace($"pending context exit state={result.State} current={request.Engine.CurrentContext?.GetState<ExecutionContextState>().Contract?.Manifest.Name ?? "<null>"}.{request.Engine.CurrentContext?.GetState<ExecutionContextState>().MethodName ?? "<none>"}");
                 riscvEngine.CompleteCurrentContextFromBridge(result);
+                Trace($"pending context completed depth={request.Engine.InvocationStack.Count}");
                 if (result.State != VMState.HALT)
                     return result;
             }

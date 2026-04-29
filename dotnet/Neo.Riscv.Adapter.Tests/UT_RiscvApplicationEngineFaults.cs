@@ -8,6 +8,7 @@ using Neo.VM;
 using Neo.VM.Types;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 
@@ -39,7 +40,31 @@ public class UT_RiscvApplicationEngineFaults
         Assert.AreEqual(0, engine.Notifications.Count);
     }
 
-    private static ContractState CreateContract(byte[] script)
+    [TestMethod]
+    public void HaltedRiscVExecutionClearsCurrentContext()
+    {
+        var script = new byte[] { 0x50, 0x56, 0x4d, 0x00 };
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+        using var engine = new RiscvApplicationEngine(
+            TriggerType.Application,
+            null,
+            snapshot,
+            null,
+            AdapterTestProtocolSettings.Default,
+            ApplicationEngine.TestModeGas,
+            new HaltingBridge([new Integer(BigInteger.One)]));
+
+        engine.LoadScript(script);
+        engine.CurrentContext!.GetState<ExecutionContextState>().Contract = CreateContract(script, ContractType.RiscV);
+
+        Assert.AreEqual(VMState.HALT, engine.Execute());
+        Assert.AreEqual(0, engine.InvocationStack.Count);
+        Assert.IsNull(engine.CurrentContext);
+        Assert.AreEqual(BigInteger.One, engine.ResultStack.Pop().GetInteger());
+    }
+
+    private static ContractState CreateContract(byte[] script, ContractType type = ContractType.NeoVM)
     {
         var nef = new NefFile
         {
@@ -54,7 +79,7 @@ public class UT_RiscvApplicationEngineFaults
         {
             Id = 1,
             UpdateCounter = 0,
-            Type = ContractType.NeoVM,
+            Type = type,
             Hash = script.ToScriptHash(),
             Nef = nef,
             Manifest = new ContractManifest
@@ -78,6 +103,37 @@ public class UT_RiscvApplicationEngineFaults
                 Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard(),
             },
         };
+    }
+
+    private sealed class HaltingBridge(IReadOnlyList<StackItem> resultStack) : IRiscvVmBridge
+    {
+        public RiscvExecutionResult Execute(RiscvExecutionRequest request)
+        {
+            return new RiscvExecutionResult(VMState.HALT, resultStack, null);
+        }
+
+        public RiscvExecutionResult ExecuteContract(
+            ApplicationEngine engine,
+            ContractState contract,
+            string method,
+            CallFlags flags,
+            IReadOnlyList<StackItem> args)
+        {
+            return Execute(new RiscvExecutionRequest(
+                engine,
+                engine.Trigger,
+                engine.ProtocolSettings.Network,
+                engine.ProtocolSettings.AddressVersion,
+                engine.PersistingBlock?.Timestamp ?? 0,
+                engine.GasLeft,
+                flags,
+                [contract.Script.ToArray()],
+                [contract.Hash],
+                [contract.Type],
+                [contract.Hash],
+                args,
+                method: method));
+        }
     }
 
     private sealed class NotifyingFaultBridge : IRiscvVmBridge

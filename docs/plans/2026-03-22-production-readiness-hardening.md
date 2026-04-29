@@ -13,7 +13,7 @@
 **Files:**
 - Modify: `scripts/verify-all.sh`
 - Test: `../neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj`
-- Test: `compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj`
+- Test: `dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj`
 
 **Step 1: Run the smallest complete verification surface**
 
@@ -35,10 +35,10 @@ For each failing integration test:
 ### Task 2: Fix one failing behavior at a time
 
 **Files:**
-- Modify: `compat/Neo.Riscv.Adapter/*.cs`
+- Modify: `dotnet/Neo.Riscv.Adapter/*.cs`
 - Modify: `crates/neo-riscv-host/src/*.rs`
 - Modify: `crates/neo-riscv-guest/src/*.rs`
-- Test: `compat/Neo.Riscv.Adapter.Tests/*.cs`
+- Test: `dotnet/Neo.Riscv.Adapter.Tests/*.cs`
 - Test: `../neo-riscv-core/tests/Neo.UnitTests/**/*.cs`
 
 **Step 1: Pick one failing test as the repro**
@@ -49,7 +49,7 @@ Expected: One clear failure.
 **Step 2: Add or tighten the narrowest local regression test only if needed**
 
 Preferred local test homes:
-- adapter/interop routing: `compat/Neo.Riscv.Adapter.Tests`
+- adapter/interop routing: `dotnet/Neo.Riscv.Adapter.Tests`
 - host/guest ABI behavior: Rust tests in `crates/neo-riscv-host/tests` or `crates/neo-riscv-guest/tests`
 
 **Step 3: Verify RED**
@@ -77,7 +77,7 @@ Expected: both pass.
 ### Task 3: Keep the verification surface fast and trustworthy
 
 **Files:**
-- Modify: `compat/Neo.VM.Riscv.Tests/*.cs`
+- Modify: `dotnet/Neo.VM.Riscv.Tests/*.cs`
 - Modify: `scripts/verify-all.sh`
 - Modify: `README.md`
 
@@ -107,8 +107,8 @@ Run:
 - `cargo fmt --all -- --check`
 - `cargo clippy --all-targets`
 - `cargo test -p neo-riscv-guest -p neo-riscv-host`
-- `dotnet test compat/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj`
-- `dotnet test compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj`
+- `dotnet test dotnet/Neo.VM.Riscv.Tests/Neo.VM.Riscv.Tests.csproj`
+- `dotnet test dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj`
 - `NEO_RUN_NEO_UNITTESTS=1 scripts/verify-all.sh`
 
 Expected: zero failures.

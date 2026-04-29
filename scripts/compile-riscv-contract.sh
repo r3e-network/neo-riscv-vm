@@ -17,15 +17,28 @@ CRATE_DIR="$(cd "${1:?Usage: compile-riscv-contract.sh <crate-dir> [output-path]
 OUTPUT="${2:-${CRATE_DIR}/contract.polkavm}"
 
 # Resolve the PolkaVM target JSON
-if command -v polkatool &>/dev/null; then
-    TARGET_JSON="$(polkatool get-target-json-path -b 32)"
-else
+if ! command -v polkatool &>/dev/null; then
     echo "Error: polkatool not found. Install with: cargo install polkavm-tools" >&2
     exit 1
 fi
 
-TARGET="riscv32emac-unknown-none-polkavm"
 TARGET_DIR="${CRATE_DIR}/target"
+TARGET_JSON="${TARGET_DIR}/neo-riscv32-polkavm.json"
+TARGET="$(basename "${TARGET_JSON}" .json)"
+ORIGINAL_TARGET_JSON="$(polkatool get-target-json-path -b 32)"
+mkdir -p "${TARGET_DIR}"
+if grep -q '"abi"' "${ORIGINAL_TARGET_JSON}"; then
+    cp "${ORIGINAL_TARGET_JSON}" "${TARGET_JSON}"
+else
+    awk '
+        /"llvm-abiname"[[:space:]]*:/ {
+            print
+            print "  \"abi\": \"ilp32e\","
+            next
+        }
+        { print }
+    ' "${ORIGINAL_TARGET_JSON}" > "${TARGET_JSON}"
+fi
 
 echo "Building contract crate: ${CRATE_DIR}"
 cargo +nightly build \
@@ -33,7 +46,8 @@ cargo +nightly build \
     --release \
     --target "${TARGET_JSON}" \
     --target-dir "${TARGET_DIR}" \
-    -Zbuild-std=core,alloc
+    -Zbuild-std=core,alloc \
+    -Zjson-target-spec
 
 # Extract the package name from Cargo.toml. Cargo keeps hyphens in the final
 # binary artifact name even though library artifacts use underscores.

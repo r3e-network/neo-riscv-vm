@@ -4,10 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIR="${ROOT_DIR}/target"
 GUEST_MANIFEST="${ROOT_DIR}/crates/neo-riscv-guest-module/Cargo.toml"
-GUEST_TARGET="riscv32emac-unknown-none-polkavm"
-GUEST_TARGET_JSON="$(polkatool get-target-json-path -b 32)"
-GUEST_ELF="${TARGET_DIR}/${GUEST_TARGET}/release/neo-riscv-guest-module"
 GUEST_BLOB="${ROOT_DIR}/crates/neo-riscv-guest-module/guest.polkavm"
+GUEST_TARGET_JSON="${TARGET_DIR}/neo-riscv32-polkavm.json"
+GUEST_TARGET="$(basename "${GUEST_TARGET_JSON}" .json)"
+GUEST_ELF="${TARGET_DIR}/${GUEST_TARGET}/release/neo-riscv-guest-module"
 
 if ! command -v polkatool >/dev/null 2>&1; then
   echo "polkatool is required to regenerate guest.polkavm" >&2
@@ -21,11 +21,27 @@ if ! cargo +nightly --version >/dev/null 2>&1; then
   exit 1
 fi
 
+mkdir -p "${TARGET_DIR}"
+ORIGINAL_TARGET_JSON="$(polkatool get-target-json-path -b 32)"
+if grep -q '"abi"' "${ORIGINAL_TARGET_JSON}"; then
+  cp "${ORIGINAL_TARGET_JSON}" "${GUEST_TARGET_JSON}"
+else
+  awk '
+    /"llvm-abiname"[[:space:]]*:/ {
+      print
+      print "  \"abi\": \"ilp32e\","
+      next
+    }
+    { print }
+  ' "${ORIGINAL_TARGET_JSON}" > "${GUEST_TARGET_JSON}"
+fi
+
 cargo +nightly build \
   --manifest-path "${GUEST_MANIFEST}" \
   --release \
   --target "${GUEST_TARGET_JSON}" \
   -Zbuild-std=core,alloc \
+  -Zjson-target-spec \
   --target-dir "${TARGET_DIR}"
 
 polkatool link \

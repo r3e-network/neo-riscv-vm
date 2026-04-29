@@ -6,6 +6,11 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Neo.SmartContract.RiscV</RootNamespace>
     <AssemblyName>Neo.Riscv.Adapter</AssemblyName>
+    <RiscvHostLibFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">neo_riscv_host.dll</RiscvHostLibFileName>
+    <RiscvHostLibFileName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libneo_riscv_host.dylib</RiscvHostLibFileName>
+    <RiscvHostLibFileName Condition="'$(RiscvHostLibFileName)' == ''">libneo_riscv_host.so</RiscvHostLibFileName>
+    <RiscvHostLibRelease>..\..\target\release\$(RiscvHostLibFileName)</RiscvHostLibRelease>
+    <RiscvHostLibDebug>..\..\target\debug\$(RiscvHostLibFileName)</RiscvHostLibDebug>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,12 +29,12 @@
       <Link>Plugins\Neo.Riscv.Adapter\Neo.Riscv.Adapter.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\target\release\libneo_riscv_host.so" Condition="Exists('..\..\target\release\libneo_riscv_host.so')">
-      <Link>Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</Link>
+    <Content Include="$(RiscvHostLibRelease)" Condition="Exists('$(RiscvHostLibRelease)')">
+      <Link>Plugins\Neo.Riscv.Adapter\$(RiscvHostLibFileName)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\target\debug\libneo_riscv_host.so" Condition="!Exists('..\..\target\release\libneo_riscv_host.so') and Exists('..\..\target\debug\libneo_riscv_host.so')">
-      <Link>Plugins\Neo.Riscv.Adapter\libneo_riscv_host.so</Link>
+    <Content Include="$(RiscvHostLibDebug)" Condition="!Exists('$(RiscvHostLibRelease)') and Exists('$(RiscvHostLibDebug)')">
+      <Link>Plugins\Neo.Riscv.Adapter\$(RiscvHostLibFileName)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -1,3 +1,4 @@
+use neo_riscv_abi::VmState;
 use neo_riscv_rt::{Context, StackValue};
 
 /// Helper: create an empty context with no initial stack.
@@ -189,18 +190,29 @@ fn static_fields_store_load() {
 }
 
 #[test]
-fn static_fields_auto_extend() {
+fn static_fields_reject_uninitialized_or_out_of_range_access() {
     let mut ctx = empty_ctx();
-    // Store into a high index -- should auto-extend
     ctx.push_int(77);
     ctx.store_static(5);
-    assert_eq!(ctx.static_fields.len(), 6);
+    assert_eq!(ctx.state, VmState::Fault);
+    assert_eq!(
+        ctx.fault_message.as_deref(),
+        Some("invalid static field index")
+    );
 
-    ctx.load_static(5);
-    assert_eq!(ctx.pop(), StackValue::Integer(77));
+    let mut ctx = empty_ctx();
+    ctx.init_sslot(1);
+    ctx.load_static(1);
+    assert_eq!(ctx.state, VmState::Fault);
+    assert_eq!(
+        ctx.fault_message.as_deref(),
+        Some("invalid static field index")
+    );
 
-    // Loading an unset intermediate slot should yield Null
+    let mut ctx = empty_ctx();
+    ctx.init_sslot(3);
     ctx.load_static(2);
+    assert_eq!(ctx.state, VmState::Halt);
     assert_eq!(ctx.pop(), StackValue::Null);
 }
 

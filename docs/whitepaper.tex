@@ -375,12 +375,12 @@ Data exchange between the guest and host uses two serialization formats:
 
 \begin{lstlisting}[language=C, caption={ContractType enumeration}]
 /// <summary>
-/// Defines the execution backend for a deployed contract.
+/// Defines the deployed contract payload format.
 /// </summary>
 public enum ContractType : byte
 {
     /// <summary>
-    /// NeoVM bytecode executed by the NeoVM interpreter guest inside PolkaVM.
+    /// NeoVM bytecode executed by the compatibility contract inside RiscvVM.
     /// This is the default. All existing contracts have this type.
     /// </summary>
     NeoVM = 0,

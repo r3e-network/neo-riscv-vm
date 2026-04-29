@@ -6,7 +6,7 @@ PLUGIN_DIR="${ROOT_DIR}/dist/Plugins/Neo.Riscv.Adapter"
 
 echo "Testing plugin loading package..."
 
-dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
+dotnet test "${ROOT_DIR}/dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
 "${ROOT_DIR}/scripts/package-adapter-plugin.sh"
 
 test -f "${PLUGIN_DIR}/Neo.Riscv.Adapter.dll"

@@ -387,15 +387,25 @@ public class UT_NativeRiscvVmBridgeRoundTrip
     private static string? ResolveWorkspaceLibraryPath()
     {
         var baseDirectory = AppContext.BaseDirectory;
-        var release = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "release", "libneo_riscv_host.so"));
+        var fileName = GetPlatformFileName();
+        var release = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "release", fileName));
         if (File.Exists(release))
             return release;
 
-        var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", "libneo_riscv_host.so"));
+        var debug = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "..", "target", "debug", fileName));
         if (File.Exists(debug))
             return debug;
 
         return null;
+    }
+
+    private static string GetPlatformFileName()
+    {
+        if (OperatingSystem.IsWindows())
+            return "neo_riscv_host.dll";
+        if (OperatingSystem.IsMacOS())
+            return "libneo_riscv_host.dylib";
+        return "libneo_riscv_host.so";
     }
 
     private static bool TryParseStorageContext(StackItem item, out StorageContext context)

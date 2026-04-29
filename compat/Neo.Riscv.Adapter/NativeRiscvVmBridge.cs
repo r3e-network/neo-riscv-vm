@@ -710,7 +710,8 @@ namespace Neo.SmartContract.RiscV
                 cacheEntry.ContractState,
                 cacheEntry.Descriptor,
                 callFlags,
-                argsArray);
+                argsArray,
+                isDynamicCall: expectedHasReturnValue is null);
 
             if (skipCache)
                 scope.ContractCallCache.Clear();

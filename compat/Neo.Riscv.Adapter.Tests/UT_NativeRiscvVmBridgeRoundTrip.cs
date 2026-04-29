@@ -100,6 +100,47 @@ public class UT_NativeRiscvVmBridgeRoundTrip
     }
 
     [TestMethod]
+    public void DynamicContractCallPushesNullForEmptyResult()
+    {
+        var keep = new Integer(99);
+        var inputStack = new StackItem[]
+        {
+            keep,
+            new ByteString(UInt160.Zero.ToArray()),
+            new ByteString("method"u8.ToArray()),
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+        };
+
+        var next = NativeRiscvVmBridge.BuildDynamicContractCallReturnStack(
+            inputStack,
+            consumedArgumentCount: 4,
+            System.Array.Empty<StackItem>());
+
+        Assert.AreEqual(2, next.Length);
+        Assert.AreSame(keep, next[0]);
+        Assert.AreSame(StackItem.Null, next[1]);
+    }
+
+    [TestMethod]
+    public void DynamicContractCallRejectsMultipleResults()
+    {
+        var inputStack = new StackItem[]
+        {
+            new ByteString(UInt160.Zero.ToArray()),
+            new ByteString("method"u8.ToArray()),
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+        };
+
+        Assert.ThrowsExactly<NotSupportedException>(() =>
+            NativeRiscvVmBridge.BuildDynamicContractCallReturnStack(
+                inputStack,
+                consumedArgumentCount: 4,
+                new StackItem[] { new Integer(1), new Integer(2) }));
+    }
+
+    [TestMethod]
     public void NonIteratorInteropRoundTripsThroughNativeStack()
     {
         using var bridge = CreateBridge();

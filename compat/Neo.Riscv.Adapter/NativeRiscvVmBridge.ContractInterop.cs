@@ -18,7 +18,8 @@ namespace Neo.SmartContract.RiscV
             ContractState contract,
             ContractMethodDescriptor descriptor,
             CallFlags callFlags,
-            Neo.VM.Types.Array argsArray)
+            Neo.VM.Types.Array argsArray,
+            bool isDynamicCall)
         {
             request.Engine.IncrementInvocationCounter(contract.Hash);
 
@@ -137,7 +138,9 @@ namespace Neo.SmartContract.RiscV
 
             Trace($"contract.call nested exit method={descriptor.Name} resultCount={nestedResult.ResultStack.Count}");
 
-            return BuildContractCallReturnStack(inputStack, 4, descriptor.ReturnType, nestedResult.ResultStack);
+            return isDynamicCall
+                ? BuildDynamicContractCallReturnStack(inputStack, 4, nestedResult.ResultStack)
+                : BuildContractCallReturnStack(inputStack, 4, descriptor.ReturnType, nestedResult.ResultStack);
         }
 
         internal static StackItem[] BuildContractCallReturnStack(
@@ -165,6 +168,29 @@ namespace Neo.SmartContract.RiscV
             {
                 next[prefixLength + index] = resultStack[index];
             }
+
+            return next;
+        }
+
+        internal static StackItem[] BuildDynamicContractCallReturnStack(
+            StackItem[] inputStack,
+            int consumedArgumentCount,
+            System.Collections.Generic.IReadOnlyList<StackItem> resultStack)
+        {
+            if (inputStack is null) throw new ArgumentNullException(nameof(inputStack));
+            if (resultStack is null) throw new ArgumentNullException(nameof(resultStack));
+            if (consumedArgumentCount < 0 || inputStack.Length < consumedArgumentCount)
+                throw new ArgumentOutOfRangeException(nameof(consumedArgumentCount));
+            if (resultStack.Count > 1)
+                throw new NotSupportedException("Multiple return values are not allowed in cross-contract calls.");
+
+            var prefixLength = inputStack.Length - consumedArgumentCount;
+            var next = new StackItem[prefixLength + 1];
+            if (prefixLength > 0)
+            {
+                System.Array.Copy(inputStack, next, prefixLength);
+            }
+            next[prefixLength] = resultStack.Count == 0 ? StackItem.Null : resultStack[0];
 
             return next;
         }

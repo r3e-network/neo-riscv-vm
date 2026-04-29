@@ -1,6 +1,7 @@
 using Neo.VM;
 using Neo.VM.Types;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -49,8 +50,7 @@ namespace Neo.SmartContract.RiscV
                 var handled = state.Bridge.HandleHostCallback(state.Request, state.Scope, api, instructionPointer, gasLeft, inputStack, out result);
                 if (ProfileEnabled)
                 {
-                    var descriptor = ApplicationEngine.GetInteropDescriptor(api);
-                    RecordHostProfile(api, descriptor.Name, inputStack.Length, readStackTicks, Stopwatch.GetTimestamp() - handleStart);
+                    RecordHostProfile(api, GetHostProfileName(api), inputStack.Length, readStackTicks, Stopwatch.GetTimestamp() - handleStart);
                 }
                 return handled;
             }
@@ -63,6 +63,28 @@ namespace Neo.SmartContract.RiscV
         }
 
         private const uint CalltMarkerHi = 0x4354;
+
+        internal static string GetHostProfileNameForTesting(uint api) => GetHostProfileName(api);
+
+        private static string GetHostProfileName(uint api)
+        {
+            return (api >> 16) == CalltMarkerHi
+                ? $"CALLT.{api & 0xFFFF}"
+                : ApplicationEngine.GetInteropDescriptor(api).Name;
+        }
+
+        internal static void ValidateSyscallForTesting(ApplicationEngine engine, uint api, CallFlags currentCallFlags)
+        {
+            ValidateSyscall(engine, ApplicationEngine.GetInteropDescriptor(api), currentCallFlags);
+        }
+
+        private static void ValidateSyscall(ApplicationEngine engine, InteropDescriptor descriptor, CallFlags currentCallFlags)
+        {
+            if (descriptor.Hardfork is not null && !engine.IsHardforkEnabled(descriptor.Hardfork.Value))
+                throw new KeyNotFoundException();
+            if (!currentCallFlags.HasFlag(descriptor.RequiredCallFlags))
+                throw new InvalidOperationException($"Cannot call this SYSCALL with the flag {currentCallFlags}.");
+        }
 
         private bool HandleHostCallback(RiscvExecutionRequest request, ExecutionScope scope, uint api, nuint instructionPointer, long gasLeft, StackItem[] inputStack, out NativeHostResult result)
         {
@@ -79,8 +101,7 @@ namespace Neo.SmartContract.RiscV
 
                 var descriptor = ApplicationEngine.GetInteropDescriptor(api);
                 Trace($"syscall enter name={descriptor.Name} api=0x{api:x8} ip={instructionPointer} gasLeft={gasLeft} stackLen={inputStack.Length}");
-                if (!request.CurrentCallFlags.HasFlag(descriptor.RequiredCallFlags))
-                    throw new InvalidOperationException($"Cannot call this SYSCALL with the flag {request.CurrentCallFlags}.");
+                ValidateSyscall(request.Engine, descriptor, request.CurrentCallFlags);
                 if (descriptor.FixedPrice != 0)
                 {
                     request.Engine.AddFee(descriptor.FixedPrice * request.Engine.ExecFeePicoFactor);

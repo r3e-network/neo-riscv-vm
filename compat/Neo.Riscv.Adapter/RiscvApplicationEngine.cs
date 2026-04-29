@@ -199,6 +199,21 @@ namespace Neo.SmartContract.RiscV
             return State;
         }
 
+        internal void RollbackCurrentContextNotificationsTo(int notificationCount)
+        {
+            if (CurrentContext is null)
+                return;
+
+            var state = CurrentContext.GetState<ExecutionContextState>();
+            if (state.NotificationCount <= notificationCount)
+                return;
+
+            var nestedNotificationCount = state.NotificationCount - notificationCount;
+            state.NotificationCount = nestedNotificationCount;
+            RollbackContextNotifications(CurrentContext);
+            state.NotificationCount = notificationCount;
+        }
+
         private static void Trace(string message)
         {
             if (!string.Equals(Environment.GetEnvironmentVariable(TraceEnvironmentVariable), "1", StringComparison.Ordinal))

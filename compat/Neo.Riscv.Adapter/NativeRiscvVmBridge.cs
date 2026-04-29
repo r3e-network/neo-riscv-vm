@@ -9,7 +9,6 @@
 using Neo.VM;
 using Neo.VM.Types;
 using Neo.Extensions;
-using Neo.Network.P2P.Payloads;
 using Neo.SmartContract;
 using Neo.SmartContract.Manifest;
 using Neo.SmartContract.Iterators;
@@ -165,6 +164,7 @@ namespace Neo.SmartContract.RiscV
         private readonly HostFreeCallbackDelegate _hostFreeCallback;
         private readonly IntPtr _hostCallbackPtr;
         private readonly IntPtr _hostFreeCallbackPtr;
+        private const CallFlags CallTRequiredCallFlags = CallFlags.ReadStates | CallFlags.AllowCall;
         private const int CachedSmallIntMin = -1;
         private const int CachedSmallIntMax = 8;
         private static readonly IntPtr CachedNullStackPtr = CreateCachedSingleStackItem(2, 0);
@@ -551,6 +551,8 @@ namespace Neo.SmartContract.RiscV
 
         private StackItem[] HandleCallT(RiscvExecutionRequest request, ExecutionScope scope, long gasLeft, ushort token, StackItem[] inputStack)
         {
+            ValidateCallTCallFlags(request.CurrentCallFlags);
+
             // Resolve the method token from the current contract's NEF.
             var currentHash = request.ScriptHashes[^1];
             var contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, currentHash)
@@ -582,10 +584,36 @@ namespace Neo.SmartContract.RiscV
             callStack[^2] = new ByteString(Encoding.UTF8.GetBytes(methodToken.Method));
             callStack[^1] = new ByteString(methodToken.Hash.GetSpan().ToArray());
 
-            return HandleContractCall(request, scope, gasLeft, callStack);
+            return HandleContractCall(request, scope, gasLeft, callStack, methodToken.HasReturnValue);
         }
 
-        private StackItem[] HandleContractCall(RiscvExecutionRequest request, ExecutionScope scope, long gasLeft, StackItem[] inputStack)
+        internal static void ValidateCallTForTesting(
+            CallFlags currentCallFlags,
+            bool tokenHasReturnValue,
+            ContractParameterType returnType)
+        {
+            ValidateCallTCallFlags(currentCallFlags);
+            ValidateCallTReturnValue(tokenHasReturnValue, returnType);
+        }
+
+        private static void ValidateCallTCallFlags(CallFlags currentCallFlags)
+        {
+            if (!currentCallFlags.HasFlag(CallTRequiredCallFlags))
+                throw new InvalidOperationException($"Cannot call this SYSCALL with the flag {currentCallFlags}.");
+        }
+
+        private static void ValidateCallTReturnValue(bool tokenHasReturnValue, ContractParameterType returnType)
+        {
+            if (tokenHasReturnValue != (returnType != ContractParameterType.Void))
+                throw new InvalidOperationException("The return value type does not match.");
+        }
+
+        private StackItem[] HandleContractCall(
+            RiscvExecutionRequest request,
+            ExecutionScope scope,
+            long gasLeft,
+            StackItem[] inputStack,
+            bool? expectedHasReturnValue = null)
         {
             var phaseStart = ProfileEnabled ? Stopwatch.GetTimestamp() : 0;
             if (inputStack.Length < 4)
@@ -612,7 +640,8 @@ namespace Neo.SmartContract.RiscV
             }
             Trace($"contract.call enter hash={contractHash} method={method} stackLen={inputStack.Length} args={argsArray.Count}");
 
-            if (TryInvokeTestingCustomMock(request, contractHash, method, argsArray, out var mockedResult))
+            if (expectedHasReturnValue is null &&
+                TryInvokeTestingCustomMock(request, contractHash, method, argsArray, out var mockedResult))
             {
                 var next = new StackItem[inputStack.Length - 3];
                 if (inputStack.Length > 4)
@@ -654,6 +683,18 @@ namespace Neo.SmartContract.RiscV
             }
 
             cacheEntry ??= scope.ContractCallCache[cacheKey];
+            if (expectedHasReturnValue.HasValue)
+            {
+                ValidateCallTReturnValue(expectedHasReturnValue.Value, cacheEntry.Descriptor.ReturnType);
+                if (TryInvokeTestingCustomMock(request, contractHash, method, argsArray, out var mockedCallTResult))
+                {
+                    var mockedResultStack = cacheEntry.HasReturnValue
+                        ? new[] { mockedCallTResult }
+                        : System.Array.Empty<StackItem>();
+                    return BuildContractCallReturnStack(inputStack, 4, cacheEntry.Descriptor.ReturnType, mockedResultStack);
+                }
+            }
+
             if (ProfileEnabled)
             {
                 RecordCallContractPhase("resolve_contract", Stopwatch.GetTimestamp() - phaseStart);
@@ -718,174 +759,5 @@ namespace Neo.SmartContract.RiscV
                 _ => item.GetType().Name,
             };
         }
-
-
-        private StackItem[] HandleNativeContractCall(
-            RiscvExecutionRequest request,
-            StackItem[] inputStack,
-            ContractState contractState,
-            NativeContract nativeContract,
-            string methodName,
-            CallFlags callFlags,
-            Neo.VM.Types.Array argsArray)
-        {
-            var method = nativeContract
-                .GetContractMethods(request.Engine)
-                .Values
-                .FirstOrDefault(candidate => candidate.Descriptor.Name == methodName && candidate.Parameters.Length == argsArray.Count)
-                ?? throw new InvalidOperationException($"Method \"{methodName}\" with {argsArray.Count} parameter(s) doesn't exist in the native contract {nativeContract.Hash}.");
-
-            if (method.ActiveIn is not null && !request.Engine.IsHardforkEnabled(method.ActiveIn.Value))
-                throw new InvalidOperationException($"Cannot call this method before hardfork {method.ActiveIn}.");
-            if (method.DeprecatedIn is not null && request.Engine.IsHardforkEnabled(method.DeprecatedIn.Value))
-                throw new InvalidOperationException($"Cannot call this method after hardfork {method.DeprecatedIn}.");
-
-            var effectiveFlags = callFlags;
-            if (method.Descriptor.Safe)
-                effectiveFlags &= ~(CallFlags.WriteStates | CallFlags.AllowNotify);
-            effectiveFlags &= request.CurrentCallFlags;
-
-            if (!effectiveFlags.HasFlag(method.RequiredCallFlags))
-                throw new InvalidOperationException($"Cannot call this method with the flag {effectiveFlags}.");
-
-            if (!request.Engine.IsHardforkEnabled(Hardfork.HF_Faun) ||
-                !NativeContract.Policy.IsWhitelistFeeContract(request.Engine.SnapshotCache, nativeContract.Hash, method.Descriptor, out var fixedFee))
-            {
-                request.Engine.AddFee(
-                    (method.CpuFee * request.Engine.ExecFeePicoFactor) +
-                    (method.StorageFee * request.Engine.StoragePrice * ApplicationEngine.FeeFactor));
-            }
-            else
-            {
-                request.Engine.AddFee(fixedFee!.Value * ApplicationEngine.FeeFactor);
-            }
-
-            var parameters = new List<object?>();
-            if (method.NeedApplicationEngine) parameters.Add(request.Engine);
-            if (method.NeedSnapshot) parameters.Add(request.Engine.SnapshotCache);
-            for (var index = 0; index < method.Parameters.Length; index++)
-                parameters.Add(request.Engine.Convert(argsArray[index], method.Parameters[index]));
-
-            object? returnValue = request.Engine.ExecuteInNativeContractContext(
-                nativeContract.Hash,
-                request.ScriptHashes[^1],
-                contractState,
-                effectiveFlags,
-                () => method.Handler.Invoke(nativeContract, parameters.ToArray()));
-            if (returnValue is ContractTask task)
-            {
-                if (!task.GetAwaiter().IsCompleted)
-                {
-                    if (request.Engine is RiscvApplicationEngine riscvEngine)
-                    {
-                        riscvEngine.Execute();
-                    }
-                    else
-                    {
-                        request.Engine.Execute();
-                    }
-                }
-                if (TryRecoverNativeDeployResult(request, nativeContract, method, parameters, out var recoveredDeployState))
-                {
-                    returnValue = recoveredDeployState;
-                }
-                else
-                {
-                    returnValue = task.GetResult();
-                }
-            }
-
-            if (returnValue is null &&
-                nativeContract.Hash == NativeContract.ContractManagement.Hash &&
-                string.Equals(method.Descriptor.Name, "deploy", StringComparison.Ordinal))
-            {
-                var parameterOffset = (method.NeedApplicationEngine ? 1 : 0) + (method.NeedSnapshot ? 1 : 0);
-                Trace($"callnative deploy-recovery-check offset={parameterOffset} paramCount={parameters.Count}");
-                if (parameters.Count >= parameterOffset + 2 &&
-                    TryGetBytesParameter(parameters[parameterOffset], out var nefFile) &&
-                    TryGetBytesParameter(parameters[parameterOffset + 1], out var manifestBytes) &&
-                    request.Engine.ScriptContainer is Transaction tx)
-                {
-                    var deployedManifest = ContractManifest.Parse(manifestBytes);
-                    var deployedNef = nefFile.AsSerializable<NefFile>();
-                    var deployedHash = Helper.GetContractHash(tx.Sender, deployedNef.CheckSum, deployedManifest.Name);
-                    returnValue = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, deployedHash);
-                    Trace($"callnative deploy-recovered hash={deployedHash} recoveredType={returnValue?.GetType().FullName ?? "null"}");
-                }
-                else
-                {
-                    Trace("callnative deploy-recovery-check skipped");
-                }
-            }
-
-            var pushed = method.Descriptor.ReturnType != ContractParameterType.Void
-                ? request.Engine.Convert(returnValue)
-                : StackItem.Null;
-
-            var next = new StackItem[inputStack.Length - 4 + 1];
-            if (inputStack.Length > 4)
-            {
-                System.Array.Copy(inputStack, next, inputStack.Length - 4);
-            }
-            next[^1] = pushed;
-            return next;
-        }
-
-        private static bool TryRecoverNativeDeployResult(
-            RiscvExecutionRequest request,
-            NativeContract nativeContract,
-            Native.ContractMethodMetadata method,
-            List<object?> parameters,
-            out ContractState? contractState)
-        {
-            contractState = null;
-            if (nativeContract.Hash != NativeContract.ContractManagement.Hash ||
-                !string.Equals(method.Descriptor.Name, "deploy", StringComparison.Ordinal) ||
-                request.Engine.ScriptContainer is not Transaction tx)
-            {
-                Trace("callnative deploy-recovery helper not-applicable");
-                return false;
-            }
-
-            var parameterOffset = (method.NeedApplicationEngine ? 1 : 0) + (method.NeedSnapshot ? 1 : 0);
-            Trace($"callnative deploy-recovery helper offset={parameterOffset} paramCount={parameters.Count}");
-            if (parameters.Count < parameterOffset + 2 ||
-                !TryGetBytesParameter(parameters[parameterOffset], out var nefFile) ||
-                !TryGetBytesParameter(parameters[parameterOffset + 1], out var manifestBytes))
-            {
-                Trace("callnative deploy-recovery helper missing-bytes");
-                return false;
-            }
-
-            var deployedManifest = ContractManifest.Parse(manifestBytes);
-            var deployedNef = nefFile.AsSerializable<NefFile>();
-            var deployedHash = Helper.GetContractHash(tx.Sender, deployedNef.CheckSum, deployedManifest.Name);
-            contractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, deployedHash);
-            Trace($"callnative deploy-recovery helper hash={deployedHash} recoveredType={contractState?.GetType().FullName ?? "null"}");
-            return contractState is not null;
-        }
-
-        private static bool TryGetBytesParameter(object? value, out byte[] bytes)
-        {
-            switch (value)
-            {
-                case byte[] data:
-                    bytes = data;
-                    return true;
-                case ReadOnlyMemory<byte> memory:
-                    bytes = memory.ToArray();
-                    return true;
-                case ByteString byteString:
-                    bytes = byteString.GetSpan().ToArray();
-                    return true;
-                case Neo.VM.Types.Buffer buffer:
-                    bytes = buffer.GetSpan().ToArray();
-                    return true;
-                default:
-                    bytes = System.Array.Empty<byte>();
-                    return false;
-            }
-        }
-
     }
 }

@@ -105,6 +105,7 @@ namespace Neo.SmartContract.RiscV
                 .Zip(nextHashes, (contractType, scriptHash) =>
                     RiscvCompatibilityContracts.ResolveExecutionFacadeHash(contractType, scriptHash))
                 .ToArray();
+            var nestedCallFlags = callFlags & request.CurrentCallFlags & CallFlags.ReadOnly;
             var nestedRequest = new RiscvExecutionRequest(
                 request.Engine,
                 request.Trigger,
@@ -112,7 +113,7 @@ namespace Neo.SmartContract.RiscV
                 request.AddressVersion,
                 request.PersistingTimestamp,
                 gasLeft,
-                callFlags & request.CurrentCallFlags & CallFlags.ReadOnly,
+                nestedCallFlags,
                 nextScripts,
                 nextHashes,
                 nextContractTypes,
@@ -124,9 +125,37 @@ namespace Neo.SmartContract.RiscV
                 nestedInitialStack[index] = argsArray[argsArray.Count - index - 1];
             }
 
-            var nestedResult = ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope);
-            if (nestedResult.State != VMState.HALT)
+            var contextState = request.Engine.CurrentContext?.GetState<ExecutionContextState>();
+            var previousSnapshot = contextState?.SnapshotCache;
+            var nestedSnapshot = previousSnapshot?.CloneCache();
+            var notificationCount = contextState?.NotificationCount ?? 0;
+            if (contextState is not null) contextState.SnapshotCache = nestedSnapshot;
+
+            RiscvExecutionResult nestedResult;
+            try
+            {
+                nestedResult = request.Engine.ExecuteInNativeContractContext(
+                    nestedScript.ToScriptHash(),
+                    request.ScriptHashes[^1],
+                    null,
+                    nestedCallFlags,
+                    () => ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope));
+            }
+            finally
+            {
+                if (contextState is not null) contextState.SnapshotCache = previousSnapshot;
+            }
+
+            if (nestedResult.State == VMState.HALT)
+            {
+                nestedSnapshot?.Commit();
+            }
+            else
+            {
+                if (request.Engine is RiscvApplicationEngine riscvEngine)
+                    riscvEngine.RollbackCurrentContextNotificationsTo(notificationCount);
                 throw nestedResult.FaultException ?? new InvalidOperationException("Runtime.LoadScript failed.");
+            }
 
             var next = new StackItem[inputStack.Length - 3 + nestedResult.ResultStack.Count];
             if (inputStack.Length > 3)

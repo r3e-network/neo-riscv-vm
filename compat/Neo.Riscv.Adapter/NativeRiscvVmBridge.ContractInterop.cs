@@ -96,6 +96,7 @@ namespace Neo.SmartContract.RiscV
             var contextState = request.Engine.CurrentContext?.GetState<ExecutionContextState>();
             var previousSnapshot = contextState?.SnapshotCache;
             var nestedSnapshot = previousSnapshot?.CloneCache();
+            var notificationCount = contextState?.NotificationCount ?? 0;
             if (contextState is not null) contextState.SnapshotCache = nestedSnapshot;
 
             RiscvExecutionResult nestedResult;
@@ -126,6 +127,8 @@ namespace Neo.SmartContract.RiscV
             }
             else
             {
+                if (request.Engine is RiscvApplicationEngine notificationEngine)
+                    notificationEngine.RollbackCurrentContextNotificationsTo(notificationCount);
                 throw nestedResult.FaultException ?? new InvalidOperationException("Contract.Call failed.");
             }
 

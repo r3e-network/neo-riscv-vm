@@ -630,6 +630,7 @@ namespace Neo.SmartContract.RiscV
 
             var contractHash = new UInt160(hashBytes.GetSpan());
             var method = methodBytes.GetString() ?? throw new InvalidOperationException("Method name must be valid UTF-8.");
+            ValidateContractCallMethod(method, isCallT: expectedHasReturnValue.HasValue);
             var callFlags = (CallFlags)(byte)callFlagsItem.GetInteger();
             if ((callFlags & ~CallFlags.All) != 0)
                 throw new InvalidOperationException($"Invalid call flags: {callFlags}");
@@ -718,6 +719,17 @@ namespace Neo.SmartContract.RiscV
                 RecordCallContractPhase("nested_riscv_execute", Stopwatch.GetTimestamp() - phaseStart);
 
             return result;
+        }
+
+        internal static void ValidateContractCallMethodForTesting(string method, bool isCallT)
+        {
+            ValidateContractCallMethod(method, isCallT);
+        }
+
+        private static void ValidateContractCallMethod(string method, bool isCallT)
+        {
+            if (!isCallT && method.StartsWith('_'))
+                throw new ArgumentException($"Method name '{method}' cannot start with underscore.", nameof(method));
         }
 
         private static bool TryInvokeTestingCustomMock(

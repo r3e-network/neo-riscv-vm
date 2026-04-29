@@ -7,6 +7,10 @@ use alloc::vec::Vec;
 use neo_riscv_abi::{ExecutionResult, StackValue, VmState};
 use neo_riscv_guest::{interpret_with_stack_and_syscalls, SyscallProvider};
 
+#[cfg(test)]
+#[path = "stack_ops_builder.rs"]
+mod stack_ops_builder;
+
 pub fn run_script(script: &[u8]) -> Option<ExecutionResult> {
     let mut host = NoOpSyscall;
     interpret_with_stack_and_syscalls(script, Vec::new(), &mut host).ok()

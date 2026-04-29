@@ -125,9 +125,9 @@ namespace Neo.SmartContract.RiscV
                     uint hash when hash == ApplicationEngine.System_Runtime_GetScriptContainer =>
                         Append(inputStack, CreateScriptContainerItem(request)),
                     uint hash when hash == ApplicationEngine.System_Storage_GetContext =>
-                        Append(inputStack, CreateStorageContextItem(request.Engine.GetStorageContext())),
+                        Append(inputStack, CreateStorageContextItem(CreateStorageContext(request, isReadOnly: false))),
                     uint hash when hash == ApplicationEngine.System_Storage_GetReadOnlyContext =>
-                        Append(inputStack, CreateStorageContextItem(request.Engine.GetReadOnlyContext())),
+                        Append(inputStack, CreateStorageContextItem(CreateStorageContext(request, isReadOnly: true))),
                     uint hash when hash == ApplicationEngine.System_Storage_AsReadOnly =>
                         HandleStorageAsReadOnly(request, inputStack),
                     uint hash when hash == ApplicationEngine.System_Storage_Local_Get =>

@@ -1029,48 +1029,48 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             // ARITHMETIC OPERATIONS (0x99-0xbb)
             // =============================================================================
             SIGN => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(value.signum()));
+                let value = pop_numeric_i128(&mut stack)?;
+                stack.push(StackValue::Integer(value.signum() as i64));
             }
             ABS => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(
+                let value = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(
                     value
                         .checked_abs()
                         .ok_or_else(|| "integer overflow for ABS".to_string())?,
                 ));
             }
             NEGATE => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(
+                let value = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(
                     value
                         .checked_neg()
                         .ok_or_else(|| "integer overflow for NEGATE".to_string())?,
                 ));
             }
             ADD => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
                 let sum = left
                     .checked_add(right)
                     .ok_or_else(|| "integer overflow for ADD".to_string())?;
-                stack.push(StackValue::Integer(sum));
+                stack.push(numeric_result_i128(sum));
             }
             INC => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(
+                let value = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(
                     value
                         .checked_add(1)
                         .ok_or_else(|| "integer overflow for INC".to_string())?,
                 ));
             }
             SUB => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
                 let difference = left
                     .checked_sub(right)
                     .ok_or_else(|| "integer overflow for SUB".to_string())?;
-                stack.push(StackValue::Integer(difference));
+                stack.push(numeric_result_i128(difference));
             }
             POW => {
                 let exponent = pop_numeric_value(&mut stack)?;
@@ -1834,38 +1834,38 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
             }
             MUL => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
                 let product = left
                     .checked_mul(right)
                     .ok_or_else(|| "integer overflow for MUL".to_string())?;
-                stack.push(StackValue::Integer(product));
+                stack.push(numeric_result_i128(product));
             }
             DIV => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
                 if right == 0 {
                     return Err("division by zero for DIV".to_string());
                 }
                 let quotient = left
                     .checked_div(right)
                     .ok_or_else(|| "integer overflow for DIV".to_string())?;
-                stack.push(StackValue::Integer(quotient));
+                stack.push(numeric_result_i128(quotient));
             }
             MOD => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
                 if right == 0 {
                     return Err("division by zero for MOD".to_string());
                 }
                 let remainder = left
                     .checked_rem(right)
                     .ok_or_else(|| "integer overflow for MOD".to_string())?;
-                stack.push(StackValue::Integer(remainder));
+                stack.push(numeric_result_i128(remainder));
             }
             DEC => {
-                let value = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(
+                let value = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(
                     value
                         .checked_sub(1)
                         .ok_or_else(|| "integer overflow for DEC".to_string())?,
@@ -1886,19 +1886,19 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Boolean(helpers::boolean_value(&value)?));
             }
             MIN => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(if left < right { left } else { right }));
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(if left < right { left } else { right }));
             }
             MAX => {
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(if left > right { left } else { right }));
+                let right = pop_numeric_i128(&mut stack)?;
+                let left = pop_numeric_i128(&mut stack)?;
+                stack.push(numeric_result_i128(if left > right { left } else { right }));
             }
             WITHIN => {
-                let upper = pop_numeric_value(&mut stack)?;
-                let lower = pop_numeric_value(&mut stack)?;
-                let value = pop_numeric_value(&mut stack)?;
+                let upper = pop_numeric_i128(&mut stack)?;
+                let lower = pop_numeric_i128(&mut stack)?;
+                let value = pop_numeric_i128(&mut stack)?;
                 stack.push(StackValue::Boolean(value >= lower && value < upper));
             }
             RIGHT => {

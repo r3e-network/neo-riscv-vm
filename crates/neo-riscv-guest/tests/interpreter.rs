@@ -325,6 +325,71 @@ fn executes_pushint128_as_big_integer() {
     assert_eq!(result.stack, vec![StackValue::BigInteger(vec![0x01])]);
 }
 
+fn push_i128(script: &mut Vec<u8>, value: i128) {
+    script.push(0x04);
+    script.extend_from_slice(&value.to_le_bytes());
+}
+
+#[test]
+fn i128_arithmetic_results_feed_unary_numeric_ops() {
+    let high = 1i128 << 64;
+    let mut script = Vec::new();
+    push_i128(&mut script, high);
+    script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x9e, // ADD -> 2^64 + 1
+        0x9c, // INC -> 2^64 + 2
+        0x9d, // DEC -> 2^64 + 1
+        0x9b, // NEGATE -> -(2^64 + 1)
+        0x9a, // ABS -> 2^64 + 1
+    ]);
+    push_i128(&mut script, -(high + 1));
+    script.extend_from_slice(&[
+        0x99, // SIGN -> -1
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script).expect("i128 arithmetic results should feed unary numeric ops");
+
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::BigInteger(vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            StackValue::Integer(-1),
+        ]
+    );
+}
+
+#[test]
+fn i128_arithmetic_results_feed_min_max_and_within() {
+    let high = 1i128 << 64;
+    let mut script = Vec::new();
+    push_i128(&mut script, high + 2);
+    push_i128(&mut script, high + 1);
+    script.push(0xb9); // MIN -> 2^64 + 1
+    push_i128(&mut script, high + 2);
+    push_i128(&mut script, high + 1);
+    script.push(0xba); // MAX -> 2^64 + 2
+    push_i128(&mut script, high + 1);
+    push_i128(&mut script, high);
+    push_i128(&mut script, high + 2);
+    script.extend_from_slice(&[
+        0xbb, // WITHIN -> true
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script).expect("i128 arithmetic results should feed range comparisons");
+
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::BigInteger(vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            StackValue::BigInteger(vec![0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            StackValue::Boolean(true),
+        ]
+    );
+}
+
 #[test]
 fn passes_current_instruction_pointer_to_syscall_provider() {
     let api = neo_riscv_abi::interop_hash("System.Contract.CallNative");
@@ -1132,22 +1197,18 @@ fn executes_nop() {
 }
 
 #[test]
-fn abort_returns_error() {
-    let error = interpret(&[0x38]).expect_err("ABORT should return an error");
-    assert!(
-        error.contains("ABORT"),
-        "error should mention ABORT: {error}"
-    );
+fn abort_faults_with_message() {
+    let result = interpret(&[0x38]).expect("ABORT should return a FAULT result");
+    assert_eq!(result.state, VmState::Fault);
+    assert_eq!(result.fault_message.as_deref(), Some("ABORT"));
 }
 
 #[test]
-fn assert_false_returns_error() {
+fn assert_false_faults_with_message() {
     // PUSHF, ASSERT → should fail
-    let error = interpret(&[0x09, 0x39]).expect_err("ASSERT false should fail");
-    assert!(
-        error.contains("ASSERT"),
-        "error should mention ASSERT: {error}"
-    );
+    let result = interpret(&[0x09, 0x39]).expect("ASSERT false should return a FAULT result");
+    assert_eq!(result.state, VmState::Fault);
+    assert_eq!(result.fault_message.as_deref(), Some("ASSERT failed"));
 }
 
 #[test]

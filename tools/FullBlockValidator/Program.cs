@@ -53,13 +53,18 @@ int reportInterval = 100;
 string? stateDir = null;
 int saveInterval = 10000;
 int fpInterval = 10000;
-int batchSize = 50; // fetch blocks in batches for performance
+int batchSize = 100; // fetch blocks in parallel batches for performance
 bool skipFaultyBlocks = false; // skip blocks that crash instead of aborting
+var skipBlocks = new HashSet<uint>(); // specific block heights to skip entirely
 
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
     {
+        case "--skip-block" when i + 1 < args.Length:
+            foreach (var part in args[++i].Split(','))
+                skipBlocks.Add(uint.Parse(part));
+            break;
         case "--rpc" when i + 1 < args.Length:
             rpcUrl = args[++i];
             break;
@@ -234,23 +239,38 @@ string? secondaryStateFile = stateDir != null && !riscvOnly
 
 var primaryProvider = new ResumableStoreProvider(primaryStateFile);
 var secondaryProvider = !riscvOnly ? new ResumableStoreProvider(secondaryStateFile) : null;
+IApplicationEngineProvider? riscvEngineProvider = null;
+var neoVmEngineProvider = new NeoVMHostApplicationEngineProvider();
+
+void UseRiscVProvider()
+{
+    riscvEngineProvider ??= RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+    ApplicationEngine.Provider = riscvEngineProvider;
+}
+
+void UseNeoVmProvider()
+{
+    ApplicationEngine.Provider = neoVmEngineProvider;
+}
+
+void UsePrimaryProvider()
+{
+    if (neoVmMode)
+        UseNeoVmProvider();
+    else
+        UseRiscVProvider();
+}
 
 // Initialize primary system
 if (!neoVmMode)
 {
-    var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-    if (string.IsNullOrWhiteSpace(libraryPath))
-    {
-        Console.Error.WriteLine($"ERROR: {NativeRiscvVmBridge.LibraryPathEnvironmentVariable} not set.");
-        return 1;
-    }
     Console.Write("Initializing RISC-V system... ");
-    ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+    UseRiscVProvider();
 }
 else
 {
     Console.Write("Initializing NeoVM system... ");
-    ApplicationEngine.Provider = null;
+    UseNeoVmProvider();
 }
 var primarySystem = new NeoSystem(mainnetSettings, primaryProvider);
 var primarySnapshot = primarySystem.GetSnapshotCache();
@@ -262,11 +282,10 @@ DataCache? secondarySnapshot = null;
 if (!riscvOnly)
 {
     Console.Write("Initializing NeoVM system... ");
-    ApplicationEngine.Provider = null;
+    UseNeoVmProvider();
     secondarySystem = new NeoSystem(mainnetSettings, secondaryProvider!);
     secondarySnapshot = secondarySystem.GetSnapshotCache();
     Console.WriteLine($"OK{(secondaryProvider!.WasRestored ? $" (restored {secondaryProvider.RestoredEntryCount:N0} entries)" : "")}");
-    ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
 }
 
 bool canSkipFastForward = primaryProvider.WasRestored
@@ -285,22 +304,59 @@ if (canSkipFastForward && stateBlock > 0 && stateBlock + 1 < startBlock)
     for (uint i = ffFrom; i < startBlock; i += (uint)batchSize)
     {
         uint batchEnd = Math.Min(i + (uint)batchSize, startBlock);
-        var ffBlocks = await FetchBlockBatch(httpClient, rpcUrl, i, batchEnd);
+        Block[] ffBlocks;
+        try
+        {
+            ffBlocks = await FetchBlockBatch(httpClient, rpcUrl, i, batchEnd);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[rpc-error] gap-forward batch {i}-{batchEnd}: {ex.Message}");
+            Console.Error.WriteLine("Retrying in 5s...");
+            await Task.Delay(5000);
+            i -= (uint)batchSize; // retry
+            continue;
+        }
         foreach (var ffBlock in ffBlocks)
         {
-            if (!neoVmMode)
-                ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
-            PersistBlockWithTransactions(primarySystem, primarySnapshot, ffBlock, onPersistScript, postPersistScript);
+            var primaryClone = primarySnapshot.CloneCache();
+            UsePrimaryProvider();
+            PersistBlockWithTransactions(primarySystem, primaryClone, ffBlock, onPersistScript, postPersistScript);
+            primaryClone.Commit();
             if (!riscvOnly && secondarySystem != null && secondarySnapshot != null)
             {
-                ApplicationEngine.Provider = null;
-                PersistBlockWithTransactions(secondarySystem, secondarySnapshot, ffBlock, onPersistScript, postPersistScript);
+                var secondaryClone = secondarySnapshot.CloneCache();
+                UseNeoVmProvider();
+                PersistBlockWithTransactions(secondarySystem, secondaryClone, ffBlock, onPersistScript, postPersistScript);
+                secondaryClone.Commit();
             }
         }
         if (batchEnd % 1000 < (uint)batchSize)
             Console.WriteLine($"  gap-forward: {batchEnd}/{startBlock} ({ffSw.Elapsed.TotalSeconds:F0}s)");
+        // Periodic flush to prevent unbounded DataCache accumulation
+        if (batchEnd % (uint)saveInterval < (uint)batchSize && stateDir != null)
+        {
+            primarySnapshot.Commit();
+            (primarySnapshot as IDisposable)?.Dispose();
+            secondarySnapshot?.Commit();
+            (secondarySnapshot as IDisposable)?.Dispose();
+            primaryProvider.SaveState(batchEnd);
+            secondaryProvider?.SaveState(batchEnd);
+            primarySnapshot = primarySystem.GetSnapshotCache();
+            secondarySnapshot = secondarySystem?.GetSnapshotCache();
+            Console.Error.WriteLine($"[gap-forward-save] block {batchEnd} state flushed");
+        }
     }
     ffSw.Stop();
+    // Final flush before entering main loop
+    primarySnapshot.Commit();
+    (primarySnapshot as IDisposable)?.Dispose();
+    secondarySnapshot?.Commit();
+    (secondarySnapshot as IDisposable)?.Dispose();
+    primaryProvider.SaveState(startBlock - 1);
+    secondaryProvider?.SaveState(startBlock - 1);
+    primarySnapshot = primarySystem.GetSnapshotCache();
+    secondarySnapshot = secondarySystem?.GetSnapshotCache();
     Console.WriteLine($"Gap-forwarded {startBlock - 1 - stateBlock} blocks in {ffSw.Elapsed.TotalSeconds:F1}s");
     canSkipFastForward = true; // Mark as done
 }
@@ -323,14 +379,17 @@ else if (startBlock > 1)
 
         foreach (var block in blocks)
         {
-            if (!neoVmMode)
-                ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
-            PersistBlockWithTransactions(primarySystem, primarySnapshot, block, onPersistScript, postPersistScript);
+            var primaryClone = primarySnapshot.CloneCache();
+            UsePrimaryProvider();
+            PersistBlockWithTransactions(primarySystem, primaryClone, block, onPersistScript, postPersistScript);
+            primaryClone.Commit();
 
             if (!riscvOnly && secondarySystem != null && secondarySnapshot != null)
             {
-                ApplicationEngine.Provider = null;
-                PersistBlockWithTransactions(secondarySystem, secondarySnapshot, block, onPersistScript, postPersistScript);
+                var secondaryClone = secondarySnapshot.CloneCache();
+                UseNeoVmProvider();
+                PersistBlockWithTransactions(secondarySystem, secondaryClone, block, onPersistScript, postPersistScript);
+                secondaryClone.Commit();
             }
         }
 
@@ -339,8 +398,14 @@ else if (startBlock > 1)
             Console.WriteLine($"  fast-forward: {batchEnd}/{startBlock} ({ffSw.Elapsed.TotalSeconds:F0}s)");
             if (stateDir != null)
             {
+                primarySnapshot.Commit();
+                (primarySnapshot as IDisposable)?.Dispose();
+                secondarySnapshot?.Commit();
+                (secondarySnapshot as IDisposable)?.Dispose();
                 primaryProvider.SaveState(batchEnd);
                 secondaryProvider?.SaveState(batchEnd);
+                primarySnapshot = primarySystem.GetSnapshotCache();
+                secondarySnapshot = secondarySystem?.GetSnapshotCache();
             }
         }
     }
@@ -394,22 +459,38 @@ for (uint batchStart = startBlock; batchStart <= endBlock; batchStart += (uint)b
         uint blockIndex = block.Index;
         int txCount = block.Transactions.Length;
 
+        if (skipBlocks.Contains(blockIndex))
+        {
+            Console.WriteLine($"[skip-block] block {blockIndex} — skipped via --skip-block; state not applied");
+            totalBlocks++;
+            continue;
+        }
+
+        // Heartbeat so we can tell which block is active if the engine hangs.
+        try { File.WriteAllText("fullblock-current-block.txt", $"{blockIndex} txs={txCount} phase=start {DateTime.UtcNow:O}\n"); } catch { }
+
         try
         {
+            // Clone snapshot before each block so failures can be discarded
+            // without corrupting the accumulated state.
+            var primaryClone = primarySnapshot.CloneCache();
+
             // Persist through primary engine (RISC-V or NeoVM)
-            if (!neoVmMode)
-                ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+            UsePrimaryProvider();
             var (primaryFaults, primaryExceptions) = PersistBlockWithTransactions(
-                primarySystem, primarySnapshot, block, onPersistScript, postPersistScript);
+                primarySystem, primaryClone, block, onPersistScript, postPersistScript);
+            primaryClone.Commit(); // merge into parent snapshot
 
             // Persist through secondary engine (NeoVM, comparison mode)
             int secondaryFaults = 0;
             List<(UInt256, string)> secondaryExceptions = new();
             if (!riscvOnly && secondarySystem != null && secondarySnapshot != null)
             {
-                ApplicationEngine.Provider = null;
+                var secondaryClone = secondarySnapshot.CloneCache();
+                UseNeoVmProvider();
                 (secondaryFaults, secondaryExceptions) = PersistBlockWithTransactions(
-                    secondarySystem, secondarySnapshot, block, onPersistScript, postPersistScript);
+                    secondarySystem, secondaryClone, block, onPersistScript, postPersistScript);
+                secondaryClone.Commit(); // merge into parent snapshot
             }
 
             totalBlocks++;
@@ -495,50 +576,86 @@ for (uint batchStart = startBlock; batchStart <= endBlock; batchStart += (uint)b
         if (isSavePoint)
         {
             var saveSw = Stopwatch.StartNew();
+            // Flush accumulated DataCache changes to the store, then recreate
+            // fresh snapshots. This prevents unbounded state accumulation in the
+            // DataCache dictionary which causes OnPersist failures after ~150K blocks.
+            primarySnapshot.Commit();
+            (primarySnapshot as IDisposable)?.Dispose();
+            secondarySnapshot?.Commit();
+            (secondarySnapshot as IDisposable)?.Dispose();
+
             primaryProvider.SaveState(blockIndex);
             secondaryProvider?.SaveState(blockIndex);
+
+            // Fresh snapshots from the updated store
+            primarySnapshot = primarySystem.GetSnapshotCache();
+            secondarySnapshot = secondarySystem?.GetSnapshotCache();
             saveSw.Stop();
-            Console.Error.WriteLine($"[state-save] block {blockIndex} saved in {saveSw.Elapsed.TotalSeconds:F1}s");
+            Console.Error.WriteLine($"[state-save] block {blockIndex} saved+refreshed in {saveSw.Elapsed.TotalSeconds:F1}s");
         }
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[block-fatal] block {blockIndex} CRASHED: {ex.Message}");
             Console.Error.WriteLine($"  Stack: {ex.StackTrace}");
-            // Re-initialize snapshots from store to continue
+            // The clone was discarded (never committed), so primarySnapshot
+            // still has clean state up to the previous block. A NeoVM replay here
+            // is diagnostic only; committing it into the primary path would hide
+            // the RISC-V divergence this validator is meant to catch.
+            int? retryFaults = null;
+            Exception? retryFailure = null;
             try
             {
-                primarySnapshot = primarySystem.GetSnapshotCache();
-                secondarySnapshot = secondarySystem?.GetSnapshotCache();
+                Console.Error.WriteLine($"[block-fatal] Running NeoVM diagnostic replay for block {blockIndex}...");
 
-                // Resync RISC-V state from NeoVM to avoid mismatch propagation
-                if (!riscvOnly && primaryProvider.Store is MemoryStore primaryStore
-                    && secondaryProvider?.Store is MemoryStore secondaryStore)
+                var retryClone = primarySnapshot.CloneCache();
+                UseNeoVmProvider();
+                var (faults, _) = PersistBlockWithTransactions(
+                    primarySystem, retryClone, block, onPersistScript, postPersistScript);
+                retryFaults = faults;
+
+                if (!riscvOnly && secondarySystem != null && secondarySnapshot != null)
                 {
-                    // Replay the crashed block through NeoVM only to get correct state
-                    ApplicationEngine.Provider = null;
-                    try
-                    {
-                        PersistBlockWithTransactions(secondarySystem!, secondarySnapshot!, block, onPersistScript, postPersistScript);
-                    }
-                    catch (Exception neoEx)
-                    {
-                        Console.Error.WriteLine($"[block-fatal] NeoVM also failed at block {blockIndex}: {neoEx.Message}");
-                    }
-                    // Copy NeoVM state to RISC-V
-                    foreach (var (key, _) in primaryStore.Find(null, SeekDirection.Forward).ToList())
-                        primaryStore.Delete(key);
-                    foreach (var (key, value) in secondaryStore.Find(null, SeekDirection.Forward))
-                        primaryStore.Put(key, value);
-                    primarySnapshot = primarySystem.GetSnapshotCache();
-                    secondarySnapshot = secondarySystem?.GetSnapshotCache();
-                    Console.Error.WriteLine($"[block-fatal] Resynced RISC-V state from NeoVM after crash at block {blockIndex}");
+                    var secondaryRetryClone = secondarySnapshot.CloneCache();
+                    UseNeoVmProvider();
+                    PersistBlockWithTransactions(
+                        secondarySystem, secondaryRetryClone, block, onPersistScript, postPersistScript);
                 }
             }
-            catch (Exception reinitEx)
+            catch (Exception retryEx)
             {
-                Console.Error.WriteLine($"[block-fatal] Failed to reinitialize: {reinitEx.Message}");
-                throw;
+                retryFailure = retryEx;
+            }
+
+            if (retryFailure is null)
+            {
+                Console.Error.WriteLine($"[block-fatal] NeoVM diagnostic replay succeeded for block {blockIndex} (faults={retryFaults}); RISC-V state was not advanced");
+                if (skipFaultyBlocks)
+                {
+                    totalBlocks++;
+                    UsePrimaryProvider();
+                    Console.Error.WriteLine($"[skip-faulty] block {blockIndex} skipped after primary failure; state not applied");
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"RISC-V validation crashed at block {blockIndex}; NeoVM diagnostic replay succeeded, but primary state was not advanced.",
+                    ex);
+            }
+            else
+            {
+                Console.Error.WriteLine($"[block-fatal] NeoVM retry also failed at block {blockIndex}: {retryFailure.Message}");
+                Console.Error.WriteLine($"  Stack: {retryFailure.StackTrace}");
+                if (skipFaultyBlocks)
+                {
+                    totalBlocks++;
+                    UsePrimaryProvider();
+                    Console.Error.WriteLine($"[skip-faulty] block {blockIndex} skipped after primary and NeoVM retry failures; state not applied");
+                    continue;
+                }
+                throw new InvalidOperationException(
+                    $"RISC-V validation crashed at block {blockIndex}; NeoVM diagnostic replay also failed.",
+                    retryFailure);
             }
         }
     }
@@ -566,6 +683,11 @@ return 0;
 
 // ─── Block Persistence (exact Blockchain.Persist flow) ─────────────────────
 
+static void WriteHeartbeat(uint blockIndex, string phase)
+{
+    try { File.WriteAllText("fullblock-current-block.txt", $"{blockIndex} phase={phase} {DateTime.UtcNow:O}\n"); } catch { }
+}
+
 static (int faults, List<(UInt256, string)> exceptions) PersistBlockWithTransactions(
     NeoSystem system, DataCache snapshot, Block block,
     byte[] onPersistScript, byte[] postPersistScript)
@@ -574,6 +696,7 @@ static (int faults, List<(UInt256, string)> exceptions) PersistBlockWithTransact
     var exceptions = new List<(UInt256, string)>();
 
     // Phase 1: OnPersist — registers block and transactions in ledger
+    WriteHeartbeat(block.Index, "onpersist");
     TransactionState[]? transactionStates = null;
     using (var engine = ApplicationEngine.Create(
         TriggerType.OnPersist, null, snapshot, block, system.Settings, 0))
@@ -592,43 +715,14 @@ static (int faults, List<(UInt256, string)> exceptions) PersistBlockWithTransact
         foreach (var transactionState in transactionStates)
         {
             var tx = transactionState.Transaction!;
+            WriteHeartbeat(block.Index, $"tx={tx.Hash}");
             using var engine = ApplicationEngine.Create(
                 TriggerType.Application, tx, clonedSnapshot, block, system.Settings, tx.SystemFee);
             engine.LoadScript(tx.Script);
             transactionState.State = engine.Execute();
 
-            // NeoVM fallback: if RISC-V trapped, retry with standard NeoVM.
-            // This ensures state root compatibility for transactions the RISC-V
-            // guest can't handle (e.g., PolkaVM Trap on complex contract deploys).
-            if (transactionState.State == VMState.FAULT
-                && engine.FaultException?.Message?.Contains("Trap") == true)
-            {
-                Console.Error.WriteLine($"[neo-riscv-fallback] block {block.Index} tx {tx.Hash}: RISC-V Trap, retrying with NeoVM");
-                clonedSnapshot = snapshot.CloneCache();
-                var savedProvider = ApplicationEngine.Provider;
-                ApplicationEngine.Provider = null;  // Use standard NeoVM
-                using var neoEngine = ApplicationEngine.Create(
-                    TriggerType.Application, tx, clonedSnapshot, block, system.Settings, tx.SystemFee);
-                neoEngine.LoadScript(tx.Script);
-                transactionState.State = neoEngine.Execute();
-                ApplicationEngine.Provider = savedProvider;  // Restore RISC-V
-
-                if (transactionState.State == VMState.HALT)
-                {
-                    clonedSnapshot.Commit();
-                    continue;
-                }
-                // If NeoVM also faults, fall through to normal fault handling
-                if (neoEngine.FaultException != null)
-                {
-                    faults++;
-                    exceptions.Add((tx.Hash, neoEngine.FaultException.Message));
-                    Console.Error.WriteLine($"[tx-fault-trace] block {block.Index} tx {tx.Hash}:");
-                    Console.Error.WriteLine($"  Exception: {neoEngine.FaultException.GetType().FullName}: {neoEngine.FaultException.Message}");
-                }
-                clonedSnapshot = snapshot.CloneCache();
-                continue;
-            }
+            // RISC-V Trap fallback is handled internally by the RiscvApplicationEngine.
+            // Traps on transactions are recorded as FAULTs.
 
             if (transactionState.State == VMState.HALT)
             {
@@ -652,6 +746,7 @@ static (int faults, List<(UInt256, string)> exceptions) PersistBlockWithTransact
     }
 
     // Phase 3: PostPersist — updates current block pointer
+    WriteHeartbeat(block.Index, "postpersist");
     using (var engine = ApplicationEngine.Create(
         TriggerType.PostPersist, null, snapshot, block, system.Settings, 0))
     {
@@ -671,10 +766,26 @@ static (int faults, List<(UInt256, string)> exceptions) PersistBlockWithTransact
 
 static async Task<Block[]> FetchBlockBatch(HttpClient client, string rpcUrl, uint start, uint end)
 {
-    var blocks = new List<Block>();
+    // Parallel fetch with concurrency limit to avoid overwhelming the RPC node
+    const int maxConcurrency = 8;
+    var semaphore = new SemaphoreSlim(maxConcurrency);
+    var tasks = new List<(uint index, Task<Block> task)>();
+
     for (uint i = start; i < end; i++)
-        blocks.Add(await FetchSingleBlock(client, rpcUrl, i));
-    return blocks.ToArray();
+    {
+        var idx = i;
+        tasks.Add((idx, FetchWithSemaphore(client, rpcUrl, idx, semaphore)));
+    }
+
+    await Task.WhenAll(tasks.Select(t => t.task));
+    return tasks.OrderBy(t => t.index).Select(t => t.task.Result).ToArray();
+}
+
+static async Task<Block> FetchWithSemaphore(HttpClient client, string rpcUrl, uint index, SemaphoreSlim semaphore)
+{
+    await semaphore.WaitAsync();
+    try { return await FetchSingleBlock(client, rpcUrl, index); }
+    finally { semaphore.Release(); }
 }
 
 static async Task<Block> FetchSingleBlock(HttpClient client, string rpcUrl, uint index)

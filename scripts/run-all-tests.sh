@@ -36,10 +36,11 @@ run_local_full() {
 }
 
 run_cross_repo_if_available() {
-  local core_dir="${CORE_DIR:-$HOME/git/neo-riscv-core}"
-  local node_dir="${NODE_DIR:-$HOME/git/neo-riscv-node}"
+  local core_dir="${CORE_DIR:-${ROOT_DIR}/../neo-riscv-core}"
+  local node_dir="${NODE_DIR:-${ROOT_DIR}/../neo-riscv-node}"
+  local devpack_dir="${DEVPACK_DIR:-${ROOT_DIR}/../neo-riscv-devpack}"
 
-  if [[ -d "${core_dir}" && -d "${node_dir}" ]]; then
+  if [[ -d "${core_dir}" && -d "${node_dir}" && -d "${devpack_dir}" ]]; then
     "${ROOT_DIR}/scripts/cross-repo-test.sh"
   else
     run_local_full
@@ -52,7 +53,7 @@ Usage: ./scripts/run-all-tests.sh [quick|full|ci]
 
 Modes:
   quick  Run local VM workspace tests, smoke corpus, adapter tests, and FFI smoke
-  full   Run the full cross-repo matrix when sibling core/node repos are available;
+  full   Run the full cross-repo matrix when sibling core/node/devpack repos are available;
          otherwise run the full local VM verification flow
   ci     Run the local full VM verification flow only
 EOF

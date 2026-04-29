@@ -141,6 +141,45 @@ public class UT_NativeRiscvVmBridgeRoundTrip
     }
 
     [TestMethod]
+    public void DynamicRuntimeLoadScriptPushesNullForEmptyResult()
+    {
+        var keep = new Integer(99);
+        var inputStack = new StackItem[]
+        {
+            keep,
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+            new ByteString(System.Array.Empty<byte>()),
+        };
+
+        var next = NativeRiscvVmBridge.BuildDynamicCallReturnStack(
+            inputStack,
+            consumedArgumentCount: 3,
+            System.Array.Empty<StackItem>());
+
+        Assert.AreEqual(2, next.Length);
+        Assert.AreSame(keep, next[0]);
+        Assert.AreSame(StackItem.Null, next[1]);
+    }
+
+    [TestMethod]
+    public void DynamicRuntimeLoadScriptRejectsMultipleResults()
+    {
+        var inputStack = new StackItem[]
+        {
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+            new ByteString(System.Array.Empty<byte>()),
+        };
+
+        Assert.ThrowsExactly<NotSupportedException>(() =>
+            NativeRiscvVmBridge.BuildDynamicCallReturnStack(
+                inputStack,
+                consumedArgumentCount: 3,
+                new StackItem[] { new Integer(1), new Integer(2) }));
+    }
+
+    [TestMethod]
     public void NonIteratorInteropRoundTripsThroughNativeStack()
     {
         using var bridge = CreateBridge();
@@ -199,6 +238,25 @@ public class UT_NativeRiscvVmBridgeRoundTrip
         var pointer = (VmPointer)roundTripped;
         Assert.AreSame(script, pointer.Script);
         Assert.AreEqual(1, pointer.Position);
+    }
+
+    [TestMethod]
+    public void PointerRoundTripCanRemapInitializeWrapperCoordinates()
+    {
+        using var bridge = CreateBridge();
+        var scope = CreateExecutionScope();
+        var wrapperScript = new Script(new byte[] { (byte)OpCode.CALL_L, 0, 0, 0, 0, (byte)OpCode.JMP_L, 0, 0, 0, 0, (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.RET }, false);
+        var originalScript = new Script(new byte[] { (byte)OpCode.NOP, (byte)OpCode.NOP, (byte)OpCode.RET }, false);
+        SetCurrentScript(scope, wrapperScript);
+        SetPointerScript(scope, originalScript);
+        SetPointerPositionDelta(scope, -10);
+
+        var roundTripped = RoundTripSingleItem(bridge, scope, new VmPointer(wrapperScript, 12));
+
+        Assert.IsInstanceOfType<VmPointer>(roundTripped);
+        var pointer = (VmPointer)roundTripped;
+        Assert.AreSame(originalScript, pointer.Script);
+        Assert.AreEqual(2, pointer.Position);
     }
 
     [TestMethod]
@@ -363,6 +421,20 @@ public class UT_NativeRiscvVmBridgeRoundTrip
         var property = scope.GetType().GetProperty("CurrentScript", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.IsNotNull(property);
         property!.SetValue(scope, script);
+    }
+
+    private static void SetPointerScript(object scope, Script script)
+    {
+        var property = scope.GetType().GetProperty("PointerScript", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.IsNotNull(property);
+        property!.SetValue(scope, script);
+    }
+
+    private static void SetPointerPositionDelta(object scope, int delta)
+    {
+        var property = scope.GetType().GetProperty("PointerPositionDelta", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.IsNotNull(property);
+        property!.SetValue(scope, delta);
     }
 
     private static StackItem RoundTripSingleItem(NativeRiscvVmBridge bridge, object scope, StackItem item)

@@ -452,11 +452,29 @@ namespace Neo.SmartContract.RiscV
                     8 => ReadMap(nativeItem, referenceCounter, scope),
                     6 => ReadIteratorHandle(scope, checked((ulong)nativeItem.IntegerValue)),
                     2 => StackItem.Null,
-                    10 => new Neo.VM.Types.Pointer(scope.CurrentScript, (int)nativeItem.IntegerValue),
+                    10 => ReadPointer(nativeItem, scope),
                     _ => throw new InvalidOperationException($"Unsupported native stack item kind: {nativeItem.Kind}.")
                 };
             }
             return stack;
+        }
+
+        private static Neo.VM.Types.Pointer ReadPointer(NativeStackItem nativeItem, ExecutionScope scope)
+        {
+            var position = checked((int)nativeItem.IntegerValue);
+            var adjusted = AdjustScriptPosition(position, scope.PointerPositionDelta);
+            if (scope.PointerScript is not null && adjusted.HasValue)
+                return new Neo.VM.Types.Pointer(scope.PointerScript, adjusted.Value);
+            return new Neo.VM.Types.Pointer(scope.CurrentScript, position);
+        }
+
+        private static int? AdjustScriptPosition(int? position, int delta)
+        {
+            if (!position.HasValue || delta == 0)
+                return position;
+
+            var adjusted = position.Value + delta;
+            return adjusted >= 0 ? adjusted : position;
         }
 
         private static StackItem ReadIteratorHandle(ExecutionScope scope, ulong handle)

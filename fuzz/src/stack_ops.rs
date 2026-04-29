@@ -7,6 +7,11 @@ use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
 use neo_riscv_abi::StackValue;
 
+#[path = "stack_ops_builder.rs"]
+mod stack_ops_builder;
+
+use stack_ops_builder::build_stack_ops_script;
+
 struct NoOpSyscall;
 
 impl neo_riscv_guest::SyscallProvider for NoOpSyscall {
@@ -77,54 +82,3 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 });
-
-fn build_stack_ops_script(seed: u64, context: &[u8]) -> Vec<u8> {
-    let _rng = SimpleRng::new(seed);
-    let mut script = Vec::new();
-
-    let stack_ops = [
-        0x43, 0x45, 0x49, 0x4a, 0x4b, 0x4d, 0x4e, 0x46, 0x48, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55,
-        0x06, 0x07,
-    ];
-
-    for (i, &byte) in context.iter().enumerate() {
-        if stack_ops.contains(&byte) {
-            script.push(byte);
-            if byte == 0x4d && i + 1 < context.len() {
-                script.push(context[i + 1]);
-            } else if byte == 0x48 && i + 1 < context.len() {
-                script.push(context[i + 1]);
-            } else if byte == 0x55 && i + 1 < context.len() {
-                script.push(context[i + 1]);
-            }
-        }
-
-        if script.len() >= 50 {
-            break;
-        }
-    }
-
-    if script.is_empty() {
-        script.push(0x11);
-        script.push(0x11);
-        script.push(0x4a);
-        script.push(0x40);
-    } else {
-        script.push(0x40);
-    }
-
-    script
-}
-
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
-    }
-}

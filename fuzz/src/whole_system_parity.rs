@@ -9,6 +9,9 @@ use neo_riscv_abi::{interop_hash, ExecutionResult, StackValue};
 use neo_riscv_guest::{interpret_with_stack_and_syscalls, SyscallProvider};
 use neo_riscv_host::{execute_script_with_host_and_stack, HostCallbackResult, RuntimeContext};
 
+#[cfg(test)]
+use neo_riscv_abi::VmState;
+
 const PLATFORM_RESULT: &[u8] = b"NEO";
 
 #[cfg(not(test))]

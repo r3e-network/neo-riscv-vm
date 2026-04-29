@@ -13,7 +13,7 @@ using System;
 
 namespace Neo.SmartContract.RiscV
 {
-    public sealed class RiscvApplicationEngineProvider : IApplicationEngineProvider, IDisposable
+    public sealed class RiscvApplicationEngineProvider : IRiscvApplicationEngineProvider, IDisposable
     {
         private readonly IRiscvVmBridge _bridge;
 

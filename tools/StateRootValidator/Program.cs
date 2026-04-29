@@ -183,24 +183,30 @@ string? secondaryStateFile = stateDir != null && !riscvOnly
 // Create store providers (persistent or in-memory)
 var primaryProvider = new ResumableStoreProvider(primaryStateFile);
 var secondaryProvider = !riscvOnly ? new ResumableStoreProvider(secondaryStateFile) : null;
+IApplicationEngineProvider? riscvEngineProvider = null;
+var neoVmEngineProvider = new NeoVMHostApplicationEngineProvider();
+
+void UseRiscVProvider()
+{
+    riscvEngineProvider ??= RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+    ApplicationEngine.Provider = riscvEngineProvider;
+}
+
+void UseNeoVmProvider()
+{
+    ApplicationEngine.Provider = neoVmEngineProvider;
+}
 
 // Initialize primary system
 if (!neoVmMode)
 {
-    var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
-    if (string.IsNullOrWhiteSpace(libraryPath))
-    {
-        Console.Error.WriteLine($"ERROR: {NativeRiscvVmBridge.LibraryPathEnvironmentVariable} not set.");
-        Console.Error.WriteLine("Set it to the path of libneo_riscv_host.so");
-        return 1;
-    }
     Console.Write("Initializing RISC-V system... ");
-    ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+    UseRiscVProvider();
 }
 else
 {
     Console.Write("Initializing NeoVM system... ");
-    ApplicationEngine.Provider = null; // standard NeoVM
+    UseNeoVmProvider();
 }
 var riscvSystem = new NeoSystem(mainnetSettings, primaryProvider);
 var riscvSnapshot = riscvSystem.GetSnapshotCache();
@@ -212,13 +218,13 @@ DataCache? neoVmSnapshot = null;
 if (!riscvOnly)
 {
     Console.Write("Initializing NeoVM system... ");
-    ApplicationEngine.Provider = null; // use default NeoVM
+    UseNeoVmProvider();
     neoVmSystem = new NeoSystem(mainnetSettings, secondaryProvider!);
     neoVmSnapshot = neoVmSystem.GetSnapshotCache();
     Console.WriteLine($"OK{(secondaryProvider!.WasRestored ? $" (restored {secondaryProvider.RestoredEntryCount:N0} entries)" : "")}");
 
     // Restore RISC-V provider for future block persistence
-    ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+    UseRiscVProvider();
 }
 
 bool canSkipFastForward = primaryProvider.WasRestored
@@ -238,13 +244,15 @@ else if (startBlock > 1)
     {
         // RISC-V path
         if (!neoVmMode)
-            ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+            UseRiscVProvider();
+        else
+            UseNeoVmProvider();
         PersistBlock(riscvSystem, riscvSnapshot, CreateEmptyBlock(i));
 
         // NeoVM path
         if (!riscvOnly && neoVmSystem != null && neoVmSnapshot != null)
         {
-            ApplicationEngine.Provider = null;
+            UseNeoVmProvider();
             PersistBlock(neoVmSystem, neoVmSnapshot, CreateEmptyBlock(i));
         }
 
@@ -293,13 +301,15 @@ for (uint blockIndex = startBlock; blockIndex <= endBlock; blockIndex++)
 {
     // Persist block
     if (!neoVmMode)
-        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+        UseRiscVProvider();
+    else
+        UseNeoVmProvider();
     PersistBlock(riscvSystem, riscvSnapshot, CreateEmptyBlock(blockIndex));
 
     // Persist through NeoVM (if dual mode)
     if (!riscvOnly && neoVmSystem != null && neoVmSnapshot != null)
     {
-        ApplicationEngine.Provider = null;
+        UseNeoVmProvider();
         PersistBlock(neoVmSystem, neoVmSnapshot, CreateEmptyBlock(blockIndex));
     }
 

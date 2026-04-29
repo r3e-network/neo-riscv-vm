@@ -3,8 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CORE_DIR="${CORE_DIR:-$HOME/git/neo-riscv-core}"
-NODE_DIR="${NODE_DIR:-$HOME/git/neo-riscv-node}"
+CORE_DIR="${CORE_DIR:-$(cd "${VM_DIR}/../neo-riscv-core" 2>/dev/null && pwd)}"
+NODE_DIR="${NODE_DIR:-$(cd "${VM_DIR}/../neo-riscv-node" 2>/dev/null && pwd)}"
+DEVPACK_DIR="${DEVPACK_DIR:-$(cd "${VM_DIR}/../neo-riscv-devpack" 2>/dev/null && pwd)}"
 
 HOST_LIB="${VM_DIR}/target/release/libneo_riscv_host.so"
 PLUGIN_BUNDLE_DIR="${VM_DIR}/dist/Plugins"
@@ -29,6 +30,14 @@ NODE_PROJECTS=(
   "${NODE_DIR}/tests/Neo.Plugins.SignClient.Tests/Neo.Plugins.SignClient.Tests.csproj"
   "${NODE_DIR}/tests/Neo.Plugins.StateService.Tests/Neo.Plugins.StateService.Tests.csproj"
   "${NODE_DIR}/tests/Neo.Plugins.Storage.Tests/Neo.Plugins.Storage.Tests.csproj"
+)
+
+DEVPACK_PROJECTS=(
+  "${DEVPACK_DIR}/tests/Neo.Compiler.CSharp.UnitTests/Neo.Compiler.CSharp.UnitTests.csproj"
+  "${DEVPACK_DIR}/tests/Neo.SmartContract.Analyzer.UnitTests/Neo.SmartContract.Analyzer.UnitTests.csproj"
+  "${DEVPACK_DIR}/tests/Neo.SmartContract.Framework.UnitTests/Neo.SmartContract.Framework.UnitTests.csproj"
+  "${DEVPACK_DIR}/tests/Neo.SmartContract.Template.UnitTests/Neo.SmartContract.Template.UnitTests.csproj"
+  "${DEVPACK_DIR}/tests/Neo.SmartContract.Testing.UnitTests/Neo.SmartContract.Testing.UnitTests.csproj"
 )
 
 require_dir() {
@@ -97,6 +106,21 @@ run_node_matrix() {
   done
 }
 
+run_devpack_matrix() {
+  local project
+  for project in "${DEVPACK_PROJECTS[@]}"; do
+    if [[ ! -f "${project}" ]]; then
+      echo "Missing devpack test project: ${project}" >&2
+      exit 1
+    fi
+
+    echo
+    echo "RUN $(basename "${project}")"
+    NEO_RISCV_HOST_LIB="${HOST_LIB}" dotnet test "${project}" -m:1 --logger "console;verbosity=minimal"
+    echo "PASS $(basename "${project}")"
+  done
+}
+
 run_node_cli_smoke() {
   echo
   echo "RUN neo-cli smoke"
@@ -116,11 +140,13 @@ main() {
   require_dir "${VM_DIR}"
   require_dir "${CORE_DIR}"
   require_dir "${NODE_DIR}"
+  require_dir "${DEVPACK_DIR}"
 
   echo "=== Cross-Repo Validation ==="
-  echo "VM:   ${VM_DIR}"
-  echo "Core: ${CORE_DIR}"
-  echo "Node: ${NODE_DIR}"
+  echo "VM:      ${VM_DIR}"
+  echo "Core:    ${CORE_DIR}"
+  echo "Node:    ${NODE_DIR}"
+  echo "Devpack: ${DEVPACK_DIR}"
 
   run_step "Package Adapter Plugin" "${VM_DIR}/scripts/package-adapter-plugin.sh"
 
@@ -133,6 +159,7 @@ main() {
   run_step "VM E2E" "${VM_DIR}/tests/e2e/run-all.sh"
   run_step "VM FFI Resolution" env "NEO_RISCV_HOST_LIB=${HOST_LIB}" "${VM_DIR}/scripts/test-ffi-resolution.sh"
   run_step "Core Test Matrix" run_core_matrix
+  run_step "Devpack Test Matrix" run_devpack_matrix
   run_step "Node Test Matrix" run_node_matrix
   run_step "Node CLI Smoke" run_node_cli_smoke
 

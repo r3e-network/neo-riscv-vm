@@ -17,7 +17,7 @@ using System.Reflection;
 
 namespace Neo.SmartContract.RiscV
 {
-    public sealed class RiscvApplicationEngine : ApplicationEngine
+    public sealed class RiscvApplicationEngine : ApplicationEngine, IRiscvApplicationEngine
     {
         private const string TraceEnvironmentVariable = "NEO_RISCV_TRACE_ENGINE";
         private static readonly FieldInfo StrictModeField = typeof(Script).GetField("_strictMode", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -158,45 +158,108 @@ namespace Neo.SmartContract.RiscV
                 // introspection (TestException.CurrentContext.InstructionPointer) sees the
                 // real offset instead of 0. Not consensus-affecting — FAULT rolls back
                 // snapshot commits already (see the HALT branch above).
-                if (result.FaultIp is int ip && InstructionPointerField is not null)
-                {
-                    try
-                    {
-                        InstructionPointerField.SetValue(CurrentContext, ip);
-                    }
-                    catch (Exception ex)
-                    {
-                        Trace($"failed to propagate fault IP {ip}: {ex.Message}");
-                    }
-                }
-                // Populate LocalVariables from the guest's fault-time locals snapshot so
-                // dev tests like Test_Abort/Test_Assert* that assert on
-                // exception.CurrentContext.LocalVariables[n] see the runtime state.
-                var setter = LocalVariablesProperty?.GetSetMethod(nonPublic: true);
-                if (_bridge is NativeRiscvVmBridge nativeBridge && setter is not null)
-                {
-                    var localsBytes = nativeBridge.TryReadLastFaultLocals();
-                    if (localsBytes.Length > 0)
-                    {
-                        try
-                        {
-                            var items = FastCodecReader.DecodeStack(localsBytes, ReferenceCounter);
-                            if (items.Length > 0)
-                            {
-                                setter.Invoke(CurrentContext, new object[] { new Slot(items, ReferenceCounter) });
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Trace($"failed to propagate fault locals ({localsBytes.Length} bytes): {ex.Message}");
-                        }
-                    }
-                }
+                ApplyFaultMetadata(result);
             }
 
             FaultException = result.FaultException;
             State = result.State;
             return State;
+        }
+
+        internal void CompleteCurrentContextFromBridge(RiscvExecutionResult result)
+        {
+            while (ResultStack.Count > 0)
+            {
+                ResultStack.Pop();
+            }
+
+            foreach (var item in result.ResultStack)
+            {
+                ResultStack.Push(item);
+            }
+
+            if (result.State == VMState.HALT)
+            {
+                if (InvocationStack.Count == 0)
+                    throw new InvalidOperationException("No current execution context is available.");
+
+                var context = InvocationStack.Pop();
+                ContextUnloaded(context);
+            }
+            else if (CurrentContext is not null)
+            {
+                RollbackContextNotifications(CurrentContext);
+                ApplyFaultMetadata(result);
+            }
+
+            FaultException = result.FaultException;
+            State = result.State;
+        }
+
+        internal void UnloadNestedContextFromBridge(ExecutionContext nestedContext, RiscvExecutionResult result)
+        {
+            if (InvocationStack.Count == 0 || !ReferenceEquals(CurrentContext, nestedContext))
+                throw new InvalidOperationException("The nested RISC-V context is not current.");
+
+            var callerContext = nestedContext.GetState<ExecutionContextState>().CallingContext;
+            var callerStackDepth = callerContext?.EvaluationStack.Count ?? 0;
+
+            while (nestedContext.EvaluationStack.Count > 0)
+            {
+                nestedContext.EvaluationStack.Pop();
+            }
+
+            foreach (var item in result.ResultStack)
+            {
+                nestedContext.EvaluationStack.Push(item);
+            }
+
+            var context = InvocationStack.Pop();
+            ContextUnloaded(context);
+
+            if (callerContext is not null)
+            {
+                while (callerContext.EvaluationStack.Count > callerStackDepth)
+                {
+                    callerContext.EvaluationStack.Pop();
+                }
+            }
+        }
+
+        private void ApplyFaultMetadata(RiscvExecutionResult result)
+        {
+            if (result.FaultIp is int ip && InstructionPointerField is not null)
+            {
+                try
+                {
+                    InstructionPointerField.SetValue(CurrentContext, ip);
+                }
+                catch (Exception ex)
+                {
+                    Trace($"failed to propagate fault IP {ip}: {ex.Message}");
+                }
+            }
+
+            var setter = LocalVariablesProperty?.GetSetMethod(nonPublic: true);
+            if (_bridge is NativeRiscvVmBridge nativeBridge && setter is not null)
+            {
+                var localsBytes = nativeBridge.TryReadLastFaultLocals();
+                if (localsBytes.Length > 0)
+                {
+                    try
+                    {
+                        var items = FastCodecReader.DecodeStack(localsBytes, ReferenceCounter);
+                        if (items.Length > 0)
+                        {
+                            setter.Invoke(CurrentContext, new object[] { new Slot(items, ReferenceCounter) });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace($"failed to propagate fault locals ({localsBytes.Length} bytes): {ex.Message}");
+                    }
+                }
+            }
         }
 
         internal void RollbackCurrentContextNotificationsTo(int notificationCount)

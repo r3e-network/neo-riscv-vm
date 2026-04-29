@@ -77,7 +77,14 @@ namespace Neo.SmartContract.RiscV
             return Execute(request);
         }
 
-        private RiscvExecutionResult ExecuteScriptInternal(RiscvExecutionRequest request, byte[] script, StackItem[] initialStack, int initialInstructionPointer, ExecutionScope scope)
+        private RiscvExecutionResult ExecuteScriptInternal(
+            RiscvExecutionRequest request,
+            byte[] script,
+            StackItem[] initialStack,
+            int initialInstructionPointer,
+            ExecutionScope scope,
+            Script? pointerScript = null,
+            int pointerPositionDelta = 0)
         {
             var scriptPtr = Marshal.AllocHGlobal(script.Length);
             NativeExecutionResult nativeResult = default;
@@ -85,7 +92,11 @@ namespace Neo.SmartContract.RiscV
             var callbackHandle = GCHandle.Alloc(callbackState);
             var initialState = CreateNativeHostResult(initialStack, scope);
             var previousScript = scope.CurrentScript;
-            scope.CurrentScript = new Script(script, request.Engine.IsHardforkEnabled(Hardfork.HF_Basilisk));
+            var previousPointerScript = scope.PointerScript;
+            var previousPointerPositionDelta = scope.PointerPositionDelta;
+            scope.CurrentScript = CreateScriptForPointerMetadata(script, request.Engine.IsHardforkEnabled(Hardfork.HF_Basilisk));
+            scope.PointerScript = pointerScript;
+            scope.PointerPositionDelta = pointerPositionDelta;
 
             try
             {
@@ -120,15 +131,27 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
+                var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
+                if (state != VMState.FAULT)
+                    scope.PendingNestedFault = null;
+
                 var gasFault = TryChargeExecutionFee(request.Engine, nativeResult.FeeConsumedPico, "execute");
                 if (gasFault is not null)
                     return gasFault;
-                var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
+                if (state == VMState.FAULT && scope.PendingNestedFault is not null)
+                {
+                    var nestedFault = scope.PendingNestedFault;
+                    scope.PendingNestedFault = null;
+                    return nestedFault;
+                }
+
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
                     ? "Native Neo RISC-V execution fault."
                     : Marshal.PtrToStringUTF8(nativeResult.ErrorPtr, checked((int)nativeResult.ErrorLen)) ?? "Native Neo RISC-V execution fault.";
                 var fault = state == VMState.FAULT ? RehydrateNativeException(faultMessage) : null;
-                var faultIp = state == VMState.FAULT ? TryReadLastFaultIp() : null;
+                var faultIp = state == VMState.FAULT
+                    ? AdjustScriptPosition(TryReadLastFaultIp(), pointerPositionDelta)
+                    : null;
                 if (state == VMState.FAULT)
                 {
                     Trace($"execute fault state={state} message={faultMessage} ip={faultIp?.ToString() ?? "<none>"}");
@@ -139,6 +162,8 @@ namespace Neo.SmartContract.RiscV
             finally
             {
                 scope.CurrentScript = previousScript;
+                scope.PointerScript = previousPointerScript;
+                scope.PointerPositionDelta = previousPointerPositionDelta;
                 StaticHostFreeCallback(IntPtr.Zero, ref initialState);
                 if (nativeResult.StackPtr != IntPtr.Zero || nativeResult.ErrorPtr != IntPtr.Zero)
                 {
@@ -162,7 +187,7 @@ namespace Neo.SmartContract.RiscV
             var callbackHandle = GCHandle.Alloc(callbackState);
             var initialState = CreateNativeHostResult(initialStack, scope);
             var previousScript = scope.CurrentScript;
-            scope.CurrentScript = new Script(binary, request.Engine.IsHardforkEnabled(Hardfork.HF_Basilisk));
+            scope.CurrentScript = CreateScriptForPointerMetadata(binary, request.Engine.IsHardforkEnabled(Hardfork.HF_Basilisk));
 
             try
             {
@@ -193,10 +218,20 @@ namespace Neo.SmartContract.RiscV
                     for (var i = 0; i < stack.Length; i++)
                         Trace($"native execute result[{i}] type={stack[i].GetType().Name} value={DescribeStackItem(stack[i])}");
                 }
+                var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
+                if (state != VMState.FAULT)
+                    scope.PendingNestedFault = null;
+
                 var gasFault = TryChargeExecutionFee(request.Engine, nativeResult.FeeConsumedPico, "native execute");
                 if (gasFault is not null)
                     return gasFault;
-                var state = nativeResult.State == 0 ? VMState.HALT : VMState.FAULT;
+                if (state == VMState.FAULT && scope.PendingNestedFault is not null)
+                {
+                    var nestedFault = scope.PendingNestedFault;
+                    scope.PendingNestedFault = null;
+                    return nestedFault;
+                }
+
                 var faultMessage = nativeResult.ErrorPtr == IntPtr.Zero
                     ? "Native RISC-V contract execution fault."
                     : Marshal.PtrToStringUTF8(nativeResult.ErrorPtr, checked((int)nativeResult.ErrorLen)) ?? "Native RISC-V contract execution fault.";
@@ -232,6 +267,18 @@ namespace Neo.SmartContract.RiscV
             {
                 NativeLibrary.Free(_libraryHandle);
                 _libraryHandle = IntPtr.Zero;
+            }
+        }
+
+        private static Script CreateScriptForPointerMetadata(byte[] script, bool strictMode)
+        {
+            try
+            {
+                return new Script(script, strictMode);
+            }
+            catch (BadScriptException)
+            {
+                return Script.Empty;
             }
         }
 

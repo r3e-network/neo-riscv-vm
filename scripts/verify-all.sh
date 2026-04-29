@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_LIB="${ROOT_DIR}/target/release/libneo_riscv_host.so"
 PREFERRED_NEO_TEST_PROJECT="${ROOT_DIR}/../neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj"
-FALLBACK_NEO_TEST_PROJECT="/home/neo/.config/superpowers/worktrees/neo/master-n3-riscv-interpreter/tests/Neo.UnitTests/Neo.UnitTests.csproj"
 NEO_TEST_PROJECT="${NEO_TEST_PROJECT:-}"
 NEO_TEST_PROJECT_EXPLICIT="0"
 if [[ -n "${NEO_TEST_PROJECT}" ]]; then
@@ -27,8 +26,6 @@ dotnet test "${ROOT_DIR}/compat/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.
 if [[ -z "${NEO_TEST_PROJECT}" ]]; then
   if [[ -f "${PREFERRED_NEO_TEST_PROJECT}" ]]; then
     NEO_TEST_PROJECT="${PREFERRED_NEO_TEST_PROJECT}"
-  elif [[ -f "${FALLBACK_NEO_TEST_PROJECT}" ]]; then
-    NEO_TEST_PROJECT="${FALLBACK_NEO_TEST_PROJECT}"
   fi
 fi
 

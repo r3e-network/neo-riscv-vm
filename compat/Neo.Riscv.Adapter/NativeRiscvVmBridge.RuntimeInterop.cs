@@ -125,48 +125,48 @@ namespace Neo.SmartContract.RiscV
                 nestedInitialStack[index] = argsArray[argsArray.Count - index - 1];
             }
 
-            var contextState = request.Engine.CurrentContext?.GetState<ExecutionContextState>();
-            var previousSnapshot = contextState?.SnapshotCache;
-            var nestedSnapshot = previousSnapshot?.CloneCache();
-            var notificationCount = contextState?.NotificationCount ?? 0;
-            if (contextState is not null) contextState.SnapshotCache = nestedSnapshot;
+            var callerContext = request.Engine.CurrentContext!;
+            var callerState = callerContext.GetState<ExecutionContextState>();
+            var nestedContext = request.Engine.LoadScript(
+                new Script(nestedScript, true),
+                configureState: state =>
+                {
+                    state.CallingContext = callerContext;
+                    state.CallFlags = nestedCallFlags;
+                    state.IsDynamicCall = true;
+                });
+            var nestedState = nestedContext.GetState<ExecutionContextState>();
+            var nestedSnapshot = nestedState.SnapshotCache;
+
+            for (var index = nestedInitialStack.Length - 1; index >= 0; index--)
+                nestedContext.EvaluationStack.Push(nestedInitialStack[index]);
 
             RiscvExecutionResult nestedResult;
-            try
-            {
-                nestedResult = request.Engine.ExecuteInNativeContractContext(
-                    nestedScript.ToScriptHash(),
-                    request.ScriptHashes[^1],
-                    null,
-                    nestedCallFlags,
-                    () => ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope));
-            }
-            finally
-            {
-                if (contextState is not null) contextState.SnapshotCache = previousSnapshot;
-            }
+            nestedResult = request.Engine.ExecuteInNativeContractContext(
+                nestedScript.ToScriptHash(),
+                request.ScriptHashes[^1],
+                null,
+                nestedCallFlags,
+                () => ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope));
 
             if (nestedResult.State == VMState.HALT)
             {
-                nestedSnapshot?.Commit();
+                if (request.Engine is RiscvApplicationEngine riscvEngine)
+                    riscvEngine.UnloadNestedContextFromBridge(nestedContext, nestedResult);
+                else
+                {
+                    nestedSnapshot?.Commit();
+                    callerState.NotificationCount += nestedState.NotificationCount;
+                    PopNestedContextIfCurrent(request.Engine, nestedContext);
+                }
             }
             else
             {
-                if (request.Engine is RiscvApplicationEngine riscvEngine)
-                    riscvEngine.RollbackCurrentContextNotificationsTo(notificationCount);
+                scope.PendingNestedFault = nestedResult;
                 throw nestedResult.FaultException ?? new InvalidOperationException("Runtime.LoadScript failed.");
             }
 
-            var next = new StackItem[inputStack.Length - 3 + nestedResult.ResultStack.Count];
-            if (inputStack.Length > 3)
-            {
-                System.Array.Copy(inputStack, next, inputStack.Length - 3);
-            }
-            for (var index = 0; index < nestedResult.ResultStack.Count; index++)
-            {
-                next[inputStack.Length - 3 + index] = nestedResult.ResultStack[index];
-            }
-            return next;
+            return BuildDynamicCallReturnStack(inputStack, 3, nestedResult.ResultStack);
         }
 
         private static bool IsPolkaVmBinary(byte[] script)
@@ -205,7 +205,9 @@ namespace Neo.SmartContract.RiscV
             if (inputStack.Length == 0)
                 throw new InvalidOperationException("Runtime.CheckWitness requires one argument.");
 
-            if (inputStack[^1] is not ByteString data)
+            if (inputStack[^1] is Null)
+                throw new ArgumentException("The argument `hashOrPubkey` can't be null.");
+            if (!TryGetByteLikeBytes(inputStack[^1], out var data))
                 throw new InvalidOperationException("Runtime.CheckWitness requires a byte string argument.");
 
             var next = new StackItem[inputStack.Length];
@@ -214,7 +216,7 @@ namespace Neo.SmartContract.RiscV
                 System.Array.Copy(inputStack, next, inputStack.Length - 1);
             }
 
-            next[^1] = request.Engine.CheckWitness(data.GetSpan().ToArray()) ? StackItem.True : StackItem.False;
+            next[^1] = request.Engine.CheckWitness(data) ? StackItem.True : StackItem.False;
             return next;
         }
 

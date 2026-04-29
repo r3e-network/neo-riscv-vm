@@ -87,7 +87,7 @@ pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
 #[inline]
 pub(crate) fn pop_integer_pair_allowing_null_false(
     stack: &mut Vec<StackValue>,
-) -> Result<Option<(i64, i64)>, String> {
+) -> Result<Option<(i128, i128)>, String> {
     let right = pop_optional_integer_for_comparison(stack)?;
     let left = pop_optional_integer_for_comparison(stack)?;
     Ok(match (left, right) {
@@ -99,17 +99,17 @@ pub(crate) fn pop_integer_pair_allowing_null_false(
 
 pub(crate) fn pop_optional_integer_for_comparison(
     stack: &mut Vec<StackValue>,
-) -> Result<Option<i64>, String> {
+) -> Result<Option<i128>, String> {
     match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(Some(value)),
-        Some(StackValue::BigInteger(_)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::ByteString(_)) => Err("expected integer on stack".to_string()),
+        Some(StackValue::Integer(value)) => Ok(Some(i128::from(value))),
+        Some(StackValue::BigInteger(value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
+        Some(StackValue::ByteString(value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
         Some(StackValue::Boolean(value)) => Ok(Some(if value { 1 } else { 0 })),
         Some(StackValue::Pointer(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Map(..)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Buffer(_, _)) => Err("expected integer on stack".to_string()),
+        Some(StackValue::Buffer(_, value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
         Some(StackValue::Interop(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Iterator(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Null) => Ok(None),
@@ -142,6 +142,24 @@ pub(crate) fn pop_numeric_value(stack: &mut Vec<StackValue>) -> Result<i64, Stri
         Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Map(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes(&bytes),
+        Some(StackValue::Interop(_)) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Iterator(_)) => Err("expected integer-compatible value".to_string()),
+        None => Err("stack underflow".to_string()),
+    }
+}
+
+pub(crate) fn pop_numeric_i128(stack: &mut Vec<StackValue>) -> Result<i128, String> {
+    match stack.pop() {
+        Some(StackValue::Integer(value)) => Ok(i128::from(value)),
+        Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
+        Some(StackValue::ByteString(value)) => decode_signed_le_bytes_i128(&value),
+        Some(StackValue::BigInteger(value)) => decode_signed_le_bytes_i128(&value),
+        Some(StackValue::Null) => Ok(0),
+        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes_i128(&bytes),
+        Some(StackValue::Pointer(_)) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Array(..)) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Map(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Interop(_)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Iterator(_)) => Err("expected integer-compatible value".to_string()),
         None => Err("stack underflow".to_string()),
@@ -1109,6 +1127,38 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
     Ok(i64::from_le_bytes(buffer))
 }
 
+pub(crate) fn decode_signed_le_bytes_i128(bytes: &[u8]) -> Result<i128, String> {
+    if bytes.is_empty() {
+        return Ok(0);
+    }
+
+    let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
+        0xff
+    } else {
+        0x00
+    };
+
+    if bytes.len() > 16 {
+        if bytes.iter().all(|byte| *byte == 0) {
+            return Ok(0);
+        }
+
+        if bytes[16..].iter().all(|byte| *byte == sign_extend)
+            && ((bytes[15] & 0x80) == (sign_extend & 0x80))
+        {
+            let mut buffer = [sign_extend; 16];
+            buffer.copy_from_slice(&bytes[..16]);
+            return Ok(i128::from_le_bytes(buffer));
+        }
+
+        return Err("integer exceeds i128 arithmetic range".to_string());
+    }
+
+    let mut buffer = [sign_extend; 16];
+    buffer[..bytes.len()].copy_from_slice(bytes);
+    Ok(i128::from_le_bytes(buffer))
+}
+
 pub(crate) fn shift_left(value: i64, shift: u32) -> Result<i64, String> {
     if shift == 0 {
         return Ok(value);
@@ -1344,6 +1394,39 @@ pub(crate) fn encode_integer(value: i64) -> Vec<u8> {
     }
 
     bytes
+}
+
+pub(crate) fn encode_integer_i128(value: i128) -> Vec<u8> {
+    if value == 0 {
+        return Vec::new();
+    }
+
+    let mut bytes = value.to_le_bytes().to_vec();
+    if value > 0 {
+        while bytes.len() > 1 && bytes.last() == Some(&0) {
+            if bytes[bytes.len() - 2] & 0x80 != 0 {
+                break;
+            }
+            bytes.pop();
+        }
+    } else {
+        while bytes.len() > 1 && bytes.last() == Some(&0xff) {
+            if bytes[bytes.len() - 2] & 0x80 == 0 {
+                break;
+            }
+            bytes.pop();
+        }
+    }
+
+    bytes
+}
+
+pub(crate) fn numeric_result_i128(value: i128) -> StackValue {
+    if let Ok(value) = i64::try_from(value) {
+        StackValue::Integer(value)
+    } else {
+        StackValue::BigInteger(encode_integer_i128(value))
+    }
 }
 
 /// Distinguishes short (i8, 1-byte) from long (i32, 4-byte) jump offsets.

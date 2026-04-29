@@ -143,6 +143,12 @@ namespace Neo.SmartContract.RiscV
         {
             public Script CurrentScript { get; set; } = Script.Empty;
 
+            public Script? PointerScript { get; set; }
+
+            public int PointerPositionDelta { get; set; }
+
+            public RiscvExecutionResult? PendingNestedFault { get; set; }
+
             public Dictionary<ulong, IIterator> Iterators { get; } = new();
 
             public Dictionary<ulong, object> InteropObjects { get; } = new();
@@ -417,7 +423,7 @@ namespace Neo.SmartContract.RiscV
             }
         }
 
-        private static StackItem[] HandleContractCallNative(RiscvExecutionRequest request, ExecutionScope scope, nuint instructionPointer, StackItem[] inputStack)
+        private StackItem[] HandleContractCallNative(RiscvExecutionRequest request, ExecutionScope scope, nuint instructionPointer, StackItem[] inputStack)
         {
             if (inputStack.Length == 0)
                 throw new InvalidOperationException("Contract.CallNative requires a version.");
@@ -471,6 +477,7 @@ namespace Neo.SmartContract.RiscV
             var currentContractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, currentContract.Hash)
                 ?? currentContract.GetContractState(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine));
 
+            var invocationDepthBeforeHandler = request.Engine.InvocationStack.Count;
             object? returnValue = request.Engine.ExecuteInNativeContractContext(
                 currentContract.Hash,
                 request.ScriptHashes.Count > 1 ? request.ScriptHashes[^2] : null,
@@ -482,8 +489,9 @@ namespace Neo.SmartContract.RiscV
             {
                 if (!task.GetAwaiter().IsCompleted)
                 {
-                    // Execute pending user contract contexts so ContextUnloaded completes the task.
-                    request.Engine.Execute();
+                    var pendingResult = ExecutePendingContractTaskContexts(request, scope, invocationDepthBeforeHandler);
+                    if (pendingResult.State != VMState.HALT)
+                        throw pendingResult.FaultException ?? new InvalidOperationException("Native contract task failed.");
                 }
                 returnValue = task.GetResult();
                 Trace($"callnative task-result method={method.Descriptor.Name} valueType={returnValue?.GetType().FullName ?? "null"}");
@@ -497,6 +505,85 @@ namespace Neo.SmartContract.RiscV
             if (currentContract.Hash == NativeContract.ContractManagement.Hash)
                 scope.ContractCallCache.Clear();
             return next;
+        }
+
+        private RiscvExecutionResult ExecutePendingContractTaskContexts(
+            RiscvExecutionRequest request,
+            ExecutionScope scope,
+            int preservedInvocationDepth)
+        {
+            if (request.Engine is not RiscvApplicationEngine riscvEngine)
+            {
+                var state = request.Engine.Execute();
+                return new RiscvExecutionResult(state, request.Engine.ResultStack.ToArray(), request.Engine.FaultException);
+            }
+
+            RiscvExecutionResult result = new(VMState.HALT, System.Array.Empty<StackItem>(), null);
+            while (request.Engine.InvocationStack.Count > preservedInvocationDepth)
+            {
+                var contexts = request.Engine.InvocationStack.Reverse().ToArray();
+                var context = contexts[^1];
+                var contextState = context.GetState<ExecutionContextState>();
+                var initialStack = context.EvaluationStack.Count > 0
+                    ? Enumerable.Range(0, context.EvaluationStack.Count)
+                        .Select(context.EvaluationStack.Peek)
+                        .ToArray()
+                    : System.Array.Empty<StackItem>();
+                var scripts = contexts
+                    .Select(current => ((ReadOnlyMemory<byte>)current.Script).ToArray())
+                    .ToArray();
+                var scriptHashes = contexts
+                    .Select(current => current.GetState<ExecutionContextState>().ScriptHash ?? ((ReadOnlyMemory<byte>)current.Script).Span.ToScriptHash())
+                    .ToArray();
+                var contractTypes = contexts
+                    .Select(current => current.GetState<ExecutionContextState>().Contract?.Type ?? ContractType.NeoVM)
+                    .ToArray();
+                var executionFacadeHashes = contractTypes
+                    .Zip(scriptHashes, (contractType, scriptHash) =>
+                        RiscvCompatibilityContracts.ResolveExecutionFacadeHash(contractType, scriptHash))
+                    .ToArray();
+                var methodName = contextState.MethodName
+                    ?? contextState.Contract?.Manifest.Abi.Methods
+                        .FirstOrDefault(method => method.Offset == context.InstructionPointer)
+                        ?.Name;
+                var nestedRequest = new RiscvExecutionRequest(
+                    request.Engine,
+                    request.Trigger,
+                    request.NetworkMagic,
+                    request.AddressVersion,
+                    request.PersistingTimestamp,
+                    request.GasLeft,
+                    contextState.CallFlags,
+                    scripts,
+                    scriptHashes,
+                    contractTypes,
+                    executionFacadeHashes,
+                    initialStack,
+                    context.InstructionPointer,
+                    methodName);
+                var script = scripts[^1];
+                var contractType = contractTypes[^1];
+                var executionKind = RiscvExecutionDispatcher.Resolve(contractType, script);
+                result = executionKind switch
+                {
+                    RiscvExecutionKind.GuestNeoVmContract =>
+                        ExecuteScriptInternal(nestedRequest, script, initialStack, context.InstructionPointer, scope),
+                    RiscvExecutionKind.NativeRiscvDirect =>
+                        ExecuteNativeContractInternal(nestedRequest, script, initialStack, methodName ?? throw new InvalidOperationException("Method is required for native RISC-V contract execution."), scope),
+                    _ => throw new InvalidOperationException($"Unsupported execution kind: {executionKind}."),
+                };
+                riscvEngine.CompleteCurrentContextFromBridge(result);
+                if (result.State != VMState.HALT)
+                    return result;
+            }
+
+            return result;
+        }
+
+        private static void PopNestedContextIfCurrent(ApplicationEngine engine, Neo.VM.ExecutionContext nestedContext)
+        {
+            if (engine.InvocationStack.Count > 0 && ReferenceEquals(engine.CurrentContext, nestedContext))
+                engine.InvocationStack.Pop();
         }
 
         private static StackItem[] HandleCreateStandardAccount(RiscvExecutionRequest request, StackItem[] inputStack)

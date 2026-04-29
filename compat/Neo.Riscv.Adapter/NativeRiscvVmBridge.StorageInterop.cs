@@ -1,5 +1,6 @@
 using Neo.SmartContract;
 using Neo.SmartContract.Iterators;
+using Neo.SmartContract.Native;
 using Neo.VM;
 using Neo.VM.Types;
 using System;
@@ -11,6 +12,17 @@ namespace Neo.SmartContract.RiscV
         private static StackItem CreateStorageContextItem(StorageContext context)
         {
             return StackItem.FromInterface(context);
+        }
+
+        private static StorageContext CreateStorageContext(RiscvExecutionRequest request, bool isReadOnly)
+        {
+            var contract = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, request.ScriptHashes[^1])
+                ?? throw new InvalidOperationException("This method can only be called by a deployed contract.");
+            return new StorageContext
+            {
+                Id = contract.Id,
+                IsReadOnly = isReadOnly
+            };
         }
 
         private static StackItem[] HandleStorageGet(RiscvExecutionRequest request, StackItem[] inputStack)

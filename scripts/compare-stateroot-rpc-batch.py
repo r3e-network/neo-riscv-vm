@@ -240,36 +240,46 @@ def main() -> int:
     log_handle = open_log(args.log_file)
     try:
         while True:
-            end = args.end
-            if end is None:
-                block_count = get_block_count(args)
-                end = block_count - 1 - args.lag
+            try:
+                end = args.end
+                if end is None:
+                    block_count = get_block_count(args)
+                    end = block_count - 1 - args.lag
+                    print(
+                        f"Local blockcount={block_count}; comparing {start}..{end}",
+                        flush=True,
+                    )
+
+                if end < start:
+                    if not args.follow:
+                        print(f"PASS no new state roots to compare from {start}", flush=True)
+                        return 0
+                    time.sleep(args.poll_interval)
+                    continue
+
+                checked, mismatch_height = compare_range(args, start, end, log_handle=log_handle)
+                total_checked += checked
+                if mismatch_height >= 0:
+                    return 2
+
                 print(
-                    f"Local blockcount={block_count}; comparing {start}..{end}",
+                    f"PASS compared every state root {start}..{end}; "
+                    f"checked={checked}; total_checked={total_checked}; mismatches=0",
                     flush=True,
                 )
-
-            if end < start:
+                start = end + 1
                 if not args.follow:
-                    print(f"PASS no new state roots to compare from {start}", flush=True)
                     return 0
                 time.sleep(args.poll_interval)
-                continue
-
-            checked, mismatch_height = compare_range(args, start, end, log_handle=log_handle)
-            total_checked += checked
-            if mismatch_height >= 0:
-                return 2
-
-            print(
-                f"PASS compared every state root {start}..{end}; "
-                f"checked={checked}; total_checked={total_checked}; mismatches=0",
-                flush=True,
-            )
-            start = end + 1
-            if not args.follow:
-                return 0
-            time.sleep(args.poll_interval)
+            except RuntimeError as exc:
+                if not args.follow:
+                    raise
+                print(
+                    f"WARN transient comparison failure: {exc}; "
+                    f"retrying in {args.poll_interval:.1f}s",
+                    flush=True,
+                )
+                time.sleep(args.poll_interval)
     finally:
         if log_handle is not None:
             log_handle.close()

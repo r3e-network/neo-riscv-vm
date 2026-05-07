@@ -107,13 +107,14 @@ pub fn syscall_arg_count(api: u32) -> usize {
     match api {
         // System.Contract
         0x525b_7d62 => 4,          // System.Contract.Call
+        0x677b_f71a => usize::MAX, // System.Contract.CallNative (native args + version)
         0x852c_35ce => 2,          // System.Contract.Create
         0x1d33_c631 => 2,          // System.Contract.Update
         0x93bc_db2e => 0,          // System.Contract.NativeOnPersist
         0x165d_a144 => 0,          // System.Contract.NativePostPersist
         0x813a_da95 => 0,          // System.Contract.GetCallFlags
         0x0287_99cf => 1,          // System.Contract.CreateStandardAccount
-        0x09e9_336a => usize::MAX, // System.Contract.CreateMultisigAccount (count-based suffix)
+        0x09e9_336a => 2,          // System.Contract.CreateMultisigAccount
         // System.Runtime (with args)
         0x8cec_27f8 => 1, // System.Runtime.CheckWitness
         0x616f_0195 => 2, // System.Runtime.Notify
@@ -141,7 +142,7 @@ pub fn syscall_arg_count(api: u32) -> usize {
         0x27b3_e756 => 2,          // System.Crypto.CheckSig
         0x3adc_d09e => usize::MAX, // System.Crypto.CheckMultisig (count-based suffix)
         // System.Iterator
-        0x9ced_089c => 2, // System.Iterator.Next
+        0x9ced_089c => 1, // System.Iterator.Next
         0x1dbf_54f3 => 1, // System.Iterator.Value
         // Unknown: pass full stack for safety
         _ => usize::MAX,
@@ -159,14 +160,22 @@ mod tests {
     use super::{interop_hash, syscall_arg_count};
 
     #[test]
-    fn count_based_syscalls_keep_the_full_stack() {
+    fn variable_stack_syscalls_keep_the_full_stack() {
         assert_eq!(
-            syscall_arg_count(interop_hash("System.Contract.CreateMultisigAccount")),
+            syscall_arg_count(interop_hash("System.Contract.CallNative")),
             usize::MAX,
         );
         assert_eq!(
             syscall_arg_count(interop_hash("System.Crypto.CheckMultisig")),
             usize::MAX,
+        );
+    }
+
+    #[test]
+    fn create_multisig_account_uses_neovm_descriptor_arguments() {
+        assert_eq!(
+            syscall_arg_count(interop_hash("System.Contract.CreateMultisigAccount")),
+            2,
         );
     }
 }

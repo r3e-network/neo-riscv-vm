@@ -1216,6 +1216,32 @@ pub(crate) fn read_guest_panic(
     Some(String::from_utf8_lossy(&bytes).to_string())
 }
 
+pub(crate) fn read_guest_last_interpreter_ip(
+    instance: &mut polkavm::Instance<ClosureHost>,
+    host: &mut ClosureHost,
+) -> Option<u32> {
+    let ip = instance
+        .call_typed_and_get_result::<u32, ()>(host, "get_last_interpreter_ip", ())
+        .ok()?;
+    (ip != u32::MAX).then_some(ip)
+}
+
+pub(crate) fn read_guest_result_diag(
+    instance: &mut polkavm::Instance<ClosureHost>,
+    host: &mut ClosureHost,
+) -> Option<(u32, u32, u32)> {
+    let stage = instance
+        .call_typed_and_get_result::<u32, ()>(host, "get_last_result_stage", ())
+        .ok()?;
+    let stack_len = instance
+        .call_typed_and_get_result::<u32, ()>(host, "get_last_result_stack_len", ())
+        .ok()?;
+    let limit = instance
+        .call_typed_and_get_result::<u32, ()>(host, "get_last_result_limit", ())
+        .ok()?;
+    Some((stage, stack_len, limit))
+}
+
 #[allow(dead_code)]
 pub(crate) fn read_guest_debug(
     instance: &mut polkavm::Instance<ClosureHost>,

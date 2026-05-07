@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MODE="${1:-${TEST_MODE:-quick}}"
+. "${SCRIPT_DIR}/resolve-host-lib.sh"
 
-HOST_LIB="${ROOT_DIR}/target/release/libneo_riscv_host.so"
+HOST_LIB="${HOST_LIB:-$(resolve_host_lib "${ROOT_DIR}" release)}"
 
 ensure_release_host() {
   if [[ ! -f "${HOST_LIB}" ]]; then

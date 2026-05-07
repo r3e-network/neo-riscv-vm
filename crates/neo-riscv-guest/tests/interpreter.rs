@@ -1,7 +1,8 @@
 use neo_riscv_abi::{StackValue, VmState};
 use neo_riscv_guest::{
     interpret, interpret_with_stack_and_syscalls, interpret_with_stack_and_syscalls_at,
-    interpret_with_syscalls, SyscallProvider,
+    interpret_with_stack_and_syscalls_at_with_initializer, interpret_with_syscalls,
+    SyscallProvider,
 };
 
 #[test]
@@ -100,11 +101,67 @@ fn creates_null_filled_array() {
 }
 
 #[test]
+fn helper_append_mutates_consumed_caller_array_alias() {
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0xc2, // NEWARRAY0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x34, 0x06, // CALL +6 -> APPEND helper
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x40, // RET
+        0xcf, // APPEND
+        0x40, // RET
+    ];
+
+    let result = interpret(script).expect("APPEND helper should update caller local alias");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
 fn gets_collection_size() {
     let result = interpret(&[0x11, 0x12, 0x12, 0xc0, 0xca, 0x40])
         .expect("guest interpreter should support SIZE");
 
     assert_eq!(result.stack, vec![StackValue::Integer(2)]);
+}
+
+#[test]
+fn size_matches_neovm_for_integer_and_boolean_values() {
+    let result = interpret(&[
+        0x10, 0xca, // PUSH0, SIZE
+        0x11, 0xca, // PUSH1, SIZE
+        0x00, 0xff, 0xca, // PUSHINT8 -1, SIZE
+        0x08, 0xca, // PUSHT, SIZE
+        0x09, 0xca, // PUSHF, SIZE
+        0x40, // RET
+    ])
+    .expect("SIZE should match NeoVM for integer and boolean values");
+
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::Integer(0),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+        ]
+    );
+}
+
+#[test]
+fn size_faults_on_null_like_neovm() {
+    let error = interpret(&[0x0b, 0xca]).expect_err("SIZE on Null should fault like NeoVM");
+    assert!(
+        error.contains("SIZE expects"),
+        "error should mention SIZE incompatibility: {error}"
+    );
 }
 
 #[test]
@@ -361,6 +418,78 @@ fn i128_arithmetic_results_feed_unary_numeric_ops() {
 }
 
 #[test]
+fn sign_accepts_positive_integer_wider_than_i128() {
+    let mut script = vec![0x0c, 0x11]; // PUSHDATA1, 17-byte payload
+    script.extend_from_slice(&[
+        0x5e, 0x54, 0x7a, 0x9f, 0xe6, 0x80, 0xa1, 0x8e, 0x60, 0x89, 0x43, 0x70, 0xdf, 0x87, 0xed,
+        0xd0, 0x00,
+    ]);
+    script.extend_from_slice(&[
+        0x99, // SIGN
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script).expect("NeoVM accepts up to 32-byte integers");
+
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn numeric_ops_accept_positive_integer_wider_than_i128() {
+    let payload = [
+        0x5e, 0x54, 0x7a, 0x9f, 0xe6, 0x80, 0xa1, 0x8e, 0x60, 0x89, 0x43, 0x70, 0xdf, 0x87, 0xed,
+        0xd0, 0x00,
+    ];
+
+    let mut gt_script = vec![0x0c, 0x11];
+    gt_script.extend_from_slice(&payload);
+    gt_script.extend_from_slice(&[
+        0x10, // PUSH0
+        0xb7, // GT
+        0x40, // RET
+    ]);
+    let gt_result = interpret(&gt_script).expect("wide positive integers should compare");
+    assert_eq!(gt_result.stack, vec![StackValue::Boolean(true)]);
+
+    let mut add_script = vec![0x0c, 0x11];
+    add_script.extend_from_slice(&payload);
+    add_script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x9e, // ADD
+        0x40, // RET
+    ]);
+    let add_result = interpret(&add_script).expect("wide positive integers should add");
+    assert_eq!(
+        add_result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x5f, 0x54, 0x7a, 0x9f, 0xe6, 0x80, 0xa1, 0x8e, 0x60, 0x89, 0x43, 0x70, 0xdf, 0x87,
+            0xed, 0xd0, 0x00,
+        ])]
+    );
+}
+
+#[test]
+fn numeric_jump_accepts_positive_integer_wider_than_i128() {
+    let mut script = vec![0x0c, 0x11]; // PUSHDATA1, 17-byte payload
+    script.extend_from_slice(&[
+        0x5e, 0x54, 0x7a, 0x9f, 0xe6, 0x80, 0xa1, 0x8e, 0x60, 0x89, 0x43, 0x70, 0xdf, 0x87, 0xed,
+        0xd0, 0x00,
+    ]);
+    script.extend_from_slice(&[
+        0x10, // PUSH0
+        0x2c, 0x05, // JMPGT +5
+        0x00, // PUSHINT8, should be skipped
+        0x00, 0x40, // RET, should be skipped
+        0x11, // PUSH1
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script).expect("wide positive integers should drive numeric jumps");
+
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
 fn i128_arithmetic_results_feed_min_max_and_within() {
     let high = 1i128 << 64;
     let mut script = Vec::new();
@@ -428,6 +557,26 @@ impl SyscallProvider for PlatformHost {
         } else {
             Err(format!("unexpected syscall 0x{api:08x}"))
         }
+    }
+}
+
+struct InitCompleteHost {
+    completions: usize,
+}
+
+impl SyscallProvider for InitCompleteHost {
+    fn syscall(
+        &mut self,
+        api: u32,
+        _ip: usize,
+        _stack: &mut Vec<StackValue>,
+    ) -> Result<(), String> {
+        Err(format!("unexpected syscall 0x{api:08x}"))
+    }
+
+    fn initializer_complete(&mut self, _ip: usize) -> Result<(), String> {
+        self.completions += 1;
+        Ok(())
     }
 }
 
@@ -829,6 +978,35 @@ fn executes_numequal_on_bytestrings() {
 }
 
 #[test]
+fn executes_numequal_on_bytestring_and_integer() {
+    let result = interpret(&[
+        0x0c, 0x01, 0x02, // PUSHDATA1 [2]
+        0x12, // PUSH2
+        0xb3, // NUMEQUAL
+        0x40, // RET
+    ])
+    .expect("NUMEQUAL should compare ByteString and Integer via GetInteger");
+
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
+fn executes_numequal_on_big_integer_and_integer() {
+    let mut script = vec![0x04]; // PUSHINT128
+    script.extend_from_slice(&2i128.to_le_bytes());
+    script.extend_from_slice(&[
+        0x12, // PUSH2
+        0xb3, // NUMEQUAL
+        0x40, // RET
+    ]);
+
+    let result =
+        interpret(&script).expect("NUMEQUAL should compare internal BigInteger and Integer");
+
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
 fn executes_numnotequal_on_bytestrings() {
     let result = interpret(&[0x0c, 0x02, b'o', b'k', 0x0c, 0x02, b'n', b'o', 0xb4, 0x40])
         .expect("guest interpreter should support NUMNOTEQUAL on byte strings");
@@ -904,6 +1082,24 @@ fn executes_pow() {
 }
 
 #[test]
+fn pow_accepts_big_integer_result() {
+    let result = interpret(&[
+        0x12, // PUSH2
+        0x00, 0x40, // PUSHINT8 64
+        0xa3, // POW -> 2^64
+        0x40, // RET
+    ])
+    .expect("POW should support NeoVM BigInteger results");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
+    );
+}
+
+#[test]
 fn executes_sqrt() {
     let result =
         interpret(&[0x00, 0x51, 0xa4, 0x40]).expect("guest interpreter should support SQRT");
@@ -932,6 +1128,46 @@ fn shr_preserves_bytestring_type() {
         .expect("guest interpreter should preserve byte string type for SHR");
 
     assert_eq!(result.stack, vec![StackValue::ByteString(vec![0x00, 0x01])]);
+}
+
+#[test]
+fn shr_accepts_big_integer_operand() {
+    let mut script = vec![0x04]; // PUSHINT128 2^72
+    let mut value = [0u8; 16];
+    value[9] = 1;
+    script.extend_from_slice(&value);
+    script.extend_from_slice(&[
+        0x18, // PUSH8
+        0xa9, // SHR -> 2^64
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script).expect("SHR should accept NeoVM BigInteger operands");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
+    );
+}
+
+#[test]
+fn shr_preserves_wide_bytestring_type() {
+    let result = interpret(&[
+        0x0c, // PUSHDATA1 2^72
+        10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x18, // PUSH8
+        0xa9, // SHR -> 2^64
+        0x40, // RET
+    ])
+    .expect("SHR should preserve ByteString type for wide values");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
+    );
 }
 
 #[test]
@@ -1002,6 +1238,105 @@ fn setitem_updates_static_field_alias() {
 }
 
 #[test]
+fn setitem_updates_local_alias_extracted_from_parent_array() {
+    let result = interpret(&[
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0x12, // PUSH2
+        0xc3, // NEWARRAY
+        0x71, // STLOC1
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x09, // PUSHF
+        0xd0, // SETITEM map["k"] = false
+        0x69, // LDLOC1
+        0x50, // SWAP
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = map
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x08, // PUSHT
+        0xd0, // SETITEM local_map["k"] = true
+        0x69, // LDLOC1
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = local_map
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM
+        0x40, // RET
+    ])
+    .expect("guest interpreter should propagate SETITEM through extracted local aliases");
+
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
+fn call_helper_updates_nested_map_argument_alias() {
+    let result = interpret(&[
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x08, // PUSHT
+        0xd0, // SETITEM source["k"] = true
+        0x70, // STLOC0
+        0x12, // PUSH2
+        0xc3, // NEWARRAY
+        0x71, // STLOC1
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x09, // PUSHF
+        0xd0, // SETITEM target["k"] = false
+        0x69, // LDLOC1
+        0x50, // SWAP
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = target
+        0x68, // LDLOC0
+        0x69, // LDLOC1
+        0x34, 0x0b, // CALL helper
+        0x45, // DROP
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM
+        0x40, // RET
+        0x57, 0x01, 0x02, // helper: INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x11, // PUSH1
+        0xce, // PICKITEM arg0[1]
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x79, // LDARG1
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM source["k"]
+        0xd0, // SETITEM local_map["k"] = source["k"]
+        0x78, // LDARG0
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM arg0[1] = local_map
+        0x11, // PUSH1
+        0x40, // RET
+    ])
+    .expect("helper call should propagate nested map argument aliases");
+
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
 fn append_updates_static_field_alias() {
     let result = interpret(&[
         0x56, 0x01, // INITSSLOT 1
@@ -1018,6 +1353,27 @@ fn append_updates_static_field_alias() {
     .expect("guest interpreter should propagate APPEND through static-field aliases");
 
     assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn initializer_static_fields_are_visible_to_target_method() {
+    let script = [
+        0x58, // LDSFLD0
+        0x40, // RET
+        0x56, 0x01, // INITSSLOT 1
+        0x17, // PUSH7
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let mut host = InitCompleteHost { completions: 0 };
+
+    let result =
+        interpret_with_stack_and_syscalls_at_with_initializer(&script, Vec::new(), 0, 2, &mut host)
+            .expect("initializer static field writes must carry into the target method");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(7)]);
+    assert_eq!(host.completions, 1);
 }
 
 #[test]
@@ -1214,11 +1570,11 @@ fn executes_or_on_integers() {
 
 #[test]
 fn executes_left_on_bytestring() {
-    // PUSHDATA1 "hello", PUSH3, LEFT → "hel", RET
+    // PUSHDATA1 "hello", PUSH3, LEFT -> Buffer("hel"), RET
     let result = interpret(&[0x0c, 0x05, b'h', b'e', b'l', b'l', b'o', 0x13, 0x8d, 0x40])
         .expect("guest interpreter should support LEFT");
 
-    assert_eq!(result.stack, vec![StackValue::ByteString(b"hel".to_vec())]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"hel".to_vec())]);
 }
 
 #[test]
@@ -1713,6 +2069,24 @@ fn mul_two_integers() {
 }
 
 #[test]
+fn sqrt_accepts_big_integer_result_from_mul() {
+    let mut script = vec![0x03];
+    script.extend_from_slice(&8_315_094i64.to_le_bytes());
+    script.push(0x03);
+    script.extend_from_slice(&10_000_000_000_000i64.to_le_bytes());
+    script.extend_from_slice(&[
+        0xa0, // MUL -> 83150940000000000000, wider than i64
+        0xa4, // SQRT
+        0x40, // RET
+    ]);
+
+    let result =
+        interpret(&script).expect("SQRT should accept NeoVM BigInteger values produced by MUL");
+
+    assert_eq!(result.stack, vec![StackValue::Integer(9_118_713_725)]);
+}
+
+#[test]
 fn div_integers() {
     // PUSHINT8 42, PUSH6, DIV → 7, RET
     let result =
@@ -1822,7 +2196,7 @@ fn nz_accepts_uint160_sized_bytestring() {
 
 #[test]
 fn substr_extracts_middle() {
-    // PUSHDATA1 "hello world", PUSH6, PUSH5, SUBSTR → "world"
+    // PUSHDATA1 "hello world", PUSH6, PUSH5, SUBSTR -> Buffer("world")
     let result = interpret(&[
         0x0c, 0x0b, b'h', b'e', b'l', b'l', b'o', b' ', b'w', b'o', b'r', b'l', b'd',
         0x16, // PUSH6 (offset)
@@ -1832,15 +2206,34 @@ fn substr_extracts_middle() {
     ])
     .expect("guest interpreter should support SUBSTR");
 
-    assert_eq!(
-        result.stack,
-        vec![StackValue::ByteString(b"world".to_vec())]
-    );
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"world".to_vec())]);
+}
+
+#[test]
+fn substr_preserves_buffer_type() {
+    // PUSHDATA1 "hello", CONVERT Buffer, PUSH1, PUSH3, SUBSTR -> Buffer("ell")
+    let result = interpret(&[
+        0x0c, 0x05, b'h', b'e', b'l', b'l', b'o', 0xdb, 0x30, 0x11, 0x13, 0x8c, 0x40,
+    ])
+    .expect("SUBSTR over Buffer should halt");
+
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"ell".to_vec())]);
+}
+
+#[test]
+fn empty_buffer_substr_can_be_reversed_in_place() {
+    // PUSH0, CONVERT Buffer, PUSH0, PUSH0, SUBSTR, DUP, REVERSEITEMS, RET.
+    // Historical NeoVM contracts use this path when integer-to-byte-array yields an empty Buffer.
+    let result = interpret(&[0x10, 0xdb, 0x30, 0x10, 0x10, 0x8c, 0x4a, 0xd1, 0x40])
+        .expect("empty Buffer SUBSTR followed by REVERSEITEMS should halt");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Buffer(Vec::new())]);
 }
 
 #[test]
 fn right_extracts_suffix() {
-    // PUSHDATA1 "hello", PUSH3, RIGHT → "llo"
+    // PUSHDATA1 "hello", PUSH3, RIGHT -> Buffer("llo")
     let result = interpret(&[
         0x0c, 0x05, b'h', b'e', b'l', b'l', b'o', 0x13, // PUSH3
         0x8e, // RIGHT
@@ -1848,7 +2241,7 @@ fn right_extracts_suffix() {
     ])
     .expect("guest interpreter should support RIGHT");
 
-    assert_eq!(result.stack, vec![StackValue::ByteString(b"llo".to_vec())]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"llo".to_vec())]);
 }
 
 #[test]
@@ -2093,6 +2486,33 @@ fn pushint256_large_value() {
 }
 
 #[test]
+fn convert_pushint256_to_buffer_preserves_big_integer_bytes() {
+    let mut script = vec![0x05]; // PUSHINT256
+    let mut value = [0u8; 32];
+    value[..20].copy_from_slice(&[
+        0x00, 0x00, 0x00, 0x00, 0x80, 0x63, 0x7f, 0x3e, 0x22, 0x34, 0xf9, 0xf3, 0xe4, 0x01, 0xce,
+        0xdf, 0xbb, 0x06, 0x55, 0x05,
+    ]);
+    script.extend_from_slice(&value);
+    script.extend_from_slice(&[
+        0xdb, 0x30, // CONVERT Buffer
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script)
+        .expect("CONVERT BigInteger to Buffer should match NeoVM primitive conversion");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Buffer(vec![
+            0x00, 0x00, 0x00, 0x00, 0x80, 0x63, 0x7f, 0x3e, 0x22, 0x34, 0xf9, 0xf3, 0xe4, 0x01,
+            0xce, 0xdf, 0xbb, 0x06, 0x55, 0x05,
+        ])]
+    );
+}
+
+#[test]
 fn gas_exhaustion_faults() {
     // The guest interpreter does not track gas, so gas exhaustion can only be tested
     // through the host runtime. Here we verify the guest handles a simple script.
@@ -2155,6 +2575,60 @@ fn try_catch_catches_throw() {
         "catch handler should have executed, stack: {:?}",
         result.stack
     );
+}
+
+#[test]
+fn try_catch_catches_pickitem_type_error() {
+    // Non-indexable items still raise catchable PICKITEM errors inside TRY.
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x3b, 0x08, 0x00, // TRY catch=+8, finally=0
+        0x08, // PUSHT (non-indexable item)
+        0x10, // PUSH0 (index)
+        0xce, // PICKITEM -> catchable type error
+        0x3d, 0x06, // ENDTRY +6 -> RET
+        0x70, // STLOC0 (catch stores thrown message)
+        0x11, // PUSH1
+        0x3d, 0x02, // ENDTRY +2 -> RET
+        0x40, // RET
+    ];
+
+    let result = interpret(script).expect("PICKITEM type error inside TRY should be caught");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn pickitem_reads_integer_as_little_endian_bytes() {
+    // Mirrors mainnet block 679779: the original N3Trader contract indexes
+    // onNEP17Payment's Integer data payload with PICKITEM.
+    let script: &[u8] = &[
+        0x15, // PUSH5
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x40, // RET
+    ];
+
+    let result = interpret(script).expect("PICKITEM should index Integer bytes");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(5)]);
+}
+
+#[test]
+fn pickitem_reads_negative_integer_sign_extended_bytes() {
+    let script: &[u8] = &[
+        0x00, 0xff, // PUSHINT8 -1 -> [ff]
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x40, // RET
+    ];
+
+    let result = interpret(script).expect("PICKITEM should index negative Integer bytes");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(0xff)]);
 }
 
 #[test]
@@ -2235,6 +2709,27 @@ fn convert_integer_to_bytestring() {
         result.stack,
         vec![StackValue::ByteString(vec![5])],
         "CONVERT 5 to ByteString should produce [5]"
+    );
+}
+
+#[test]
+fn convert_wide_bytestring_to_integer_preserves_big_integer() {
+    let script: &[u8] = &[
+        0x0c, // PUSHDATA1
+        0x09, // 9-byte payload, one byte wider than i64
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xdb, 0x21, // CONVERT Integer
+        0x40, // RET
+    ];
+
+    let result =
+        interpret(script).expect("CONVERT ByteString to Integer should accept 32-byte integers");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
     );
 }
 

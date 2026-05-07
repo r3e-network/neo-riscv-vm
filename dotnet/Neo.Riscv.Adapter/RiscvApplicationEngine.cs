@@ -13,43 +13,13 @@ using Neo.VM.Types;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 
 namespace Neo.SmartContract.RiscV
 {
     public sealed class RiscvApplicationEngine : ApplicationEngine, IRiscvApplicationEngine
     {
         private const string TraceEnvironmentVariable = "NEO_RISCV_TRACE_ENGINE";
-        private static readonly FieldInfo StrictModeField = typeof(Script).GetField("_strictMode", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Unable to locate Neo.VM.Script strict mode field.");
-
-        /// <summary>
-        /// Backing field of <see cref="ExecutionContext.InstructionPointer"/>. The
-        /// property setter is declared <c>internal</c> and Neo.VM's
-        /// <c>InternalsVisibleTo</c> list does not grant access to this adapter, so we
-        /// reflect the private field once at class-load and write directly on fault.
-        /// Lookup is tolerant of compiler-generated field names ("InstructionPointer",
-        /// "_instructionPointer", "instructionPointer") so a future rename in Neo.VM
-        /// degrades gracefully to <see langword="null"/> rather than throwing at class load.
-        /// </summary>
-        private static readonly FieldInfo? InstructionPointerField =
-            typeof(ExecutionContext).GetField("instructionPointer", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? typeof(ExecutionContext).GetField("_instructionPointer", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? typeof(ExecutionContext).GetField("<InstructionPointer>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
-
-        private static readonly FieldInfo CurrentContextField =
-            typeof(ExecutionEngine).GetField("<CurrentContext>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Unable to locate Neo.VM.ExecutionEngine current context field.");
-
-        /// <summary>
-        /// Backing property <see cref="ExecutionContext.LocalVariables"/> — internal setter.
-        /// Reflected once at class-load so the adapter can populate the faulting frame's
-        /// locals from the guest side-channel (fault-locals FFI) for dev-time test harnesses
-        /// like Test_Abort that assert <c>exception.CurrentContext.LocalVariables[0]</c>.
-        /// </summary>
-        private static readonly PropertyInfo? LocalVariablesProperty =
-            typeof(ExecutionContext).GetProperty("LocalVariables", BindingFlags.Instance | BindingFlags.Public);
-
+        private const string FaultLogEnvironmentVariable = "NEO_RISCV_LOG_FAULTS";
         private readonly IRiscvVmBridge _bridge;
 
         /// <summary>
@@ -91,6 +61,7 @@ namespace Neo.SmartContract.RiscV
                 Trace($"bridge dispatch index={index} ip={context.InstructionPointer} scriptLen={((ReadOnlyMemory<byte>)context.Script).Length}");
                 var contextInitialStack = context.EvaluationStack.Count > 0
                     ? Enumerable.Range(0, context.EvaluationStack.Count)
+                        .Reverse()
                         .Select(context.EvaluationStack.Peek)
                         .ToArray()
                     : initialStack;
@@ -165,6 +136,9 @@ namespace Neo.SmartContract.RiscV
                 ApplyFaultMetadata(result);
             }
 
+            if (result.State == VMState.FAULT)
+                LogFault(result);
+
             FaultException = result.FaultException;
             State = result.State;
             return State;
@@ -228,20 +202,12 @@ namespace Neo.SmartContract.RiscV
 
         private void ApplyFaultMetadata(RiscvExecutionResult result)
         {
-            if (result.FaultIp is int ip && InstructionPointerField is not null)
+            if (result.FaultIp is int ip)
             {
-                try
-                {
-                    InstructionPointerField.SetValue(CurrentContext, ip);
-                }
-                catch (Exception ex)
-                {
-                    Trace($"failed to propagate fault IP {ip}: {ex.Message}");
-                }
+                NeoVmExecutionContextAccessors.TrySetInstructionPointer(CurrentContext, ip, Trace);
             }
 
-            var setter = LocalVariablesProperty?.GetSetMethod(nonPublic: true);
-            if (_bridge is NativeRiscvVmBridge nativeBridge && setter is not null)
+            if (_bridge is NativeRiscvVmBridge nativeBridge)
             {
                 var localsBytes = nativeBridge.TryReadLastFaultLocals();
                 if (localsBytes.Length > 0)
@@ -251,7 +217,10 @@ namespace Neo.SmartContract.RiscV
                         var items = FastCodecReader.DecodeStack(localsBytes, ReferenceCounter);
                         if (items.Length > 0)
                         {
-                            setter.Invoke(CurrentContext, new object[] { new Slot(items, ReferenceCounter) });
+                            NeoVmExecutionContextAccessors.TrySetLocalVariables(
+                                CurrentContext,
+                                new Slot(items, ReferenceCounter),
+                                Trace);
                         }
                     }
                     catch (Exception ex)
@@ -288,7 +257,7 @@ namespace Neo.SmartContract.RiscV
 
         private void SetCurrentContextFromInvocationStack()
         {
-            CurrentContextField.SetValue(this, InvocationStack.Count > 0 ? InvocationStack.Peek() : null);
+            NeoVmExecutionContextAccessors.SetCurrentContext(this, InvocationStack.Count > 0 ? InvocationStack.Peek() : null);
         }
 
         private static void ReplaceEvaluationStack(ExecutionContext context, IReadOnlyList<StackItem> stack)
@@ -345,9 +314,33 @@ namespace Neo.SmartContract.RiscV
             Console.Error.WriteLine($"[neo-riscv-engine] {message}");
         }
 
+        private void LogFault(RiscvExecutionResult result)
+        {
+            if (!string.Equals(Environment.GetEnvironmentVariable(FaultLogEnvironmentVariable), "1", StringComparison.Ordinal))
+                return;
+
+            var containerHash = ScriptContainer switch
+            {
+                Transaction tx => tx.Hash.ToString(),
+                Block block => block.Hash.ToString(),
+                _ => ScriptContainer?.GetType().Name ?? "<none>"
+            };
+            var blockIndex = PersistingBlock?.Index.ToString() ?? "<none>";
+            var context = DescribeContext(CurrentContext);
+            var message = result.FaultException?.Message ?? "<none>";
+            var baseException = result.FaultException?.GetBaseException();
+            var baseMessage = baseException is null || ReferenceEquals(baseException, result.FaultException)
+                ? string.Empty
+                : $" base={baseException.GetType().FullName}:{baseException.Message}";
+            var ip = result.FaultIp?.ToString() ?? "<none>";
+            Console.Error.WriteLine(
+                $"[neo-riscv-fault] block={blockIndex} trigger={Trigger} container={containerHash} " +
+                $"context={context} ip={ip} message={message}{baseMessage}");
+        }
+
         private static bool IsStrictMode(Script script)
         {
-            return (bool)StrictModeField.GetValue(script)!;
+            return NeoVmExecutionContextAccessors.IsStrictMode(script);
         }
     }
 }

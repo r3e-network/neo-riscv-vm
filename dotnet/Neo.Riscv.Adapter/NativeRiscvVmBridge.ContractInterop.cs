@@ -96,58 +96,43 @@ namespace Neo.SmartContract.RiscV
                 : contract.Manifest.Abi.GetMethod(
                     ContractBasicMethod.Initialize,
                     ContractBasicMethod.InitializePCount);
-            if (initMethod is not null && request.Engine.CurrentContext is { } initContext && !ReferenceEquals(initContext, nestedContext))
+            var initializerInstructionPointer = (int?)null;
+            Neo.VM.ExecutionContext? initContext = null;
+            if (initMethod is not null && request.Engine.CurrentContext is { } currentInitContext && !ReferenceEquals(currentInitContext, nestedContext))
             {
-                var initRequest = new RiscvExecutionRequest(
-                    request.Engine,
-                    request.Trigger,
-                    request.NetworkMagic,
-                    request.AddressVersion,
-                    request.PersistingTimestamp,
-                    gasLeft,
-                    nestedRequest.CurrentCallFlags,
-                    nestedScripts,
-                    nestedScriptHashes,
-                    nestedContractTypes,
-                    nestedExecutionFacadeHashes,
-                    System.Array.Empty<StackItem>(),
-                    initMethod.Offset,
-                    initMethod.Name);
+                initContext = currentInitContext;
+                initializerInstructionPointer = initMethod.Offset;
+                scope.PendingInitializerContexts.Push(initContext);
+            }
 
-                var initResult = request.Engine.ExecuteInNativeContractContext(
+            RiscvExecutionResult nestedResult;
+            try
+            {
+                nestedResult = request.Engine.ExecuteInNativeContractContext(
                     contract.Hash,
                     request.ScriptHashes[^1],
                     executionContractState,
                     nestedRequest.CurrentCallFlags,
-                    () => ExecuteScriptInternal(initRequest, calleeScript, System.Array.Empty<StackItem>(), initMethod.Offset, scope));
-
-                if (initResult.State == VMState.HALT)
+                    () => contract.Type == ContractType.RiscV
+                        ? ExecuteNativeContractInternal(nestedRequest, calleeScript, nestedInitialStack, descriptor.Name, scope)
+                        : ExecuteScriptInternal(
+                            nestedRequest,
+                            calleeScript,
+                            nestedInitialStack,
+                            descriptor.Offset,
+                            scope,
+                            initializerInstructionPointer: initializerInstructionPointer,
+                            resultStackLimit: descriptor.ReturnType == ContractParameterType.Void ? 0 : 1));
+            }
+            finally
+            {
+                if (initContext is not null &&
+                    scope.PendingInitializerContexts.Count > 0 &&
+                    ReferenceEquals(scope.PendingInitializerContexts.Peek(), initContext))
                 {
-                    if (request.Engine is RiscvApplicationEngine initEngine)
-                        initEngine.UnloadNestedContextFromBridge(initContext, initResult);
-                    else
-                        PopNestedContextIfCurrent(request.Engine, initContext);
-                }
-                else
-                {
-                    scope.PendingNestedFault = initResult;
-                    throw initResult.FaultException ?? new InvalidOperationException("Contract _initialize failed.");
+                    scope.PendingInitializerContexts.Pop();
                 }
             }
-
-            var nestedResult = request.Engine.ExecuteInNativeContractContext(
-                contract.Hash,
-                request.ScriptHashes[^1],
-                executionContractState,
-                nestedRequest.CurrentCallFlags,
-                () => contract.Type == ContractType.RiscV
-                    ? ExecuteNativeContractInternal(nestedRequest, calleeScript, nestedInitialStack, descriptor.Name, scope)
-                    : ExecuteScriptInternal(
-                        nestedRequest,
-                        calleeScript,
-                        nestedInitialStack,
-                        descriptor.Offset,
-                        scope));
 
             if (nestedResult.State == VMState.HALT)
             {
@@ -187,8 +172,8 @@ namespace Neo.SmartContract.RiscV
             if (consumedArgumentCount < 0 || inputStack.Length < consumedArgumentCount)
                 throw new ArgumentOutOfRangeException(nameof(consumedArgumentCount));
 
-            var returnedCount = returnType == ContractParameterType.Void ? 0 : resultStack.Count;
-            if (returnType != ContractParameterType.Void && returnedCount == 0)
+            var returnedCount = returnType == ContractParameterType.Void ? 0 : 1;
+            if (returnType != ContractParameterType.Void && resultStack.Count == 0)
                 throw new InvalidOperationException("Contract.Call target did not return a value for a non-void method.");
 
             var prefixLength = inputStack.Length - consumedArgumentCount;
@@ -197,10 +182,8 @@ namespace Neo.SmartContract.RiscV
             {
                 System.Array.Copy(inputStack, next, prefixLength);
             }
-            for (var index = 0; index < returnedCount; index++)
-            {
-                next[prefixLength + index] = resultStack[index];
-            }
+            if (returnedCount == 1)
+                next[prefixLength] = resultStack[^1];
 
             return next;
         }

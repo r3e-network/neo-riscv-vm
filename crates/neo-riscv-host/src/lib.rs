@@ -9,7 +9,10 @@ mod pricing;
 mod profiling;
 mod runtime_cache;
 
-use bridge::{read_guest_debug, read_guest_panic, read_guest_trace, ClosureHost, GuestTrace};
+use bridge::{
+    read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic, read_guest_result_diag,
+    read_guest_trace, ClosureHost, GuestTrace,
+};
 use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, VmState};
 use std::cell::Cell;
 
@@ -93,8 +96,11 @@ pub use ffi::{
     neo_riscv_execute_native_contract, neo_riscv_execute_native_contract_builtin,
     neo_riscv_execute_native_contract_builtin_by_id,
     neo_riscv_execute_native_contract_builtin_i64_by_id, neo_riscv_execute_script,
-    neo_riscv_execute_script_with_host, neo_riscv_free_execution_result, NativeExecutionResult,
-    NativeHostCallback, NativeHostFreeCallback, NativeHostResult, NativeStackItem,
+    neo_riscv_execute_script_with_host, neo_riscv_execute_script_with_host_and_initializer,
+    neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
+    neo_riscv_execute_script_with_host_and_result_limit, neo_riscv_free_execution_result,
+    NativeExecutionResult, NativeHostCallback, NativeHostFreeCallback, NativeHostResult,
+    NativeStackItem,
 };
 pub use profiling::{get_current_memory, get_peak_memory, reset as reset_profiling};
 
@@ -262,12 +268,13 @@ where
             let trace = read_guest_trace(instance, &mut host);
             // Read guest panic message if available
             let panic_msg = read_guest_panic(instance, &mut host);
+            let result_diag = read_guest_result_diag(instance, &mut host);
             {
                 let alloc_peak = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ()).unwrap_or(0);
                 let alloc_fails = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ()).unwrap_or(0);
                 let alloc_fail_size = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ()).unwrap_or(0);
                 format!(
-                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
                     host.last_opcode,
                     host.opcode_count,
                     host.syscall_count,
@@ -332,7 +339,14 @@ where
 
     match result {
         Ok(result) => Ok((result, trace)),
-        Err(error) => Err(format!("{error}; trace={trace:?}")),
+        Err(error) => {
+            if let Some(ip) = read_guest_last_interpreter_ip(instance, &mut host) {
+                set_last_fault_ip(Some(ip));
+                Err(format!("{error}; ip={ip}; trace={trace:?}"))
+            } else {
+                Err(format!("{error}; trace={trace:?}"))
+            }
+        }
     }
 }
 
@@ -340,6 +354,116 @@ pub fn execute_script_with_host_and_stack_and_ip<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
     initial_ip: usize,
+    context: RuntimeContext,
+    callback: F,
+) -> Result<ExecutionResult, String>
+where
+    F: FnMut(
+        u32,
+        usize,
+        RuntimeContext,
+        &[neo_riscv_abi::StackValue],
+    ) -> Result<HostCallbackResult, String>,
+{
+    execute_script_with_host_and_stack_and_ip_inner(
+        script,
+        initial_stack,
+        initial_ip,
+        None,
+        None,
+        context,
+        callback,
+    )
+}
+
+pub fn execute_script_with_host_and_stack_and_ip_and_initializer<F>(
+    script: &[u8],
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    initial_ip: usize,
+    initializer_ip: usize,
+    context: RuntimeContext,
+    callback: F,
+) -> Result<ExecutionResult, String>
+where
+    F: FnMut(
+        u32,
+        usize,
+        RuntimeContext,
+        &[neo_riscv_abi::StackValue],
+    ) -> Result<HostCallbackResult, String>,
+{
+    execute_script_with_host_and_stack_and_ip_inner(
+        script,
+        initial_stack,
+        initial_ip,
+        Some(initializer_ip),
+        None,
+        context,
+        callback,
+    )
+}
+
+pub fn execute_script_with_host_and_stack_and_ip_with_result_limit<F>(
+    script: &[u8],
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    initial_ip: usize,
+    result_limit: usize,
+    context: RuntimeContext,
+    callback: F,
+) -> Result<ExecutionResult, String>
+where
+    F: FnMut(
+        u32,
+        usize,
+        RuntimeContext,
+        &[neo_riscv_abi::StackValue],
+    ) -> Result<HostCallbackResult, String>,
+{
+    execute_script_with_host_and_stack_and_ip_inner(
+        script,
+        initial_stack,
+        initial_ip,
+        None,
+        Some(result_limit),
+        context,
+        callback,
+    )
+}
+
+pub fn execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit<F>(
+    script: &[u8],
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    initial_ip: usize,
+    initializer_ip: usize,
+    result_limit: usize,
+    context: RuntimeContext,
+    callback: F,
+) -> Result<ExecutionResult, String>
+where
+    F: FnMut(
+        u32,
+        usize,
+        RuntimeContext,
+        &[neo_riscv_abi::StackValue],
+    ) -> Result<HostCallbackResult, String>,
+{
+    execute_script_with_host_and_stack_and_ip_inner(
+        script,
+        initial_stack,
+        initial_ip,
+        Some(initializer_ip),
+        Some(result_limit),
+        context,
+        callback,
+    )
+}
+
+fn execute_script_with_host_and_stack_and_ip_inner<F>(
+    script: &[u8],
+    initial_stack: Vec<neo_riscv_abi::StackValue>,
+    initial_ip: usize,
+    initializer_ip: Option<usize>,
+    result_limit: Option<usize>,
     context: RuntimeContext,
     mut callback: F,
 ) -> Result<ExecutionResult, String>
@@ -394,22 +518,64 @@ where
             .map_err(|e| format!("guest write_memory failed: {e:?}"))?;
     }
 
-    instance
-        .call_typed(
+    if let (Some(_), Some(result_limit)) = (initializer_ip, result_limit) {
+        instance
+            .call_typed(&mut host, "set_result_limit", (result_limit as u32,))
+            .map_err(|e| {
+                set_last_native_fee_consumed_pico(host.fee_consumed_pico);
+                format!("guest set_result_limit failed: {e:?}")
+            })?;
+    }
+
+    let execution_call = match (initializer_ip, result_limit) {
+        (Some(initializer_ip), Some(_)) | (Some(initializer_ip), None) => instance.call_typed(
+            &mut host,
+            "execute_with_initializer",
+            (
+                script_ptr,
+                script_len,
+                stack_ptr,
+                stack_len,
+                initial_ip as u32,
+                initializer_ip as u32,
+            ),
+        ),
+        (None, Some(result_limit)) => instance.call_typed(
+            &mut host,
+            "execute_with_result_limit",
+            (
+                script_ptr,
+                script_len,
+                stack_ptr,
+                stack_len,
+                initial_ip as u32,
+                result_limit as u32,
+            ),
+        ),
+        (None, None) => instance.call_typed(
             &mut host,
             "execute",
-            (script_ptr, script_len, stack_ptr, stack_len, initial_ip as u32),
-        )
+            (
+                script_ptr,
+                script_len,
+                stack_ptr,
+                stack_len,
+                initial_ip as u32,
+            ),
+        ),
+    };
+    execution_call
         .map_err(|e| {
             set_last_native_fee_consumed_pico(host.fee_consumed_pico);
             let trace = read_guest_trace(instance, &mut host);
             let panic_msg = read_guest_panic(instance, &mut host);
+            let result_diag = read_guest_result_diag(instance, &mut host);
             {
                 let alloc_peak = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ()).unwrap_or(0);
                 let alloc_fails = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ()).unwrap_or(0);
                 let alloc_fail_size = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ()).unwrap_or(0);
                 format!(
-                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
                     host.last_opcode,
                     host.opcode_count,
                     host.syscall_count,
@@ -472,6 +638,10 @@ where
 
     if let Err(error) = result {
         let trace = read_guest_trace(instance, &mut host);
+        if let Some(ip) = read_guest_last_interpreter_ip(instance, &mut host) {
+            set_last_fault_ip(Some(ip));
+            return Err(format!("{error}; ip={ip}; trace={trace:?}"));
+        }
         return Err(format!("{error}; trace={trace:?}"));
     }
 

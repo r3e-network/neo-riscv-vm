@@ -99,12 +99,11 @@ namespace Neo.SmartContract.RiscV
 
             if (inputStack[^1] is not ByteString scriptItem)
                 throw new InvalidOperationException("Runtime.LoadScript requires a byte string script.");
-            if (inputStack[^2] is not Integer callFlagsItem)
-                throw new InvalidOperationException("Runtime.LoadScript requires integer call flags.");
+            var callFlagsInteger = ReadIntegerArgument(inputStack[^2], "Runtime.LoadScript requires integer call flags.");
             if (inputStack[^3] is not Neo.VM.Types.Array argsArray)
                 throw new InvalidOperationException("Runtime.LoadScript requires an array of arguments.");
 
-            var callFlags = (CallFlags)(byte)callFlagsItem.GetInteger();
+            var callFlags = (CallFlags)(byte)callFlagsInteger;
             if ((callFlags & ~CallFlags.All) != 0)
                 throw new InvalidOperationException($"Invalid call flags: {callFlags}");
 
@@ -161,7 +160,7 @@ namespace Neo.SmartContract.RiscV
                 request.ScriptHashes[^1],
                 null,
                 nestedCallFlags,
-                () => ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope));
+                () => ExecuteScriptInternal(nestedRequest, nestedScript, nestedInitialStack, 0, scope, resultStackLimit: 1));
 
             if (nestedResult.State == VMState.HALT)
             {

@@ -47,6 +47,11 @@ namespace Neo.SmartContract.RiscV
                 }
 
                 var handleStart = ProfileEnabled ? Stopwatch.GetTimestamp() : 0;
+                if (TraceEnabled && api == ApplicationEngine.System_Storage_Put)
+                {
+                    for (var index = 0; index < inputStack.Length; index++)
+                        Trace($"callback input item[{index}] api=0x{api:x8} value={DescribeStackItem(inputStack[index])}");
+                }
                 var handled = state.Bridge.HandleHostCallback(state.Request, state.Scope, api, instructionPointer, gasLeft, inputStack, out result);
                 if (ProfileEnabled)
                 {
@@ -70,6 +75,8 @@ namespace Neo.SmartContract.RiscV
         {
             return (api >> 16) == CalltMarkerHi
                 ? $"CALLT.{api & 0xFFFF}"
+                : api == InitializerCompleteMarker
+                    ? "InitializerComplete"
                 : ApplicationEngine.GetInteropDescriptor(api).Name;
         }
 
@@ -147,6 +154,13 @@ namespace Neo.SmartContract.RiscV
                     var calltGasLeft = gasLeft - (request.GasLeft - request.Engine.GasLeft);
                     var calltResult = HandleCallT(request, scope, calltGasLeft, calltToken, inputStack);
                     result = CreateNativeHostResult(calltResult, scope);
+                    return true;
+                }
+
+                if (api == InitializerCompleteMarker)
+                {
+                    CompletePendingInitializerContext(request.Engine, scope);
+                    result = CreateNativeHostResult(inputStack, scope);
                     return true;
                 }
 
@@ -267,6 +281,18 @@ namespace Neo.SmartContract.RiscV
             }
         }
 
+        private static void CompletePendingInitializerContext(ApplicationEngine engine, ExecutionScope scope)
+        {
+            if (!scope.PendingInitializerContexts.TryPop(out var initContext))
+                throw new InvalidOperationException("No pending _initialize context is available.");
+
+            var initResult = new RiscvExecutionResult(VMState.HALT, System.Array.Empty<StackItem>(), null);
+            if (engine is RiscvApplicationEngine riscvEngine)
+                riscvEngine.UnloadNestedContextFromBridge(initContext, initResult);
+            else
+                PopNestedContextIfCurrent(engine, initContext);
+        }
+
         private static StackItem[] Append(StackItem[] inputStack, StackItem item)
         {
             var next = new StackItem[inputStack.Length + 1];
@@ -277,8 +303,8 @@ namespace Neo.SmartContract.RiscV
 
         private static StackItem[] HandleCallingScriptHash(RiscvExecutionRequest request, StackItem[] inputStack)
         {
-            var current = request.ScriptHashes[^1];
-            var expected = request.Scripts.Count > 1 ? request.ScriptHashes[^2] : null;
+            var current = request.Engine.CurrentScriptHash ?? request.ScriptHashes[^1];
+            var expected = request.Engine.CallingScriptHash;
             var value = GetTestingHooks(request.Engine)?.OverrideCallingScriptHash(current, expected) ?? expected;
             return AppendHashOrNull(inputStack, value);
         }

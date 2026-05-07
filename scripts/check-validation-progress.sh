@@ -2,7 +2,9 @@
 # Check progress of all running mainnet validation processes
 set -e
 
-TOOL_DIR="/home/neo/git/neo-riscv-vm/tools"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TOOL_DIR="${TOOL_DIR:-${VM_DIR}/tools}"
 MAINNET_HEIGHT=$(curl -s -X POST http://seed1.neo.org:10332 -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"getblockcount","params":[],"id":1}' 2>/dev/null | \
   python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "unknown")

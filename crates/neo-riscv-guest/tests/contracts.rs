@@ -617,7 +617,7 @@ fn string_substring() {
     .expect("should execute substring");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::ByteString(b"ell".to_vec())]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"ell".to_vec())]);
 }
 
 #[test]
@@ -632,7 +632,7 @@ fn string_left() {
     .expect("should execute LEFT");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::ByteString(b"hel".to_vec())]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"hel".to_vec())]);
 }
 
 #[test]
@@ -647,7 +647,7 @@ fn string_right() {
     .expect("should execute RIGHT");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::ByteString(b"llo".to_vec())]);
+    assert_eq!(result.stack, vec![StackValue::Buffer(b"llo".to_vec())]);
 }
 
 // ===== BITWISE OPERATION CONTRACTS =====

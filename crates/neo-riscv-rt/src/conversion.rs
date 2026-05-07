@@ -45,10 +45,10 @@ impl Context {
         let val = self.pop();
         let target_type = normalize_type_tag(target_type);
         let converted = match target_type {
-            TAG_INTEGER => self.to_integer(&val),
+            TAG_INTEGER => self.convert_to_integer(&val),
             TAG_BOOLEAN => Some(StackValue::Boolean(self.value_to_bool(&val))),
-            TAG_BYTESTRING => self.to_bytestring(&val),
-            TAG_BUFFER => self.to_buffer(&val),
+            TAG_BYTESTRING => self.convert_to_bytestring(&val),
+            TAG_BUFFER => self.convert_to_buffer(&val),
             TAG_ARRAY => match val {
                 StackValue::Array(_) => Some(val),
                 StackValue::Struct(items) => Some(StackValue::Array(items)),
@@ -90,7 +90,8 @@ impl Context {
             TAG_ARRAY => StackValue::Array(Vec::new()),
             TAG_STRUCT => StackValue::Struct(Vec::new()),
             TAG_MAP => StackValue::Map(Vec::new()),
-            TAG_NULL | _ => StackValue::Null,
+            TAG_NULL => StackValue::Null,
+            _ => StackValue::Null,
         };
         self.push(val);
     }
@@ -99,7 +100,7 @@ impl Context {
     // Internal conversion helpers
     // ---------------------------------------------------------------
 
-    fn to_integer(&mut self, val: &StackValue) -> Option<StackValue> {
+    fn convert_to_integer(&mut self, val: &StackValue) -> Option<StackValue> {
         match val {
             StackValue::Integer(_) => Some(val.clone()),
             StackValue::Boolean(b) => Some(StackValue::Integer(if *b { 1 } else { 0 })),
@@ -115,7 +116,7 @@ impl Context {
                 let mut buf = [0u8; 8];
                 buf[..bytes.len()].copy_from_slice(bytes);
                 // Sign-extend from the most significant byte of the input.
-                if bytes.last().map_or(false, |b| b & 0x80 != 0) {
+                if bytes.last().is_some_and(|b| b & 0x80 != 0) {
                     for b in &mut buf[bytes.len()..] {
                         *b = 0xFF;
                     }
@@ -129,7 +130,7 @@ impl Context {
                 if bytes.len() <= 8 {
                     let mut buf = [0u8; 8];
                     buf[..bytes.len()].copy_from_slice(bytes);
-                    if bytes.last().map_or(false, |b| b & 0x80 != 0) {
+                    if bytes.last().is_some_and(|b| b & 0x80 != 0) {
                         for b in &mut buf[bytes.len()..] {
                             *b = 0xFF;
                         }
@@ -147,7 +148,7 @@ impl Context {
         }
     }
 
-    fn to_bytestring(&mut self, val: &StackValue) -> Option<StackValue> {
+    fn convert_to_bytestring(&mut self, val: &StackValue) -> Option<StackValue> {
         match val {
             StackValue::ByteString(_) => Some(val.clone()),
             StackValue::Buffer(b) => Some(StackValue::ByteString(b.clone())),
@@ -168,7 +169,7 @@ impl Context {
         }
     }
 
-    fn to_buffer(&mut self, val: &StackValue) -> Option<StackValue> {
+    fn convert_to_buffer(&mut self, val: &StackValue) -> Option<StackValue> {
         match val {
             StackValue::Buffer(_) => Some(val.clone()),
             StackValue::ByteString(b) => Some(StackValue::Buffer(b.clone())),

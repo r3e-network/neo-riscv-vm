@@ -46,6 +46,10 @@ namespace Neo.SmartContract.RiscV
             }
 
             var value = request.Engine.Get(context, key);
+            if (TraceEnabled)
+            {
+                Trace($"storage.get contextId={context.Id} readOnly={context.IsReadOnly} key={Convert.ToHexString(key)} valueLen={(value.HasValue ? value.Value.Length.ToString() : "<null>")}");
+            }
             var next = new StackItem[inputStack.Length - 1];
             if (inputStack.Length > 2)
             {
@@ -313,17 +317,21 @@ namespace Neo.SmartContract.RiscV
 
         private static bool TryGetByteLikeBytes(StackItem item, out byte[] bytes)
         {
-            switch (item)
+            if (item.IsNull)
             {
-                case ByteString byteString:
-                    bytes = byteString.GetSpan().ToArray();
-                    return true;
-                case Neo.VM.Types.Buffer buffer:
-                    bytes = buffer.GetSpan().ToArray();
-                    return true;
-                default:
-                    bytes = System.Array.Empty<byte>();
-                    return false;
+                bytes = System.Array.Empty<byte>();
+                return false;
+            }
+
+            try
+            {
+                bytes = item.GetSpan().ToArray();
+                return true;
+            }
+            catch (Exception) when (item is not ByteString && item is not Neo.VM.Types.Buffer)
+            {
+                bytes = System.Array.Empty<byte>();
+                return false;
             }
         }
 

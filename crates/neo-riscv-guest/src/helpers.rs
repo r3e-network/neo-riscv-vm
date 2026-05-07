@@ -48,6 +48,9 @@ pub(crate) static RETAINED_ARGS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer
 static RETAINED_LOCALS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 static RETAINED_STATIC_FIELDS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 static RETAINED_ALT_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
+static RETAINED_CONSUMED_MUTATIONS_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
+#[cfg(target_arch = "riscv32")]
+static RETAINED_INITIAL_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 #[cfg(target_arch = "riscv32")]
 pub(crate) static RETAINED_CALL_STACK_BUF: RetainedPrefixBuffer = RetainedPrefixBuffer::new();
 
@@ -58,6 +61,8 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use num_bigint::BigInt;
+use num_traits::Zero;
 
 #[inline]
 pub(crate) fn peek_item(stack: &[StackValue]) -> Result<StackValue, String> {
@@ -86,31 +91,31 @@ pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
 }
 
 #[inline]
-pub(crate) fn pop_integer_pair_allowing_null_false(
+pub(crate) fn pop_bigint_pair_allowing_null_false(
     stack: &mut Vec<StackValue>,
-) -> Result<Option<(i128, i128)>, String> {
-    let right = pop_optional_integer_for_comparison(stack)?;
-    let left = pop_optional_integer_for_comparison(stack)?;
+) -> Result<Option<(BigInt, BigInt)>, String> {
+    let right = pop_optional_bigint_for_comparison(stack)?;
+    let left = pop_optional_bigint_for_comparison(stack)?;
     Ok(match (left, right) {
         (Some(left), Some(right)) => Some((left, right)),
-        (None, None) => Some((0, 0)), // null == 0 in Neo N3 comparison semantics
+        (None, None) => Some((BigInt::zero(), BigInt::zero())),
         _ => None,
     })
 }
 
-pub(crate) fn pop_optional_integer_for_comparison(
+pub(crate) fn pop_optional_bigint_for_comparison(
     stack: &mut Vec<StackValue>,
-) -> Result<Option<i128>, String> {
+) -> Result<Option<BigInt>, String> {
     match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(Some(i128::from(value))),
-        Some(StackValue::BigInteger(value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
-        Some(StackValue::ByteString(value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
-        Some(StackValue::Boolean(value)) => Ok(Some(if value { 1 } else { 0 })),
+        Some(StackValue::Integer(value)) => Ok(Some(BigInt::from(value))),
+        Some(StackValue::BigInteger(value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
+        Some(StackValue::ByteString(value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
+        Some(StackValue::Boolean(value)) => Ok(Some(BigInt::from(if value { 1 } else { 0 }))),
         Some(StackValue::Pointer(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Map(..)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Buffer(_, value)) => Ok(Some(decode_signed_le_bytes_i128(&value)?)),
+        Some(StackValue::Buffer(_, value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
         Some(StackValue::Interop(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Iterator(_)) => Err("expected integer on stack".to_string()),
         Some(StackValue::Null) => Ok(None),
@@ -149,14 +154,14 @@ pub(crate) fn pop_numeric_value(stack: &mut Vec<StackValue>) -> Result<i64, Stri
     }
 }
 
-pub(crate) fn pop_numeric_i128(stack: &mut Vec<StackValue>) -> Result<i128, String> {
+pub(crate) fn pop_numeric_bigint(stack: &mut Vec<StackValue>) -> Result<BigInt, String> {
     match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(i128::from(value)),
-        Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
-        Some(StackValue::ByteString(value)) => decode_signed_le_bytes_i128(&value),
-        Some(StackValue::BigInteger(value)) => decode_signed_le_bytes_i128(&value),
-        Some(StackValue::Null) => Ok(0),
-        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes_i128(&bytes),
+        Some(StackValue::Integer(value)) => Ok(BigInt::from(value)),
+        Some(StackValue::Boolean(value)) => Ok(BigInt::from(if value { 1 } else { 0 })),
+        Some(StackValue::ByteString(value)) => decode_signed_le_bytes_bigint(&value),
+        Some(StackValue::BigInteger(value)) => decode_signed_le_bytes_bigint(&value),
+        Some(StackValue::Null) => Ok(BigInt::zero()),
+        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes_bigint(&bytes),
         Some(StackValue::Pointer(_)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
@@ -169,22 +174,24 @@ pub(crate) fn pop_numeric_i128(stack: &mut Vec<StackValue>) -> Result<i128, Stri
 
 pub(crate) fn pop_shift_value(stack: &mut Vec<StackValue>) -> Result<ShiftValue, String> {
     match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(ShiftValue::Integer(value)),
-        Some(StackValue::Boolean(value)) => Ok(ShiftValue::Integer(if value { 1 } else { 0 })),
-        Some(StackValue::ByteString(value)) => {
-            Ok(ShiftValue::ByteString(decode_signed_le_bytes(&value)?))
+        Some(StackValue::Integer(value)) => Ok(ShiftValue::Integer(BigInt::from(value))),
+        Some(StackValue::Boolean(value)) => {
+            Ok(ShiftValue::Integer(BigInt::from(if value { 1 } else { 0 })))
         }
+        Some(StackValue::ByteString(value)) => Ok(ShiftValue::ByteString(
+            decode_signed_le_bytes_bigint(&value)?,
+        )),
         Some(StackValue::BigInteger(value)) => {
-            Ok(ShiftValue::ByteString(decode_signed_le_bytes(&value)?))
+            Ok(ShiftValue::Integer(decode_signed_le_bytes_bigint(&value)?))
         }
-        Some(StackValue::Null) => Ok(ShiftValue::Integer(0)),
+        Some(StackValue::Null) => Ok(ShiftValue::Integer(BigInt::zero())),
         Some(StackValue::Pointer(_)) => Err("expected integer-compatible shift value".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer-compatible shift value".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer-compatible shift value".to_string()),
         Some(StackValue::Map(..)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Buffer(_, bytes)) => {
-            Ok(ShiftValue::ByteString(decode_signed_le_bytes(&bytes)?))
-        }
+        Some(StackValue::Buffer(_, bytes)) => Ok(ShiftValue::ByteString(
+            decode_signed_le_bytes_bigint(&bytes)?,
+        )),
         Some(StackValue::Interop(_)) => Err("expected integer-compatible shift value".to_string()),
         Some(StackValue::Iterator(_)) => Err("expected integer-compatible shift value".to_string()),
         None => Err("stack underflow".to_string()),
@@ -192,25 +199,26 @@ pub(crate) fn pop_shift_value(stack: &mut Vec<StackValue>) -> Result<ShiftValue,
 }
 
 pub(crate) fn num_equal(left: &StackValue, right: &StackValue) -> Result<bool, String> {
-    match (left, right) {
-        (StackValue::ByteString(left), StackValue::ByteString(right)) => Ok(left == right),
-        (StackValue::Null, _) | (_, StackValue::Null) => {
-            Err("NUMEQUAL expects primitive numeric or byte string values".to_string())
-        }
-        (
-            StackValue::Integer(_) | StackValue::Boolean(_),
-            StackValue::Integer(_) | StackValue::Boolean(_),
-        ) => Ok(integer_value_for_equality(left)? == integer_value_for_equality(right)?),
-        _ => Err("NUMEQUAL expects primitive numeric or byte string values".to_string()),
-    }
+    Ok(integer_value_for_num_equal(left)? == integer_value_for_num_equal(right)?)
 }
 
-pub(crate) fn integer_value_for_equality(value: &StackValue) -> Result<i64, String> {
+fn integer_value_for_num_equal(value: &StackValue) -> Result<BigInt, String> {
     match value {
-        StackValue::Integer(value) => Ok(*value),
-        StackValue::Boolean(value) => Ok(if *value { 1 } else { 0 }),
-        StackValue::Null => Ok(0),
-        _ => Err("expected integer-compatible value".to_string()),
+        StackValue::Integer(value) => Ok(BigInt::from(*value)),
+        StackValue::BigInteger(value) | StackValue::ByteString(value) => {
+            decode_signed_le_bytes_bigint(value)
+        }
+        StackValue::Boolean(value) => Ok(BigInt::from(if *value { 1 } else { 0 })),
+        StackValue::Null
+        | StackValue::Pointer(_)
+        | StackValue::Array(..)
+        | StackValue::Struct(..)
+        | StackValue::Map(..)
+        | StackValue::Buffer(..)
+        | StackValue::Interop(_)
+        | StackValue::Iterator(_) => {
+            Err("NUMEQUAL expects primitive numeric or byte string values".to_string())
+        }
     }
 }
 
@@ -360,7 +368,19 @@ pub(crate) fn convert_value(
 
     match kind {
         0x20 => Ok(StackValue::Boolean(boolean_value(&value)?)),
-        0x21 => Ok(StackValue::Integer(numeric_value(&value)?)),
+        0x21 => Ok(match value {
+            StackValue::Integer(value) => StackValue::Integer(value),
+            StackValue::Boolean(value) => StackValue::Integer(if value { 1 } else { 0 }),
+            StackValue::ByteString(bytes) | StackValue::BigInteger(bytes) => numeric_result_bigint(
+                decode_signed_le_bytes_bigint(&bytes)?,
+                "integer size exceeds maximum",
+            )?,
+            StackValue::Buffer(_, bytes) => numeric_result_bigint(
+                decode_signed_le_bytes_bigint(&bytes)?,
+                "integer size exceeds maximum",
+            )?,
+            other => return Err(format!("unsupported CONVERT source for Integer: {other:?}")),
+        }),
         0x28 => Ok(match value {
             StackValue::ByteString(bytes) => StackValue::ByteString(bytes),
             StackValue::Buffer(_, bytes) => StackValue::ByteString(bytes),
@@ -377,6 +397,8 @@ pub(crate) fn convert_value(
             StackValue::ByteString(bytes) => ids.buffer(bytes),
             StackValue::Buffer(_, _) => value,
             StackValue::Integer(value) => ids.buffer(encode_integer(value)),
+            StackValue::BigInteger(value) => ids.buffer(value),
+            StackValue::Boolean(value) => ids.buffer(vec![if value { 1 } else { 0 }]),
             other => return Err(format!("unsupported CONVERT source for Buffer: {other:?}")),
         }),
         0x40 => Ok(match value {
@@ -772,6 +794,7 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
     locals: &mut Vec<StackValue>,
     static_fields: &mut Vec<StackValue>,
     alt_stack: &mut Vec<StackValue>,
+    consumed_mutations: &mut Vec<StackValue>,
     ids: &mut CompoundIds,
 ) -> Result<(), String> {
     let arg_count = neo_riscv_abi::syscall_arg_count(api).min(stack.len());
@@ -812,10 +835,23 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
     } else {
         None
     };
+    let retained_consumed_mutations_len =
+        if cfg!(target_arch = "riscv32") && !consumed_mutations.is_empty() {
+            let buf = unsafe { RETAINED_CONSUMED_MUTATIONS_BUF.as_mut_slice() };
+            Some(encode_retained_prefix_to_slice(consumed_mutations, buf)?)
+        } else {
+            None
+        };
     match host.syscall(api, ip, &mut abi_args) {
         Ok(()) => {
             stabilize_allocator_after_host_call();
             if let Some(retained_len) = retained_stack_len {
+                restore_retained_values(
+                    consumed_mutations,
+                    retained_consumed_mutations_len,
+                    &RETAINED_CONSUMED_MUTATIONS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
                 restore_retained_values(
                     locals,
                     retained_locals_len,
@@ -865,6 +901,12 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
         Err(e) => {
             if let Some(retained_len) = retained_stack_len {
                 let _ = restore_retained_values(
+                    consumed_mutations,
+                    retained_consumed_mutations_len,
+                    &RETAINED_CONSUMED_MUTATIONS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
+                let _ = restore_retained_values(
                     locals,
                     retained_locals_len,
                     &RETAINED_LOCALS_BUF,
@@ -901,6 +943,97 @@ pub(crate) fn invoke_syscall<H: SyscallProvider>(
     }
 }
 
+pub(crate) fn complete_initializer_retaining_state<H: SyscallProvider>(
+    host: &mut H,
+    ip: usize,
+    method_initial_stack: &mut Vec<StackValue>,
+    static_fields: &mut Vec<StackValue>,
+) -> Result<(), String> {
+    let retained_method_stack_len =
+        if cfg!(target_arch = "riscv32") && !method_initial_stack.is_empty() {
+            let buf = unsafe { RETAINED_STACK_BUF.as_mut_slice() };
+            Some(encode_retained_prefix_to_slice(method_initial_stack, buf)?)
+        } else {
+            None
+        };
+    let retained_static_fields_len = if cfg!(target_arch = "riscv32") && !static_fields.is_empty() {
+        let buf = unsafe { RETAINED_STATIC_FIELDS_BUF.as_mut_slice() };
+        Some(encode_retained_prefix_to_slice(static_fields, buf)?)
+    } else {
+        None
+    };
+
+    let result = host.initializer_complete(ip);
+    if result.is_ok() {
+        stabilize_allocator_after_host_call();
+    }
+
+    if retained_method_stack_len.is_some() || retained_static_fields_len.is_some() {
+        let method_restore = restore_retained_values(
+            method_initial_stack,
+            retained_method_stack_len,
+            &RETAINED_STACK_BUF,
+            method_initial_stack.len().max(POST_SYSCALL_STACK_HEADROOM),
+        );
+        let static_restore = restore_retained_values(
+            static_fields,
+            retained_static_fields_len,
+            &RETAINED_STATIC_FIELDS_BUF,
+            static_fields.len().max(POST_SYSCALL_STACK_HEADROOM),
+        );
+
+        if let Err(error) = result {
+            let _ = method_restore;
+            let _ = static_restore;
+            return Err(error);
+        }
+
+        method_restore?;
+        static_restore?;
+        return Ok(());
+    }
+
+    result
+}
+
+pub(crate) fn retain_initializer_method_stack(
+    method_initial_stack: &[StackValue],
+) -> Result<Option<usize>, String> {
+    #[cfg(target_arch = "riscv32")]
+    {
+        if method_initial_stack.is_empty() {
+            return Ok(None);
+        }
+        let buf = unsafe { RETAINED_INITIAL_STACK_BUF.as_mut_slice() };
+        return encode_retained_prefix_to_slice(method_initial_stack, buf).map(Some);
+    }
+    #[cfg(not(target_arch = "riscv32"))]
+    {
+        let _ = method_initial_stack;
+        Ok(None)
+    }
+}
+
+pub(crate) fn restore_initializer_method_stack(
+    method_initial_stack: &mut Vec<StackValue>,
+    retained_len: Option<usize>,
+) -> Result<(), String> {
+    #[cfg(target_arch = "riscv32")]
+    {
+        restore_retained_values(
+            method_initial_stack,
+            retained_len,
+            &RETAINED_INITIAL_STACK_BUF,
+            method_initial_stack.len().max(POST_SYSCALL_STACK_HEADROOM),
+        )
+    }
+    #[cfg(not(target_arch = "riscv32"))]
+    {
+        let _ = (method_initial_stack, retained_len);
+        Ok(())
+    }
+}
+
 fn restore_retained_values(
     values: &mut Vec<StackValue>,
     retained_len: Option<usize>,
@@ -931,6 +1064,7 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
     locals: &mut Vec<StackValue>,
     static_fields: &mut Vec<StackValue>,
     alt_stack: &mut Vec<StackValue>,
+    consumed_mutations: &mut Vec<StackValue>,
     ids: &mut CompoundIds,
 ) -> Result<(), String> {
     let mut abi_stack = to_abi_stack(stack);
@@ -964,10 +1098,23 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
     } else {
         None
     };
+    let retained_consumed_mutations_len =
+        if cfg!(target_arch = "riscv32") && !consumed_mutations.is_empty() {
+            let buf = unsafe { RETAINED_CONSUMED_MUTATIONS_BUF.as_mut_slice() };
+            Some(encode_retained_prefix_to_slice(consumed_mutations, buf)?)
+        } else {
+            None
+        };
     match host.callt(token, ip, &mut abi_stack) {
         Ok(()) => {
             stabilize_allocator_after_host_call();
             if let Some(retained_len) = retained_stack_len {
+                restore_retained_values(
+                    consumed_mutations,
+                    retained_consumed_mutations_len,
+                    &RETAINED_CONSUMED_MUTATIONS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                )?;
                 restore_retained_values(
                     locals,
                     retained_locals_len,
@@ -1000,8 +1147,7 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
                 )?;
             }
 
-            let preserved_stack = core::mem::take(stack);
-            let mut next_stack =
+            let mut imported_stack =
                 Vec::with_capacity(abi_stack.len().max(POST_SYSCALL_STACK_HEADROOM));
             for item in abi_stack {
                 let imported = ids.import_abi(item);
@@ -1017,19 +1163,47 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
                 } else {
                     imported
                 };
-                next_stack.push(stabilized);
+                imported_stack.push(stabilized);
             }
-            let shared_prefix = preserved_stack
+            let shared_prefix = stack
                 .iter()
-                .zip(next_stack.iter())
+                .zip(imported_stack.iter())
                 .take_while(|(left, right)| structurally_equal(left, right))
                 .count();
-            next_stack[..shared_prefix].clone_from_slice(&preserved_stack[..shared_prefix]);
-            *stack = next_stack;
+            #[cfg(target_arch = "riscv32")]
+            {
+                let mut preserved_stack = core::mem::take(stack);
+                let mut next_stack =
+                    Vec::with_capacity(imported_stack.len().max(POST_SYSCALL_STACK_HEADROOM));
+
+                if shared_prefix > 0 {
+                    let discarded_preserved = preserved_stack.split_off(shared_prefix);
+                    next_stack.append(&mut preserved_stack);
+                    core::mem::forget(discarded_preserved);
+                } else {
+                    core::mem::forget(preserved_stack);
+                }
+
+                let mut imported_suffix = imported_stack.split_off(shared_prefix);
+                next_stack.append(&mut imported_suffix);
+                core::mem::forget(imported_stack);
+                *stack = next_stack;
+            }
+            #[cfg(not(target_arch = "riscv32"))]
+            {
+                imported_stack[..shared_prefix].clone_from_slice(&stack[..shared_prefix]);
+                *stack = imported_stack;
+            }
             Ok(())
         }
         Err(e) => {
             if let Some(retained_len) = retained_stack_len {
+                let _ = restore_retained_values(
+                    consumed_mutations,
+                    retained_consumed_mutations_len,
+                    &RETAINED_CONSUMED_MUTATIONS_BUF,
+                    POST_SYSCALL_STACK_HEADROOM,
+                );
                 let _ = restore_retained_values(
                     locals,
                     retained_locals_len,
@@ -1065,19 +1239,6 @@ pub(crate) fn invoke_callt<H: SyscallProvider>(
             core::mem::forget(abi_stack);
             Err(e)
         }
-    }
-}
-
-#[inline]
-pub(crate) fn numeric_value(value: &StackValue) -> Result<i64, String> {
-    match value {
-        StackValue::Integer(value) => Ok(*value),
-        StackValue::Boolean(value) => Ok(if *value { 1 } else { 0 }),
-        StackValue::ByteString(bytes) => decode_signed_le_bytes(bytes),
-        StackValue::BigInteger(bytes) => decode_signed_le_bytes(bytes),
-        StackValue::Buffer(_, bytes) => decode_signed_le_bytes(bytes),
-        StackValue::Null => Ok(0),
-        _ => Err("expected numeric-compatible value".to_string()),
     }
 }
 
@@ -1134,92 +1295,56 @@ pub(crate) fn decode_signed_le_bytes(bytes: &[u8]) -> Result<i64, String> {
     Ok(i64::from_le_bytes(buffer))
 }
 
-pub(crate) fn decode_signed_le_bytes_i128(bytes: &[u8]) -> Result<i128, String> {
-    if bytes.is_empty() {
-        return Ok(0);
-    }
+pub(crate) fn decode_signed_le_bytes_bigint(bytes: &[u8]) -> Result<BigInt, String> {
     if bytes.len() > MAX_INTEGER_SIZE {
         return Err("integer size exceeds maximum".to_string());
     }
-
-    let sign_extend = if bytes.last().is_some_and(|byte| byte & 0x80 != 0) {
-        0xff
-    } else {
-        0x00
-    };
-
-    if bytes.len() > 16 {
-        if bytes.iter().all(|byte| *byte == 0) {
-            return Ok(0);
-        }
-
-        if bytes[16..].iter().all(|byte| *byte == sign_extend)
-            && ((bytes[15] & 0x80) == (sign_extend & 0x80))
-        {
-            let mut buffer = [sign_extend; 16];
-            buffer.copy_from_slice(&bytes[..16]);
-            return Ok(i128::from_le_bytes(buffer));
-        }
-
-        return Err("integer exceeds i128 arithmetic range".to_string());
-    }
-
-    let mut buffer = [sign_extend; 16];
-    buffer[..bytes.len()].copy_from_slice(bytes);
-    Ok(i128::from_le_bytes(buffer))
-}
-
-pub(crate) fn shift_left(value: i64, shift: u32) -> Result<i64, String> {
-    if shift == 0 {
-        return Ok(value);
-    }
-    if shift >= 64 {
-        return if value == 0 {
-            Ok(0)
-        } else {
-            Err("integer overflow for SHL".to_string())
-        };
-    }
-
-    value
-        .checked_shl(shift)
-        .ok_or_else(|| "integer overflow for SHL".to_string())
+    Ok(BigInt::from_signed_bytes_le(bytes))
 }
 
 pub(crate) enum ShiftValue {
-    Integer(i64),
-    ByteString(i64),
+    Integer(BigInt),
+    ByteString(BigInt),
 }
 
 impl ShiftValue {
     pub(crate) fn shift_left(self, shift: u32) -> Result<StackValue, String> {
-        let value = match self {
-            ShiftValue::Integer(value) | ShiftValue::ByteString(value) => shift_left(value, shift)?,
-        };
-        Ok(match self {
-            ShiftValue::Integer(_) => StackValue::Integer(value),
-            ShiftValue::ByteString(_) => StackValue::ByteString(encode_integer(value)),
-        })
-    }
-
-    pub(crate) fn shift_right(self, shift: u32) -> StackValue {
-        let value = match self {
+        let value = match &self {
             ShiftValue::Integer(value) | ShiftValue::ByteString(value) => {
-                if shift >= 64 {
-                    if value < 0 {
-                        -1
-                    } else {
-                        0
-                    }
-                } else {
-                    value >> shift
-                }
+                value.clone() << (shift as usize)
             }
         };
+        self.shift_result(value, "integer overflow for SHL")
+    }
+
+    pub(crate) fn shift_right(self, shift: u32) -> Result<StackValue, String> {
+        let value = match &self {
+            ShiftValue::Integer(value) | ShiftValue::ByteString(value) => {
+                value.clone() >> (shift as usize)
+            }
+        };
+        self.shift_result(value, "integer overflow for SHR")
+    }
+
+    fn shift_result(self, value: BigInt, overflow_message: &str) -> Result<StackValue, String> {
         match self {
-            ShiftValue::Integer(_) => StackValue::Integer(value),
-            ShiftValue::ByteString(_) => StackValue::ByteString(encode_integer(value)),
+            ShiftValue::Integer(_) => numeric_result_bigint(value, overflow_message),
+            ShiftValue::ByteString(_) => {
+                let bytes = minimal_signed_bytes(value);
+                if bytes.len() > MAX_INTEGER_SIZE {
+                    return Err(overflow_message.to_string());
+                }
+                Ok(StackValue::ByteString(bytes))
+            }
         }
+    }
+}
+
+fn minimal_signed_bytes(value: BigInt) -> Vec<u8> {
+    if value.is_zero() {
+        Vec::new()
+    } else {
+        trim_le_bytes(value.to_signed_bytes_le())
     }
 }
 
@@ -1325,20 +1450,6 @@ pub(crate) fn mod_inverse(value: i64, modulus: i64) -> Result<i64, String> {
     i64::try_from(inverse).map_err(|_| "integer overflow for MODPOW".to_string())
 }
 
-pub(crate) fn integer_sqrt(value: u64) -> u64 {
-    if value < 2 {
-        return value;
-    }
-
-    let mut x0 = value;
-    let mut x1 = (x0 + value / x0) / 2;
-    while x1 < x0 {
-        x0 = x1;
-        x1 = (x0 + value / x0) / 2;
-    }
-    x0
-}
-
 pub(crate) fn pop_bytes(stack: &mut Vec<StackValue>) -> Result<Vec<u8>, String> {
     match stack.pop() {
         Some(StackValue::ByteString(value)) => Ok(value),
@@ -1405,36 +1516,32 @@ pub(crate) fn encode_integer(value: i64) -> Vec<u8> {
     bytes
 }
 
-pub(crate) fn encode_integer_i128(value: i128) -> Vec<u8> {
-    if value == 0 {
-        return Vec::new();
+pub(crate) fn numeric_result_bigint(
+    value: BigInt,
+    overflow_message: &str,
+) -> Result<StackValue, String> {
+    let bytes = trim_le_bytes(value.to_signed_bytes_le());
+    if bytes.len() > MAX_INTEGER_SIZE {
+        return Err(overflow_message.to_string());
     }
-
-    let mut bytes = value.to_le_bytes().to_vec();
-    if value > 0 {
-        while bytes.len() > 1 && bytes.last() == Some(&0) {
-            if bytes[bytes.len() - 2] & 0x80 != 0 {
-                break;
-            }
-            bytes.pop();
-        }
-    } else {
-        while bytes.len() > 1 && bytes.last() == Some(&0xff) {
-            if bytes[bytes.len() - 2] & 0x80 == 0 {
-                break;
-            }
-            bytes.pop();
-        }
-    }
-
-    bytes
+    Ok(bigint_or_integer(bytes))
 }
 
-pub(crate) fn numeric_result_i128(value: i128) -> StackValue {
-    if let Ok(value) = i64::try_from(value) {
-        StackValue::Integer(value)
+pub(crate) fn bigint_sign(value: &BigInt) -> i64 {
+    if value.is_zero() {
+        0
+    } else if value < &BigInt::zero() {
+        -1
     } else {
-        StackValue::BigInteger(encode_integer_i128(value))
+        1
+    }
+}
+
+pub(crate) fn bigint_abs(value: BigInt) -> BigInt {
+    if value < BigInt::zero() {
+        -value
+    } else {
+        value
     }
 }
 

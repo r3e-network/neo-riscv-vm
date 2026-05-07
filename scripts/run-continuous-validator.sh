@@ -10,7 +10,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 VALIDATOR_DIR="$PROJECT_DIR/tools/FullBlockValidator"
-NATIVE_LIB="$PROJECT_DIR/target/release/libneo_riscv_host.so"
+. "$SCRIPT_DIR/resolve-host-lib.sh"
+NATIVE_LIB="${HOST_LIB:-$(resolve_host_lib "$PROJECT_DIR" release)}"
 LOG_DIR="$VALIDATOR_DIR/logs"
 
 mkdir -p "$LOG_DIR"
@@ -31,7 +32,7 @@ fi
 
 # Copy native lib to validator output directory
 mkdir -p "$VALIDATOR_DIR/bin/Release/net10.0/Plugins/Neo.Riscv.Adapter/"
-cp "$NATIVE_LIB" "$VALIDATOR_DIR/bin/Release/net10.0/Plugins/Neo.Riscv.Adapter/libneo_riscv_host.so" 2>/dev/null || true
+cp "$NATIVE_LIB" "$VALIDATOR_DIR/bin/Release/net10.0/Plugins/Neo.Riscv.Adapter/$(basename "$NATIVE_LIB")" 2>/dev/null || true
 
 # Ensure adapter DLL is in place
 if [ ! -f "$VALIDATOR_DIR/bin/Release/net10.0/Neo.Riscv.Adapter.dll" ]; then

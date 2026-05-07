@@ -131,7 +131,7 @@ impl Context {
     pub fn shl(&mut self) {
         let shift = self.pop_integer();
         let value = self.pop_integer();
-        if shift < 0 || shift >= 64 {
+        if !(0..64).contains(&shift) {
             self.fault("SHL: shift amount out of range");
             return;
         }
@@ -143,7 +143,7 @@ impl Context {
     pub fn shr(&mut self) {
         let shift = self.pop_integer();
         let value = self.pop_integer();
-        if shift < 0 || shift >= 64 {
+        if !(0..64).contains(&shift) {
             self.fault("SHR: shift amount out of range");
             return;
         }
@@ -247,7 +247,7 @@ fn isqrt(n: u64) -> u64 {
         return 0;
     }
     let mut x = n;
-    let mut y = (x + 1) / 2;
+    let mut y = x.div_ceil(2);
     while y < x {
         x = y;
         y = (x + n / x) / 2;

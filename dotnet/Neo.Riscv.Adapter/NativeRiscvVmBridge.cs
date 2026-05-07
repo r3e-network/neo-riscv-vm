@@ -91,11 +91,75 @@ namespace Neo.SmartContract.RiscV
         private delegate nuint LastFaultLocalsDelegate(IntPtr outPtr, nuint outCapacity);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate nuint SyscallArgCountDelegate(uint api);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
         private delegate bool ExecuteScriptDelegate(
             IntPtr scriptPtr,
             nuint scriptLen,
             nuint initialInstructionPointer,
+            byte trigger,
+            uint networkMagic,
+            byte addressVersion,
+            ulong persistingTimestamp,
+            long gasLeft,
+            long execFeeFactorPico,
+            IntPtr initialStackPtr,
+            nuint initialStackLen,
+            IntPtr userData,
+            IntPtr hostCallback,
+            IntPtr hostFree,
+            out NativeExecutionResult result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool ExecuteScriptWithResultLimitDelegate(
+            IntPtr scriptPtr,
+            nuint scriptLen,
+            nuint initialInstructionPointer,
+            nuint resultLimit,
+            byte trigger,
+            uint networkMagic,
+            byte addressVersion,
+            ulong persistingTimestamp,
+            long gasLeft,
+            long execFeeFactorPico,
+            IntPtr initialStackPtr,
+            nuint initialStackLen,
+            IntPtr userData,
+            IntPtr hostCallback,
+            IntPtr hostFree,
+            out NativeExecutionResult result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool ExecuteScriptWithInitializerDelegate(
+            IntPtr scriptPtr,
+            nuint scriptLen,
+            nuint initialInstructionPointer,
+            nuint initializerInstructionPointer,
+            byte trigger,
+            uint networkMagic,
+            byte addressVersion,
+            ulong persistingTimestamp,
+            long gasLeft,
+            long execFeeFactorPico,
+            IntPtr initialStackPtr,
+            nuint initialStackLen,
+            IntPtr userData,
+            IntPtr hostCallback,
+            IntPtr hostFree,
+            out NativeExecutionResult result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool ExecuteScriptWithInitializerAndResultLimitDelegate(
+            IntPtr scriptPtr,
+            nuint scriptLen,
+            nuint initialInstructionPointer,
+            nuint initializerInstructionPointer,
+            nuint resultLimit,
             byte trigger,
             uint networkMagic,
             byte addressVersion,
@@ -149,6 +213,8 @@ namespace Neo.SmartContract.RiscV
 
             public RiscvExecutionResult? PendingNestedFault { get; set; }
 
+            public Stack<Neo.VM.ExecutionContext> PendingInitializerContexts { get; } = new();
+
             public Dictionary<ulong, IIterator> Iterators { get; } = new();
 
             public Dictionary<ulong, object> InteropObjects { get; } = new();
@@ -162,14 +228,19 @@ namespace Neo.SmartContract.RiscV
 
         private IntPtr _libraryHandle;
         private readonly ExecuteScriptDelegate _executeScript;
+        private readonly ExecuteScriptWithInitializerDelegate? _executeScriptWithInitializer;
+        private readonly ExecuteScriptWithResultLimitDelegate? _executeScriptWithResultLimit;
+        private readonly ExecuteScriptWithInitializerAndResultLimitDelegate? _executeScriptWithInitializerAndResultLimit;
         private readonly ExecuteNativeContractDelegate _executeNativeContract;
         private readonly FreeExecutionResultDelegate _freeExecutionResult;
         private readonly LastFaultIpDelegate? _lastFaultIp;
         private readonly LastFaultLocalsDelegate? _lastFaultLocals;
+        private readonly SyscallArgCountDelegate? _syscallArgCount;
         private readonly HostCallbackDelegate _hostCallback;
         private readonly HostFreeCallbackDelegate _hostFreeCallback;
         private readonly IntPtr _hostCallbackPtr;
         private readonly IntPtr _hostFreeCallbackPtr;
+        private const uint InitializerCompleteMarker = 0x494e4954;
         private const CallFlags CallTRequiredCallFlags = CallFlags.ReadStates | CallFlags.AllowCall;
         private const int CachedSmallIntMin = -1;
         private const int CachedSmallIntMax = 8;
@@ -225,6 +296,18 @@ namespace Neo.SmartContract.RiscV
             var nativeContractExport = NativeLibrary.GetExport(_libraryHandle, "neo_riscv_execute_native_contract");
             var freeExport = NativeLibrary.GetExport(_libraryHandle, "neo_riscv_free_execution_result");
             _executeScript = Marshal.GetDelegateForFunctionPointer<ExecuteScriptDelegate>(executeExport);
+            if (NativeLibrary.TryGetExport(_libraryHandle, "neo_riscv_execute_script_with_host_and_initializer", out var executeWithInitializerExport))
+            {
+                _executeScriptWithInitializer = Marshal.GetDelegateForFunctionPointer<ExecuteScriptWithInitializerDelegate>(executeWithInitializerExport);
+            }
+            if (NativeLibrary.TryGetExport(_libraryHandle, "neo_riscv_execute_script_with_host_and_result_limit", out var executeWithResultLimitExport))
+            {
+                _executeScriptWithResultLimit = Marshal.GetDelegateForFunctionPointer<ExecuteScriptWithResultLimitDelegate>(executeWithResultLimitExport);
+            }
+            if (NativeLibrary.TryGetExport(_libraryHandle, "neo_riscv_execute_script_with_host_and_initializer_and_result_limit", out var executeWithInitializerAndResultLimitExport))
+            {
+                _executeScriptWithInitializerAndResultLimit = Marshal.GetDelegateForFunctionPointer<ExecuteScriptWithInitializerAndResultLimitDelegate>(executeWithInitializerAndResultLimitExport);
+            }
             _executeNativeContract = Marshal.GetDelegateForFunctionPointer<ExecuteNativeContractDelegate>(nativeContractExport);
             _freeExecutionResult = Marshal.GetDelegateForFunctionPointer<FreeExecutionResultDelegate>(freeExport);
             // Optional side-channel FFI: if the loaded library predates the fault-IP export,
@@ -236,6 +319,10 @@ namespace Neo.SmartContract.RiscV
             if (NativeLibrary.TryGetExport(_libraryHandle, "neo_riscv_last_fault_locals", out var lastFaultLocalsExport))
             {
                 _lastFaultLocals = Marshal.GetDelegateForFunctionPointer<LastFaultLocalsDelegate>(lastFaultLocalsExport);
+            }
+            if (NativeLibrary.TryGetExport(_libraryHandle, "neo_riscv_syscall_arg_count", out var syscallArgCountExport))
+            {
+                _syscallArgCount = Marshal.GetDelegateForFunctionPointer<SyscallArgCountDelegate>(syscallArgCountExport);
             }
         }
 
@@ -262,6 +349,8 @@ namespace Neo.SmartContract.RiscV
                 handle.Free();
             }
         }
+
+        internal nuint? GetSyscallArgCountForTesting(uint api) => _syscallArgCount?.Invoke(api);
 
         /// <summary>
         /// Fetches the instruction pointer of the most recent FAULT on this thread from the
@@ -466,12 +555,16 @@ namespace Neo.SmartContract.RiscV
             if (inputStack.Length < parameterCount + 1)
                 throw new InvalidOperationException($"Native contract method \"{method.Descriptor.Name}\" expects {parameterCount} argument(s).");
 
+            TraceContractManagementUpdateInput(currentContract, method.Descriptor.Name, inputStack);
             var parameters = new List<object?>();
             if (method.NeedApplicationEngine) parameters.Add(request.Engine);
             if (method.NeedSnapshot) parameters.Add(request.Engine.SnapshotCache);
             for (var index = 0; index < parameterCount; index++)
             {
-                parameters.Add(request.Engine.Convert(inputStack[inputStack.Length - 2 - index], method.Parameters[index]));
+                var raw = inputStack[inputStack.Length - 2 - index];
+                var converted = request.Engine.Convert(raw, method.Parameters[index]);
+                TraceContractManagementUpdateConverted(currentContract, method.Descriptor.Name, index, raw, converted);
+                parameters.Add(converted);
             }
 
             var currentContractState = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, currentContract.Hash)
@@ -507,6 +600,75 @@ namespace Neo.SmartContract.RiscV
             return next;
         }
 
+        private static void TraceContractManagementUpdateInput(
+            NativeContract currentContract,
+            string methodName,
+            IReadOnlyList<StackItem> inputStack)
+        {
+            if (!TraceEnabled ||
+                currentContract.Hash != NativeContract.ContractManagement.Hash ||
+                methodName != "update")
+                return;
+
+            Trace($"callnative update inputStackLen={inputStack.Count}");
+            for (var index = 0; index < inputStack.Count; index++)
+                Trace($"callnative update input[{index}] {DescribeStackItemForTrace(inputStack[index])}");
+        }
+
+        private static void TraceContractManagementUpdateConverted(
+            NativeContract currentContract,
+            string methodName,
+            int parameterIndex,
+            StackItem raw,
+            object? converted)
+        {
+            if (!TraceEnabled ||
+                currentContract.Hash != NativeContract.ContractManagement.Hash ||
+                methodName != "update")
+                return;
+
+            Trace(
+                $"callnative update param[{parameterIndex}] raw={DescribeStackItemForTrace(raw)} " +
+                $"converted={DescribeConvertedParameterForTrace(converted)}");
+        }
+
+        private static string DescribeConvertedParameterForTrace(object? value)
+        {
+            return value switch
+            {
+                null => "null",
+                byte[] bytes => DescribeBytesForTrace(bytes),
+                string text => DescribeBytesForTrace(Encoding.UTF8.GetBytes(text)),
+                _ => value.GetType().FullName ?? value.GetType().Name,
+            };
+        }
+
+        private static string DescribeStackItemForTrace(StackItem item)
+        {
+            return item switch
+            {
+                ByteString byteString => $"ByteString {DescribeBytesForTrace(byteString.GetSpan())}",
+                Neo.VM.Types.Buffer buffer => $"Buffer {DescribeBytesForTrace(buffer.GetSpan())}",
+                Integer integer => $"Integer value={integer.GetInteger()} size={integer.Size}",
+                Neo.VM.Types.Boolean boolean => $"Boolean value={boolean.GetBoolean()}",
+                Null => "Null",
+                Neo.VM.Types.Array array => $"Array count={array.Count}",
+                Neo.VM.Types.Map map => $"Map count={map.Count}",
+                _ => item.GetType().FullName ?? item.GetType().Name,
+            };
+        }
+
+        private static string DescribeBytesForTrace(ReadOnlySpan<byte> bytes)
+        {
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+            var offset = bytes.Length > 4272 ? 4272 : Math.Max(0, bytes.Length - Math.Min(bytes.Length, 32));
+            var length = Math.Min(64, bytes.Length - offset);
+            var window = length > 0
+                ? Convert.ToHexString(bytes.Slice(offset, length)).ToLowerInvariant()
+                : string.Empty;
+            return $"len={bytes.Length} sha256={hash} window@{offset}={window}";
+        }
+
         private RiscvExecutionResult ExecutePendingContractTaskContexts(
             RiscvExecutionRequest request,
             ExecutionScope scope,
@@ -523,30 +685,42 @@ namespace Neo.SmartContract.RiscV
             {
                 var contexts = request.Engine.InvocationStack.Reverse().ToArray();
                 var context = contexts[^1];
+                var dispatchContexts = contexts;
+                var dispatchContext = context;
+                Neo.VM.ExecutionContext? initContext = null;
+                var initializerInstructionPointer = (int?)null;
+                if (TryResolvePendingInitializerDispatch(contexts, out var targetContext, out var pendingInitContext, out var targetContextIndex, out var initInstructionPointer))
+                {
+                    dispatchContext = targetContext;
+                    dispatchContexts = contexts.Take(targetContextIndex + 1).ToArray();
+                    initContext = pendingInitContext;
+                    initializerInstructionPointer = initInstructionPointer;
+                    scope.PendingInitializerContexts.Push(initContext);
+                }
+
                 var contextState = context.GetState<ExecutionContextState>();
-                Trace($"pending context enter depth={request.Engine.InvocationStack.Count} context={contextState.Contract?.Manifest.Name ?? "<script>"}.{contextState.MethodName ?? "<none>"}");
-                var initialStack = context.EvaluationStack.Count > 0
-                    ? Enumerable.Range(0, context.EvaluationStack.Count)
-                        .Select(context.EvaluationStack.Peek)
+                var dispatchState = dispatchContext.GetState<ExecutionContextState>();
+                var dispatchMethodName = ResolveContextMethodName(dispatchContext, dispatchState);
+                Trace($"pending context enter depth={request.Engine.InvocationStack.Count} context={contextState.Contract?.Manifest.Name ?? "<script>"}.{contextState.MethodName ?? "<none>"} dispatch={dispatchState.Contract?.Manifest.Name ?? "<script>"}.{dispatchMethodName ?? "<none>"} initIp={initializerInstructionPointer?.ToString() ?? "<none>"}");
+                var initialStack = dispatchContext.EvaluationStack.Count > 0
+                    ? Enumerable.Range(0, dispatchContext.EvaluationStack.Count)
+                        .Reverse()
+                        .Select(dispatchContext.EvaluationStack.Peek)
                         .ToArray()
                     : System.Array.Empty<StackItem>();
-                var scripts = contexts
+                var scripts = dispatchContexts
                     .Select(current => ((ReadOnlyMemory<byte>)current.Script).ToArray())
                     .ToArray();
-                var scriptHashes = contexts
+                var scriptHashes = dispatchContexts
                     .Select(current => current.GetState<ExecutionContextState>().ScriptHash ?? ((ReadOnlyMemory<byte>)current.Script).Span.ToScriptHash())
                     .ToArray();
-                var contractTypes = contexts
+                var contractTypes = dispatchContexts
                     .Select(current => current.GetState<ExecutionContextState>().Contract?.Type ?? ContractType.NeoVM)
                     .ToArray();
                 var executionFacadeHashes = contractTypes
                     .Zip(scriptHashes, (contractType, scriptHash) =>
                         RiscvCompatibilityContracts.ResolveExecutionFacadeHash(contractType, scriptHash))
                     .ToArray();
-                var methodName = contextState.MethodName
-                    ?? contextState.Contract?.Manifest.Abi.Methods
-                        .FirstOrDefault(method => method.Offset == context.InstructionPointer)
-                        ?.Name;
                 var nestedRequest = new RiscvExecutionRequest(
                     request.Engine,
                     request.Trigger,
@@ -554,25 +728,43 @@ namespace Neo.SmartContract.RiscV
                     request.AddressVersion,
                     request.PersistingTimestamp,
                     request.GasLeft,
-                    contextState.CallFlags,
+                    dispatchState.CallFlags,
                     scripts,
                     scriptHashes,
                     contractTypes,
                     executionFacadeHashes,
                     initialStack,
-                    context.InstructionPointer,
-                    methodName);
+                    dispatchContext.InstructionPointer,
+                    dispatchMethodName);
                 var script = scripts[^1];
                 var contractType = contractTypes[^1];
                 var executionKind = RiscvExecutionDispatcher.Resolve(contractType, script);
-                result = executionKind switch
+                try
                 {
-                    RiscvExecutionKind.NeoVmCompatibilityContract =>
-                        ExecuteScriptInternal(nestedRequest, script, initialStack, context.InstructionPointer, scope),
-                    RiscvExecutionKind.NativeRiscvDirect =>
-                        ExecuteNativeContractInternal(nestedRequest, script, initialStack, methodName ?? throw new InvalidOperationException("Method is required for native RISC-V contract execution."), scope),
-                    _ => throw new InvalidOperationException($"Unsupported execution kind: {executionKind}."),
-                };
+                    result = executionKind switch
+                    {
+                        RiscvExecutionKind.NeoVmCompatibilityContract =>
+                            ExecuteScriptInternal(
+                                nestedRequest,
+                                script,
+                                initialStack,
+                                dispatchContext.InstructionPointer,
+                                scope,
+                                initializerInstructionPointer: initializerInstructionPointer),
+                        RiscvExecutionKind.NativeRiscvDirect =>
+                            ExecuteNativeContractInternal(nestedRequest, script, initialStack, dispatchMethodName ?? throw new InvalidOperationException("Method is required for native RISC-V contract execution."), scope),
+                        _ => throw new InvalidOperationException($"Unsupported execution kind: {executionKind}."),
+                    };
+                }
+                finally
+                {
+                    if (initContext is not null &&
+                        scope.PendingInitializerContexts.Count > 0 &&
+                        ReferenceEquals(scope.PendingInitializerContexts.Peek(), initContext))
+                    {
+                        scope.PendingInitializerContexts.Pop();
+                    }
+                }
                 Trace($"pending context exit state={result.State} current={request.Engine.CurrentContext?.GetState<ExecutionContextState>().Contract?.Manifest.Name ?? "<null>"}.{request.Engine.CurrentContext?.GetState<ExecutionContextState>().MethodName ?? "<none>"}");
                 riscvEngine.CompleteCurrentContextFromBridge(result);
                 Trace($"pending context completed depth={request.Engine.InvocationStack.Count}");
@@ -581,6 +773,62 @@ namespace Neo.SmartContract.RiscV
             }
 
             return result;
+        }
+
+        private static bool TryResolvePendingInitializerDispatch(
+            IReadOnlyList<Neo.VM.ExecutionContext> contexts,
+            out Neo.VM.ExecutionContext targetContext,
+            out Neo.VM.ExecutionContext initContext,
+            out int targetContextIndex,
+            out int initializerInstructionPointer)
+        {
+            targetContext = null!;
+            initContext = null!;
+            targetContextIndex = -1;
+            initializerInstructionPointer = 0;
+
+            if (contexts.Count < 2)
+                return false;
+
+            initContext = contexts[^1];
+            targetContextIndex = contexts.Count - 2;
+            targetContext = contexts[targetContextIndex];
+            var initState = initContext.GetState<ExecutionContextState>();
+            var targetState = targetContext.GetState<ExecutionContextState>();
+            var contract = targetState.Contract ?? initState.Contract;
+            if (contract is null || contract.Type == ContractType.RiscV)
+                return false;
+
+            var initMethod = contract.Manifest.Abi.GetMethod(
+                ContractBasicMethod.Initialize,
+                ContractBasicMethod.InitializePCount);
+            if (initMethod is null)
+                return false;
+
+            if (initContext.InstructionPointer != initMethod.Offset ||
+                targetContext.InstructionPointer == initMethod.Offset)
+            {
+                return false;
+            }
+
+            var initHash = initState.ScriptHash;
+            var targetHash = targetState.ScriptHash;
+            if (initHash is not null && targetHash is not null && initHash != targetHash)
+                return false;
+
+            if (!((ReadOnlyMemory<byte>)initContext.Script).Span.SequenceEqual(((ReadOnlyMemory<byte>)targetContext.Script).Span))
+                return false;
+
+            initializerInstructionPointer = initMethod.Offset;
+            return true;
+        }
+
+        private static string? ResolveContextMethodName(Neo.VM.ExecutionContext context, ExecutionContextState state)
+        {
+            return state.Contract?.Manifest.Abi.Methods
+                .FirstOrDefault(method => method.Offset == context.InstructionPointer)
+                ?.Name
+                ?? state.MethodName;
         }
 
         private static void PopNestedContextIfCurrent(ApplicationEngine engine, Neo.VM.ExecutionContext nestedContext)
@@ -614,26 +862,22 @@ namespace Neo.SmartContract.RiscV
 
             if (inputStack[^1] is not Integer mValue)
                 throw new InvalidOperationException("CreateMultisigAccount requires integer m.");
-            if (inputStack[^2] is not Integer countValue)
-                throw new InvalidOperationException("CreateMultisigAccount requires integer public key count.");
+            if (inputStack[^2] is not Neo.VM.Types.Array keyItems)
+                throw new InvalidOperationException("CreateMultisigAccount requires a public key array.");
 
-            var count = (int)countValue.GetInteger();
-            if (count < 0 || inputStack.Length < count + 2)
-                throw new InvalidOperationException("CreateMultisigAccount public key count is invalid.");
-
-            var pubKeys = new ECPoint[count];
-            for (var index = 0; index < count; index++)
+            var pubKeys = new ECPoint[keyItems.Count];
+            for (var index = 0; index < keyItems.Count; index++)
             {
-                var item = inputStack[inputStack.Length - 3 - index];
+                var item = keyItems[index];
                 if (item is not ByteString pubKeyBytes)
                     throw new InvalidOperationException("CreateMultisigAccount requires byte string public keys.");
-                pubKeys[count - index - 1] = ECPoint.DecodePoint(pubKeyBytes.GetSpan().ToArray(), ECCurve.Secp256r1);
+                pubKeys[index] = ECPoint.DecodePoint(pubKeyBytes.GetSpan().ToArray(), ECCurve.Secp256r1);
             }
 
-            var next = new StackItem[inputStack.Length - count - 1];
-            if (next.Length > 0)
+            var next = new StackItem[inputStack.Length - 1];
+            if (inputStack.Length > 2)
             {
-                System.Array.Copy(inputStack, next, next.Length - 1);
+                System.Array.Copy(inputStack, next, inputStack.Length - 2);
             }
             next[^1] = new ByteString(request.Engine.CreateMultisigAccount((int)mValue.GetInteger(), pubKeys).GetSpan().ToArray());
             return next;
@@ -709,19 +953,18 @@ namespace Neo.SmartContract.RiscV
             if (inputStack.Length < 4)
                 throw new InvalidOperationException("Contract.Call requires hash, method, call flags, and args.");
 
-            if (inputStack[^1] is not ByteString hashBytes || hashBytes.GetSpan().Length != UInt160.Length)
+            if (!TryGetByteLikeBytes(inputStack[^1], out var hashBytes) || hashBytes.Length != UInt160.Length)
                 throw new InvalidOperationException("Contract.Call requires a contract hash.");
             if (inputStack[^2] is not ByteString methodBytes)
                 throw new InvalidOperationException("Contract.Call requires a method name.");
-            if (inputStack[^3] is not Integer callFlagsItem)
-                throw new InvalidOperationException("Contract.Call requires integer call flags.");
+            var callFlagsInteger = ReadIntegerArgument(inputStack[^3], "Contract.Call requires integer call flags.");
             if (inputStack[^4] is not Neo.VM.Types.Array argsArray)
                 throw new InvalidOperationException("Contract.Call requires an argument array.");
 
-            var contractHash = new UInt160(hashBytes.GetSpan());
+            var contractHash = new UInt160(hashBytes);
             var method = methodBytes.GetString() ?? throw new InvalidOperationException("Method name must be valid UTF-8.");
             ValidateContractCallMethod(method, isCallT: expectedHasReturnValue.HasValue);
-            var callFlags = (CallFlags)(byte)callFlagsItem.GetInteger();
+            var callFlags = (CallFlags)(byte)callFlagsInteger;
             if ((callFlags & ~CallFlags.All) != 0)
                 throw new InvalidOperationException($"Invalid call flags: {callFlags}");
             if (ProfileEnabled)
@@ -823,6 +1066,18 @@ namespace Neo.SmartContract.RiscV
                 throw new ArgumentException($"Method name '{method}' cannot start with underscore.", nameof(method));
         }
 
+        private static BigInteger ReadIntegerArgument(StackItem item, string message)
+        {
+            try
+            {
+                return item.GetInteger();
+            }
+            catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException or NotSupportedException)
+            {
+                throw new InvalidOperationException(message, ex);
+            }
+        }
+
         private static bool TryInvokeTestingCustomMock(
             RiscvExecutionRequest request,
             UInt160 contractHash,
@@ -852,6 +1107,7 @@ namespace Neo.SmartContract.RiscV
             return item switch
             {
                 ByteString bytes => $"bytes:{Convert.ToHexString(bytes.GetSpan())}",
+                Neo.VM.Types.Buffer buffer => $"buffer:{Convert.ToHexString(buffer.GetSpan())}",
                 Integer integer => $"int:{integer.GetInteger()}",
                 Neo.VM.Types.Boolean boolean => $"bool:{boolean.GetBoolean()}",
                 Null => "null",

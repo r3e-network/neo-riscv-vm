@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST_LIB="${ROOT_DIR}/target/release/libneo_riscv_host.so"
+. "${ROOT_DIR}/scripts/resolve-host-lib.sh"
+HOST_LIB="${HOST_LIB:-$(resolve_host_lib "${ROOT_DIR}" release)}"
 PREFERRED_NEO_TEST_PROJECT="${ROOT_DIR}/../neo-riscv-core/tests/Neo.UnitTests/Neo.UnitTests.csproj"
 NEO_TEST_PROJECT="${NEO_TEST_PROJECT:-}"
 NEO_TEST_PROJECT_EXPLICIT="0"

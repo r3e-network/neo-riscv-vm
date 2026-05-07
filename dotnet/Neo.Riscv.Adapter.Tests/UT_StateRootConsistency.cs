@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Neo.Riscv.Adapter.Tests;
 
@@ -389,6 +390,639 @@ public class UT_StateRootConsistency
         Console.WriteLine($"[StateRoot] Contract deploy fingerprint: {fingerprint1}");
     }
 
+    [TestMethod]
+    public void ApplicationTrigger_ContractDeploy_RunsInitializeBeforeDeploy()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        PersistBlock(system, snapshot, CreateEmptyBlock(system, 1));
+
+        var committee = AdapterTestProtocolSettings.Default.StandbyCommittee[0];
+        var committeeHash = Contract.CreateSignatureRedeemScript(committee).ToScriptHash();
+        var contractScript = new byte[]
+        {
+            (byte)OpCode.LDSFLD0,
+            (byte)OpCode.DROP,
+            (byte)OpCode.RET,
+            (byte)OpCode.INITSSLOT,
+            0x01,
+            (byte)OpCode.PUSH1,
+            (byte)OpCode.STSFLD0,
+            (byte)OpCode.RET,
+        };
+        const int deployOffset = 0;
+        const int initializeOffset = 3;
+
+        var nef = new NefFile
+        {
+            Compiler = "test-compiler 1.0",
+            Source = string.Empty,
+            Tokens = [],
+            Script = contractScript,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        var manifest = new SmartContract.Manifest.ContractManifest
+        {
+            Name = "DeployInitStaticField",
+            Groups = [],
+            SupportedStandards = [],
+            Abi = new SmartContract.Manifest.ContractAbi
+            {
+                Methods =
+                [
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Deploy,
+                        Parameters =
+                        [
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "data",
+                                Type = ContractParameterType.Any,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "update",
+                                Type = ContractParameterType.Boolean,
+                            },
+                        ],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = deployOffset,
+                        Safe = false,
+                    },
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Initialize,
+                        Parameters = [],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = initializeOffset,
+                        Safe = false,
+                    },
+                ],
+                Events = [],
+            },
+            Permissions = [SmartContract.Manifest.ContractPermission.DefaultPermission],
+            Trusts = SmartContract.Manifest.WildcardContainer<SmartContract.Manifest.ContractPermissionDescriptor>.Create(),
+        };
+
+        using var sb = new ScriptBuilder();
+        sb.EmitDynamicCall(
+            NativeContract.ContractManagement.Hash,
+            "deploy",
+            nef.ToArray(),
+            System.Text.Encoding.UTF8.GetBytes(manifest.ToJson().ToString()));
+
+        var script = sb.ToArray();
+        using var engine = ApplicationEngine.Create(
+            TriggerType.Application,
+            new Transaction
+            {
+                Signers = [new Signer { Account = committeeHash, Scopes = WitnessScope.CalledByEntry }],
+                Attributes = [],
+                Script = script,
+                Witnesses = [],
+            },
+            snapshot,
+            CreateEmptyBlock(system, 2),
+            system.Settings,
+            2000_00000000);
+        engine.LoadScript(script);
+
+        var state = engine.Execute();
+
+        Assert.AreEqual(VMState.HALT, state, engine.FaultException?.ToString());
+    }
+
+    [TestMethod]
+    public void ApplicationTrigger_ContractDeploy_StoragePutAcceptsIntegerValue()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        PersistBlock(system, snapshot, CreateEmptyBlock(system, 1));
+
+        byte[] contractScript;
+        using (var contractBuilder = new ScriptBuilder())
+        {
+            contractBuilder.Emit(OpCode.INITSLOT, new ReadOnlySpan<byte>([0, 2]));
+            contractBuilder.EmitSysCall(ApplicationEngine.System_Storage_GetContext);
+            contractBuilder.EmitPush(System.Text.Encoding.UTF8.GetBytes("integer-value"));
+            contractBuilder.EmitPush(1);
+            contractBuilder.EmitSysCall(ApplicationEngine.System_Storage_Put);
+            contractBuilder.Emit(OpCode.RET);
+            contractScript = contractBuilder.ToArray();
+        }
+
+        var nef = new NefFile
+        {
+            Compiler = "test-compiler 1.0",
+            Source = string.Empty,
+            Tokens = [],
+            Script = contractScript,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        var manifest = new SmartContract.Manifest.ContractManifest
+        {
+            Name = "StoragePutIntegerValue",
+            Groups = [],
+            SupportedStandards = [],
+            Abi = new SmartContract.Manifest.ContractAbi
+            {
+                Methods =
+                [
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Deploy,
+                        Parameters =
+                        [
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "data",
+                                Type = ContractParameterType.Any,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "update",
+                                Type = ContractParameterType.Boolean,
+                            },
+                        ],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = 0,
+                        Safe = false,
+                    },
+                ],
+                Events = [],
+            },
+            Permissions = [SmartContract.Manifest.ContractPermission.DefaultPermission],
+            Trusts = SmartContract.Manifest.WildcardContainer<SmartContract.Manifest.ContractPermissionDescriptor>.Create(),
+        };
+
+        using var sb = new ScriptBuilder();
+        sb.EmitDynamicCall(
+            NativeContract.ContractManagement.Hash,
+            "deploy",
+            nef.ToArray(),
+            System.Text.Encoding.UTF8.GetBytes(manifest.ToJson().ToString()));
+
+        var script = sb.ToArray();
+        var committee = AdapterTestProtocolSettings.Default.StandbyCommittee[0];
+        using var engine = ApplicationEngine.Create(
+            TriggerType.Application,
+            new Transaction
+            {
+                Signers =
+                [
+                    new Signer
+                    {
+                        Account = Contract.CreateSignatureRedeemScript(committee).ToScriptHash(),
+                        Scopes = WitnessScope.CalledByEntry,
+                    }
+                ],
+                Attributes = [],
+                Script = script,
+                Witnesses = [],
+            },
+            snapshot,
+            CreateEmptyBlock(system, 2),
+            system.Settings,
+            2000_00000000);
+        engine.LoadScript(script);
+
+        var state = engine.Execute();
+
+        Assert.AreEqual(VMState.HALT, state, engine.FaultException?.ToString());
+    }
+
+    [TestMethod]
+    public void ApplicationTrigger_ContractDeploy_PreservesDeployArgumentOrderWithInitializer()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        PersistBlock(system, snapshot, CreateEmptyBlock(system, 1));
+
+        byte[] contractScript;
+        int deployOffset;
+        using (var contractBuilder = new ScriptBuilder())
+        {
+            contractBuilder.Emit(OpCode.INITSSLOT, new ReadOnlySpan<byte>([1]));
+            contractBuilder.Emit(OpCode.RET);
+
+            deployOffset = contractBuilder.Length;
+            contractBuilder.Emit(OpCode.INITSLOT, new ReadOnlySpan<byte>([0, 2]));
+            contractBuilder.Emit(OpCode.LDARG1);
+            contractBuilder.Emit(OpCode.JMPIF, new ReadOnlySpan<byte>([0]));
+            var afterUpdateJump = contractBuilder.Length;
+            contractBuilder.EmitSysCall(ApplicationEngine.System_Storage_GetContext);
+            contractBuilder.EmitPush(System.Text.Encoding.UTF8.GetBytes("deploy-ran"));
+            contractBuilder.EmitPush(1);
+            contractBuilder.EmitSysCall(ApplicationEngine.System_Storage_Put);
+            var returnOffset = contractBuilder.Length;
+            contractBuilder.Emit(OpCode.RET);
+
+            contractScript = contractBuilder.ToArray();
+            contractScript[afterUpdateJump - 1] = (byte)(returnOffset - afterUpdateJump + 2);
+        }
+
+        var nef = new NefFile
+        {
+            Compiler = "test-compiler 1.0",
+            Source = string.Empty,
+            Tokens = [],
+            Script = contractScript,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        var manifest = new SmartContract.Manifest.ContractManifest
+        {
+            Name = "DeployArgumentOrder",
+            Groups = [],
+            SupportedStandards = [],
+            Abi = new SmartContract.Manifest.ContractAbi
+            {
+                Methods =
+                [
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Initialize,
+                        Parameters = [],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = 0,
+                        Safe = false,
+                    },
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Deploy,
+                        Parameters =
+                        [
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "data",
+                                Type = ContractParameterType.Any,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "update",
+                                Type = ContractParameterType.Boolean,
+                            },
+                        ],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = deployOffset,
+                        Safe = false,
+                    },
+                ],
+                Events = [],
+            },
+            Permissions = [SmartContract.Manifest.ContractPermission.DefaultPermission],
+            Trusts = SmartContract.Manifest.WildcardContainer<SmartContract.Manifest.ContractPermissionDescriptor>.Create(),
+        };
+
+        using var sb = new ScriptBuilder();
+        sb.EmitDynamicCall(
+            NativeContract.ContractManagement.Hash,
+            "deploy",
+            nef.ToArray(),
+            System.Text.Encoding.UTF8.GetBytes(manifest.ToJson().ToString()),
+            System.Text.Encoding.UTF8.GetBytes("non-empty-data"));
+
+        var script = sb.ToArray();
+        var committee = AdapterTestProtocolSettings.Default.StandbyCommittee[0];
+        using var engine = ApplicationEngine.Create(
+            TriggerType.Application,
+            new Transaction
+            {
+                Signers =
+                [
+                    new Signer
+                    {
+                        Account = Contract.CreateSignatureRedeemScript(committee).ToScriptHash(),
+                        Scopes = WitnessScope.CalledByEntry,
+                    }
+                ],
+                Attributes = [],
+                Script = script,
+                Witnesses = [],
+            },
+            snapshot,
+            CreateEmptyBlock(system, 2),
+            system.Settings,
+            2000_00000000);
+        engine.LoadScript(script);
+
+        var state = engine.Execute();
+
+        Assert.AreEqual(VMState.HALT, state, engine.FaultException?.ToString());
+        var deployed = NativeContract.ContractManagement.ListContracts(engine.SnapshotCache)
+            .SingleOrDefault(contract => contract.Manifest.Name == "DeployArgumentOrder");
+        Assert.IsNotNull(deployed, "The test contract should have been deployed.");
+        var storage = engine.SnapshotCache.TryGet(new StorageKey
+        {
+            Id = deployed.Id,
+            Key = System.Text.Encoding.UTF8.GetBytes("deploy-ran"),
+        });
+        Assert.IsNotNull(storage,
+            "_deploy must see isUpdate=false and write storage; missing storage means deploy arguments were reversed.");
+    }
+
+    [TestMethod]
+    public void ApplicationTrigger_DynamicContractCall_PreservesArgumentOrder()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        PersistBlock(system, snapshot, CreateEmptyBlock(system, 1));
+
+        byte[] contractScript;
+        using (var contractBuilder = new ScriptBuilder())
+        {
+            contractBuilder.Emit(OpCode.INITSLOT, new ReadOnlySpan<byte>([0, 3]));
+            contractBuilder.Emit(OpCode.LDARG0);
+            contractBuilder.Emit(OpCode.RET);
+            contractScript = contractBuilder.ToArray();
+        }
+
+        var nef = new NefFile
+        {
+            Compiler = "test-compiler 1.0",
+            Source = string.Empty,
+            Tokens = [],
+            Script = contractScript,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        var manifest = new SmartContract.Manifest.ContractManifest
+        {
+            Name = "DynamicArgumentOrder",
+            Groups = [],
+            SupportedStandards = [],
+            Abi = new SmartContract.Manifest.ContractAbi
+            {
+                Methods =
+                [
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = "pickFirst",
+                        Parameters =
+                        [
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "first",
+                                Type = ContractParameterType.Integer,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "second",
+                                Type = ContractParameterType.Integer,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "third",
+                                Type = ContractParameterType.Integer,
+                            },
+                        ],
+                        ReturnType = ContractParameterType.Integer,
+                        Offset = 0,
+                        Safe = false,
+                    },
+                ],
+                Events = [],
+            },
+            Permissions = [SmartContract.Manifest.ContractPermission.DefaultPermission],
+            Trusts = SmartContract.Manifest.WildcardContainer<SmartContract.Manifest.ContractPermissionDescriptor>.Create(),
+        };
+
+        var committee = AdapterTestProtocolSettings.Default.StandbyCommittee[0];
+        var committeeHash = Contract.CreateSignatureRedeemScript(committee).ToScriptHash();
+
+        using (var deployBuilder = new ScriptBuilder())
+        {
+            deployBuilder.EmitDynamicCall(
+                NativeContract.ContractManagement.Hash,
+                "deploy",
+                nef.ToArray(),
+                System.Text.Encoding.UTF8.GetBytes(manifest.ToJson().ToString()));
+            var deployScript = deployBuilder.ToArray();
+            using var deployEngine = ApplicationEngine.Create(
+                TriggerType.Application,
+                new Transaction
+                {
+                    Signers = [new Signer { Account = committeeHash, Scopes = WitnessScope.CalledByEntry }],
+                    Attributes = [],
+                    Script = deployScript,
+                    Witnesses = [],
+                },
+                snapshot,
+                CreateEmptyBlock(system, 2),
+                system.Settings,
+                2000_00000000);
+            deployEngine.LoadScript(deployScript);
+
+            Assert.AreEqual(VMState.HALT, deployEngine.Execute(), deployEngine.FaultException?.ToString());
+            deployEngine.SnapshotCache.Commit();
+            snapshot.Commit();
+        }
+
+        var deployed = NativeContract.ContractManagement.ListContracts(snapshot)
+            .SingleOrDefault(contract => contract.Manifest.Name == "DynamicArgumentOrder");
+        Assert.IsNotNull(deployed, "The test contract should have been deployed.");
+
+        using var callBuilder = new ScriptBuilder();
+        callBuilder.EmitDynamicCall(deployed.Hash, "pickFirst", 128, 1, 381);
+        var callScript = callBuilder.ToArray();
+        using var callEngine = ApplicationEngine.Create(
+            TriggerType.Application,
+            new Transaction
+            {
+                Signers = [new Signer { Account = committeeHash, Scopes = WitnessScope.CalledByEntry }],
+                Attributes = [],
+                Script = callScript,
+                Witnesses = [],
+            },
+            snapshot,
+            CreateEmptyBlock(system, 3),
+            system.Settings,
+            2000_00000000);
+        callEngine.LoadScript(callScript);
+
+        Assert.AreEqual(VMState.HALT, callEngine.Execute(), callEngine.FaultException?.ToString());
+        Assert.AreEqual(1, callEngine.ResultStack.Count);
+        Assert.AreEqual(128, callEngine.ResultStack.Pop().GetInteger());
+    }
+
+    [TestMethod]
+    public void ApplicationTrigger_StorageFindWithInitializerPrefixAndPackedArguments_CountsAllValues()
+    {
+        var libraryPath = Environment.GetEnvironmentVariable(NativeRiscvVmBridge.LibraryPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            Assert.Inconclusive($"{NativeRiscvVmBridge.LibraryPathEnvironmentVariable} is not set.");
+
+        ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
+
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        PersistBlock(system, snapshot, CreateEmptyBlock(system, 1));
+
+        var contractScript = BuildStorageFindCountContractScript(out var countOffset, out var initializeOffset);
+        var nef = new NefFile
+        {
+            Compiler = "test-compiler 1.0",
+            Source = string.Empty,
+            Tokens = [],
+            Script = contractScript,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        var manifest = new SmartContract.Manifest.ContractManifest
+        {
+            Name = "StorageFindInitializerPrefix",
+            Groups = [],
+            SupportedStandards = [],
+            Abi = new SmartContract.Manifest.ContractAbi
+            {
+                Methods =
+                [
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = "count",
+                        Parameters =
+                        [
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "arena",
+                                Type = ContractParameterType.Integer,
+                            },
+                            new SmartContract.Manifest.ContractParameterDefinition
+                            {
+                                Name = "tournament",
+                                Type = ContractParameterType.Integer,
+                            },
+                        ],
+                        ReturnType = ContractParameterType.Integer,
+                        Offset = countOffset,
+                        Safe = false,
+                    },
+                    new SmartContract.Manifest.ContractMethodDescriptor
+                    {
+                        Name = ContractBasicMethod.Initialize,
+                        Parameters = [],
+                        ReturnType = ContractParameterType.Void,
+                        Offset = initializeOffset,
+                        Safe = false,
+                    },
+                ],
+                Events = [],
+            },
+            Permissions = [SmartContract.Manifest.ContractPermission.DefaultPermission],
+            Trusts = SmartContract.Manifest.WildcardContainer<SmartContract.Manifest.ContractPermissionDescriptor>.Create(),
+        };
+
+        var committee = AdapterTestProtocolSettings.Default.StandbyCommittee[0];
+        var committeeHash = Contract.CreateSignatureRedeemScript(committee).ToScriptHash();
+        using (var deployBuilder = new ScriptBuilder())
+        {
+            deployBuilder.EmitDynamicCall(
+                NativeContract.ContractManagement.Hash,
+                "deploy",
+                nef.ToArray(),
+                Encoding.UTF8.GetBytes(manifest.ToJson().ToString()));
+            var deployScript = deployBuilder.ToArray();
+            using var deployEngine = ApplicationEngine.Create(
+                TriggerType.Application,
+                new Transaction
+                {
+                    Signers = [new Signer { Account = committeeHash, Scopes = WitnessScope.CalledByEntry }],
+                    Attributes = [],
+                    Script = deployScript,
+                    Witnesses = [],
+                },
+                snapshot,
+                CreateEmptyBlock(system, 2),
+                system.Settings,
+                2000_00000000);
+            deployEngine.LoadScript(deployScript);
+
+            Assert.AreEqual(VMState.HALT, deployEngine.Execute(), deployEngine.FaultException?.ToString());
+            deployEngine.SnapshotCache.Commit();
+            snapshot.Commit();
+        }
+
+        var deployed = NativeContract.ContractManagement.ListContracts(snapshot)
+            .SingleOrDefault(contract => contract.Manifest.Name == "StorageFindInitializerPrefix");
+        Assert.IsNotNull(deployed, "The test contract should have been deployed.");
+
+        var prefix = new byte[] { 0x01, 0x05, 0x80, 0x00, 0x01 };
+        for (var i = 0; i < 6; i++)
+        {
+            snapshot.Add(
+                new StorageKey
+                {
+                    Id = deployed.Id,
+                    Key = prefix.Concat([(byte)i]).ToArray(),
+                },
+                new StorageItem
+                {
+                    Value = BinarySerializer.Serialize(
+                        new Neo.VM.Types.Array(
+                        new Neo.VM.Types.StackItem[]
+                        {
+                            new Neo.VM.Types.Integer(i),
+                            new Neo.VM.Types.ByteString(new byte[] { (byte)(0xA0 + i) }),
+                        }),
+                        ExecutionEngineLimits.Default),
+                });
+        }
+
+        using var callBuilder = new ScriptBuilder();
+        callBuilder.EmitDynamicCall(deployed.Hash, "count", 128, 1);
+        var callScript = callBuilder.ToArray();
+        using var callEngine = ApplicationEngine.Create(
+            TriggerType.Application,
+            new Transaction
+            {
+                Signers = [new Signer { Account = committeeHash, Scopes = WitnessScope.CalledByEntry }],
+                Attributes = [],
+                Script = callScript,
+                Witnesses = [],
+            },
+            snapshot,
+            CreateEmptyBlock(system, 3),
+            system.Settings,
+            2000_00000000);
+        callEngine.LoadScript(callScript);
+
+        Assert.AreEqual(VMState.HALT, callEngine.Execute(), callEngine.FaultException?.ToString());
+        Assert.AreEqual(1, callEngine.ResultStack.Count);
+        Assert.AreEqual(6, callEngine.ResultStack.Pop().GetInteger());
+    }
+
     /// <summary>
     /// Validates state consistency with interleaved empty blocks and state-modifying
     /// transactions across a 20-block chain.
@@ -407,6 +1041,134 @@ public class UT_StateRootConsistency
             "Mixed block scenario fingerprint must be deterministic across runs.");
 
         Console.WriteLine($"[StateRoot] Mixed block scenario fingerprint: {fingerprint1}");
+    }
+
+    private static byte[] BuildStorageFindCountContractScript(out int countOffset, out int initializeOffset)
+    {
+        var script = new List<byte>();
+        countOffset = script.Count;
+
+        // count(arena, tournament):
+        //   prefix = staticPrefix + Buffer(arena) + Buffer(tournament)
+        //   args = [Storage.GetContext(), prefix]
+        //   iterator = Storage.Find(args unpacked by the compiler-style helper, ValuesOnly|DeserializeValues)
+        //   while iterator.Next(): iterator.Value(); count++
+        script.Add((byte)OpCode.INITSLOT);
+        script.Add(4);
+        script.Add(2);
+        script.Add((byte)OpCode.LDSFLD0);
+        script.Add((byte)OpCode.LDARG0);
+        script.Add((byte)OpCode.CONVERT);
+        script.Add(0x30);
+        script.Add((byte)OpCode.CAT);
+        script.Add((byte)OpCode.LDARG1);
+        script.Add((byte)OpCode.CONVERT);
+        script.Add(0x30);
+        script.Add((byte)OpCode.CAT);
+        script.Add((byte)OpCode.STLOC0);
+
+        script.Add((byte)OpCode.LDLOC0);
+        EmitSyscall(script, ApplicationEngine.System_Storage_GetContext.Hash);
+        script.Add((byte)OpCode.PUSH2);
+        script.Add((byte)OpCode.PACK);
+        script.Add((byte)OpCode.STLOC1);
+
+        script.Add((byte)OpCode.PUSH12);
+        script.Add((byte)OpCode.LDLOC1);
+        var findCallOperand = EmitCallLPlaceholder(script);
+        script.Add((byte)OpCode.STLOC2);
+
+        script.Add((byte)OpCode.PUSH0);
+        script.Add((byte)OpCode.STLOC3);
+
+        var loopOffset = script.Count;
+        script.Add((byte)OpCode.LDLOC2);
+        var nextCallOperand = EmitCallLPlaceholder(script);
+        var exitJumpIp = script.Count;
+        script.Add((byte)OpCode.JMPIFNOT_L);
+        var exitJumpOperand = script.Count;
+        AddInt32(script, 0);
+
+        script.Add((byte)OpCode.LDLOC2);
+        var valueCallOperand = EmitCallLPlaceholder(script);
+        script.Add((byte)OpCode.DROP);
+        script.Add((byte)OpCode.LDLOC3);
+        script.Add((byte)OpCode.INC);
+        script.Add((byte)OpCode.STLOC3);
+
+        var loopJumpIp = script.Count;
+        script.Add((byte)OpCode.JMP_L);
+        var loopJumpOperand = script.Count;
+        AddInt32(script, 0);
+
+        var exitOffset = script.Count;
+        script.Add((byte)OpCode.LDLOC3);
+        script.Add((byte)OpCode.RET);
+
+        var findHelperOffset = script.Count;
+        script.Add((byte)OpCode.UNPACK);
+        script.Add((byte)OpCode.DROP);
+        EmitSyscall(script, ApplicationEngine.System_Storage_Find.Hash);
+        script.Add((byte)OpCode.RET);
+
+        var nextHelperOffset = script.Count;
+        EmitSyscall(script, ApplicationEngine.System_Iterator_Next.Hash);
+        script.Add((byte)OpCode.RET);
+
+        var valueHelperOffset = script.Count;
+        EmitSyscall(script, ApplicationEngine.System_Iterator_Value.Hash);
+        script.Add((byte)OpCode.RET);
+
+        initializeOffset = script.Count;
+        script.Add((byte)OpCode.INITSSLOT);
+        script.Add(1);
+        script.Add((byte)OpCode.PUSHDATA1);
+        script.Add(2);
+        script.Add(0x01);
+        script.Add(0x05);
+        script.Add((byte)OpCode.CONVERT);
+        script.Add(0x30);
+        script.Add((byte)OpCode.STSFLD0);
+        script.Add((byte)OpCode.RET);
+
+        PatchInt32(script, findCallOperand, findHelperOffset - (findCallOperand - 1));
+        PatchInt32(script, nextCallOperand, nextHelperOffset - (nextCallOperand - 1));
+        PatchInt32(script, valueCallOperand, valueHelperOffset - (valueCallOperand - 1));
+        PatchInt32(script, exitJumpOperand, exitOffset - exitJumpIp);
+        PatchInt32(script, loopJumpOperand, loopOffset - loopJumpIp);
+
+        return script.ToArray();
+    }
+
+    private static int EmitCallLPlaceholder(List<byte> script)
+    {
+        script.Add((byte)OpCode.CALL_L);
+        var operandOffset = script.Count;
+        AddInt32(script, 0);
+        return operandOffset;
+    }
+
+    private static void EmitSyscall(List<byte> script, uint hash)
+    {
+        script.Add((byte)OpCode.SYSCALL);
+        AddUInt32(script, hash);
+    }
+
+    private static void AddInt32(List<byte> script, int value)
+    {
+        script.AddRange(BitConverter.GetBytes(value));
+    }
+
+    private static void AddUInt32(List<byte> script, uint value)
+    {
+        script.AddRange(BitConverter.GetBytes(value));
+    }
+
+    private static void PatchInt32(List<byte> script, int offset, int value)
+    {
+        var bytes = BitConverter.GetBytes(value);
+        for (var i = 0; i < bytes.Length; i++)
+            script[offset + i] = bytes[i];
     }
 
     private static string RunContractDeployScenario()

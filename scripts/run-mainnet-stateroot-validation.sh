@@ -18,13 +18,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CORE_DIR="${CORE_DIR:-$HOME/git/neo-riscv-core}"
-NODE_DIR="${NODE_DIR:-$HOME/git/neo-riscv-node}"
+CORE_DIR="${CORE_DIR:-$(cd "${VM_DIR}/../neo-riscv-core" 2>/dev/null && pwd)}"
+NODE_DIR="${NODE_DIR:-$(cd "${VM_DIR}/../neo-riscv-node" 2>/dev/null && pwd)}"
+. "${SCRIPT_DIR}/resolve-host-lib.sh"
+HOST_LIB="${HOST_LIB:-$(resolve_host_lib "${VM_DIR}" release)}"
 
 DEPLOY_DIR="${VM_DIR}/mainnet-validation"
 DATA_DIR="${DEPLOY_DIR}/Data"
 LOG_DIR="${DEPLOY_DIR}/logs"
 STATEROOT_LOG="${LOG_DIR}/stateroot-validation.log"
+STATEROOT_CHECKPOINT="${LOG_DIR}/stateroot-validation.checkpoint"
 
 REFERENCE_RPC="http://seed1.neo.org:10332"
 LOCAL_RPC="http://127.0.0.1:10332"
@@ -50,6 +53,30 @@ copy_plugin_output() {
 
   mkdir -p "${DEPLOY_DIR}/Plugins/${name}"
   cp -a "${output_dir}/." "${DEPLOY_DIR}/Plugins/${name}/"
+}
+
+stage_leveldb_native() {
+  local rid
+  case "$(uname -s):$(uname -m)" in
+    Darwin:arm64) rid="osx-arm64" ;;
+    Darwin:x86_64) rid="osx-x64" ;;
+    Linux:aarch64|Linux:arm64) rid="linux-arm64" ;;
+    Linux:x86_64) rid="linux-x64" ;;
+    *) return 0 ;;
+  esac
+
+  local native_dir="${DEPLOY_DIR}/Plugins/LevelDBStore/runtimes/${rid}/native"
+  local native_lib
+  case "${rid}" in
+    osx-*) native_lib="${native_dir}/libleveldb.dylib" ;;
+    linux-*) native_lib="${native_dir}/libleveldb.so" ;;
+    *) return 0 ;;
+  esac
+
+  if [[ -f "${native_lib}" ]]; then
+    cp "${native_lib}" "${DEPLOY_DIR}/Plugins/LevelDBStore/"
+    cp "${native_lib}" "${DEPLOY_DIR}/"
+  fi
 }
 
 # ─── Build ───────────────────────────────────────────────────────────────────
@@ -81,6 +108,7 @@ build_all() {
   echo "  Building LevelDBStore plugin..."
   (cd "${NODE_DIR}" && dotnet build -c Release plugins/LevelDBStore/LevelDBStore.csproj)
   copy_plugin_output "LevelDBStore" "${NODE_DIR}/plugins/LevelDBStore/bin/Release/net10.0"
+  stage_leveldb_native
 
   # Copy RpcServer plugin (needed by StateService)
   echo "  Building RpcServer plugin..."
@@ -116,9 +144,10 @@ STATECFG
   cat > "${DEPLOY_DIR}/Plugins/RpcServer/RpcServer.json" <<'RPCCFG'
 {
   "PluginConfiguration": {
-    "Network": 860833102,
+    "UnhandledExceptionPolicy": "Ignore",
     "Servers": [
       {
+        "Network": 860833102,
         "BindAddress": "127.0.0.1",
         "Port": 10332,
         "SslCert": "",
@@ -126,13 +155,19 @@ STATECFG
         "TrustedAuthorities": [],
         "RpcUser": "",
         "RpcPass": "",
+        "EnableCors": true,
+        "AllowOrigins": [],
+        "KeepAliveTimeout": 60,
+        "RequestHeadersTimeout": 15,
         "MaxGasInvoke": 20,
         "MaxFee": 0.1,
+        "MaxConcurrentConnections": 40,
         "MaxIteratorResultItems": 100,
         "MaxStackSize": 65535,
-        "DisabledMethods": [],
+        "DisabledMethods": [ "openwallet" ],
         "SessionEnabled": false,
-        "SessionExpirationTime": 60
+        "SessionExpirationTime": 60,
+        "FindStoragePageSize": 50
       }
     ]
   }
@@ -158,9 +193,10 @@ launch_node() {
   echo
 
   cd "${DEPLOY_DIR}"
-  NEO_RISCV_HOST_LIB="${VM_DIR}/target/release/libneo_riscv_host.so" \
-    dotnet Neo.CLI.dll \
+  NEO_RISCV_HOST_LIB="${HOST_LIB}" \
+    dotnet neo-cli.dll \
     --noverify \
+    --background \
     2>&1 | tee "${LOG_DIR}/neo-cli.log" &
 
   NODE_PID=$!
@@ -189,77 +225,29 @@ monitor_stateroots() {
   echo "Reference: ${REFERENCE_RPC}"
   echo "Local:     ${LOCAL_RPC}"
   echo "Log:       ${STATEROOT_LOG}"
+  echo "Checkpoint:${STATEROOT_CHECKPOINT}"
   echo
-  echo "Monitoring... (Ctrl+C to stop)"
+  echo "Monitoring with JSON-RPC batches... (Ctrl+C to stop)"
   echo
 
-  local last_checked=0
-  local mismatches=0
-  local checked=0
+  mkdir -p "${LOG_DIR}"
 
-  # Header
-  printf "%-10s %-68s %-8s\n" "Block" "StateRoot" "Status" | tee -a "${STATEROOT_LOG}"
-  printf "%s\n" "$(printf '=%.0s' {1..90})" | tee -a "${STATEROOT_LOG}"
-
-  while true; do
-    # Get local block height
-    local_height=$(timeout 5 curl -s -X POST -H 'Content-Type: application/json' \
-      -d '{"jsonrpc":"2.0","method":"getblockcount","params":[],"id":1}' \
-      "${LOCAL_RPC}" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',0))" 2>/dev/null || echo "0")
-
-    if [[ "${local_height}" == "0" ]]; then
-      echo "[$(date '+%H:%M:%S')] Waiting for node sync..."
-      sleep 10
-      continue
+  local start_index="${STATEROOT_START:-0}"
+  if [[ -f "${STATEROOT_CHECKPOINT}" ]]; then
+    local checkpoint
+    checkpoint="$(tr -dc '0-9' < "${STATEROOT_CHECKPOINT}" || true)"
+    if [[ -n "${checkpoint}" ]]; then
+      start_index=$((checkpoint + 1))
     fi
+  fi
 
-    local current_index=$((local_height - 1))
-
-    # Check state root for each block we haven't checked yet
-    local check_up_to=$current_index
-    # Don't check the very latest block (might not have state root computed yet)
-    check_up_to=$((check_up_to - 1))
-
-    if [[ ${check_up_to} -le ${last_checked} ]]; then
-      sleep 5
-      continue
-    fi
-
-    for ((block = last_checked + 1; block <= check_up_to; block++)); do
-      # Get local state root
-      local_root=$(timeout 5 curl -s -X POST -H 'Content-Type: application/json' \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getstateroot\",\"params\":[${block}],\"id\":1}" \
-        "${LOCAL_RPC}" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',{}).get('roothash','N/A'))" 2>/dev/null || echo "ERROR")
-
-      # Get reference state root
-      reference_root=$(timeout 5 curl -s -X POST -H 'Content-Type: application/json' \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getstateroot\",\"params\":[${block}],\"id\":1}" \
-        "${REFERENCE_RPC}" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',{}).get('roothash','N/A'))" 2>/dev/null || echo "ERROR")
-
-      checked=$((checked + 1))
-
-      if [[ "${local_root}" == "N/A" || "${local_root}" == "ERROR" ]]; then
-        printf "%-10s %-68s %-8s\n" "${block}" "${local_root}" "SKIP" | tee -a "${STATEROOT_LOG}"
-      elif [[ "${local_root}" == "${reference_root}" ]]; then
-        # Only print every 100th block or first 10 to avoid noise
-        if [[ $((block % 100)) -eq 0 || ${block} -le 10 ]]; then
-          printf "%-10s %-68s %-8s\n" "${block}" "${local_root}" "OK" | tee -a "${STATEROOT_LOG}"
-        fi
-      else
-        mismatches=$((mismatches + 1))
-        printf "%-10s %-68s %-8s\n" "${block}" "LOCAL:${local_root}" "MISMATCH" | tee -a "${STATEROOT_LOG}"
-        printf "%-10s %-68s\n" "" "REF:  ${reference_root}" | tee -a "${STATEROOT_LOG}"
-        echo "!!! MISMATCH at block ${block} !!!" | tee -a "${STATEROOT_LOG}"
-      fi
-
-      last_checked=${block}
-    done
-
-    # Status update every pass
-    echo "[$(date '+%H:%M:%S')] Checked: ${checked} blocks, Mismatches: ${mismatches}, Height: ${local_height}"
-
-    sleep 2
-  done
+  python3 "${SCRIPT_DIR}/compare-stateroot-rpc-batch.py" \
+    --local-rpc "${LOCAL_RPC}" \
+    --reference-rpc "${REFERENCE_RPC}" \
+    --start "${start_index}" \
+    --follow \
+    --log-file "${STATEROOT_LOG}" \
+    --checkpoint-file "${STATEROOT_CHECKPOINT}"
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -275,7 +263,7 @@ main() {
   if [[ "${BUILD_ONLY}" == "true" ]]; then
     echo
     echo "Build complete. To launch:"
-    echo "  cd ${DEPLOY_DIR} && NEO_RISCV_HOST_LIB=${VM_DIR}/target/release/libneo_riscv_host.so dotnet Neo.CLI.dll"
+    echo "  cd ${DEPLOY_DIR} && NEO_RISCV_HOST_LIB=${HOST_LIB} dotnet neo-cli.dll --noverify --background"
     echo
     echo "To monitor state roots:"
     echo "  $0 --monitor-only"

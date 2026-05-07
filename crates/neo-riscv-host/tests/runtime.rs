@@ -2,9 +2,13 @@ use neo_riscv_abi::{BackendKind, StackValue, VmState};
 use neo_riscv_host::{
     debug_execute_script_with_host_and_stack, execute_script, execute_script_with_context,
     execute_script_with_host, execute_script_with_host_and_stack,
-    execute_script_with_host_and_stack_and_ip, execute_script_with_trigger,
-    neo_riscv_execute_script_with_host, neo_riscv_free_execution_result, HostCallbackResult,
-    NativeExecutionResult, NativeHostResult, PolkaVmRuntime, RuntimeContext,
+    execute_script_with_host_and_stack_and_ip,
+    execute_script_with_host_and_stack_and_ip_and_initializer,
+    execute_script_with_host_and_stack_and_ip_with_result_limit, execute_script_with_trigger,
+    neo_riscv_execute_script_with_host, neo_riscv_execute_script_with_host_and_initializer,
+    neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
+    neo_riscv_free_execution_result, HostCallbackResult, NativeExecutionResult, NativeHostResult,
+    PolkaVmRuntime, RuntimeContext,
 };
 use std::{ffi::c_void, ptr, slice};
 
@@ -291,6 +295,222 @@ fn executes_push1_ret_through_host_runtime() {
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn helper_append_mutates_consumed_caller_array_alias_through_host_runtime() {
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0xc2, // NEWARRAY0
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x34, 0x06, // CALL +6 -> APPEND helper
+        0x68, // LDLOC0
+        0x10, // PUSH0
+        0xce, // PICKITEM
+        0x40, // RET
+        0xcf, // APPEND
+        0x40, // RET
+    ];
+
+    let result = execute_script(script).expect("host runtime should execute helper APPEND");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn size_matches_neovm_for_integer_and_boolean_values_through_host_runtime() {
+    let result = execute_script(&[
+        0x10, 0xca, // PUSH0, SIZE
+        0x11, 0xca, // PUSH1, SIZE
+        0x00, 0xff, 0xca, // PUSHINT8 -1, SIZE
+        0x08, 0xca, // PUSHT, SIZE
+        0x09, 0xca, // PUSHF, SIZE
+        0x40, // RET
+    ])
+    .expect("SIZE should match NeoVM for integer and boolean values");
+
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::Integer(0),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+            StackValue::Integer(1),
+        ]
+    );
+}
+
+#[test]
+fn size_faults_on_null_like_neovm_through_host_runtime() {
+    let error = execute_script(&[0x0b, 0xca]).expect_err("SIZE on Null should fault like NeoVM");
+    assert!(
+        error.contains("SIZE expects"),
+        "error should mention SIZE incompatibility: {error}"
+    );
+}
+
+#[test]
+fn pickitem_reads_integer_payload_through_host_runtime() {
+    let result =
+        execute_script(&[0x15, 0x10, 0xce, 0x40]).expect("host runtime should index Integer");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(5)]);
+}
+
+#[test]
+fn shr_accepts_big_integer_operand_through_host_runtime() {
+    let mut script = vec![0x04]; // PUSHINT128 2^72
+    let mut value = [0u8; 16];
+    value[9] = 1;
+    script.extend_from_slice(&value);
+    script.extend_from_slice(&[
+        0x18, // PUSH8
+        0xa9, // SHR -> 2^64
+        0x40, // RET
+    ]);
+
+    let result = execute_script(&script).expect("host runtime should SHR a wide Integer");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
+    );
+}
+
+#[test]
+fn wide_positive_integer_numeric_ops_work_through_host_runtime() {
+    let mut script = vec![0x0c, 0x11];
+    script.extend_from_slice(&[
+        0x5e, 0x54, 0x7a, 0x9f, 0xe6, 0x80, 0xa1, 0x8e, 0x60, 0x89, 0x43, 0x70, 0xdf, 0x87, 0xed,
+        0xd0, 0x00,
+    ]);
+    script.extend_from_slice(&[
+        0x99, // SIGN
+        0x40, // RET
+    ]);
+
+    let result = execute_script(&script).expect("host runtime should execute wide integer SIGN");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn empty_buffer_substr_reverses_through_host_runtime() {
+    let result = execute_script(&[0x10, 0xdb, 0x30, 0x10, 0x10, 0x8c, 0x4a, 0xd1, 0x40])
+        .expect("host runtime should keep empty SUBSTR result mutable");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Buffer(Vec::new())]);
+}
+
+#[test]
+fn setitem_updates_local_alias_extracted_from_parent_array_through_host_runtime() {
+    let result = execute_script(&[
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0x12, // PUSH2
+        0xc3, // NEWARRAY
+        0x71, // STLOC1
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x09, // PUSHF
+        0xd0, // SETITEM map["k"] = false
+        0x69, // LDLOC1
+        0x50, // SWAP
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = map
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x08, // PUSHT
+        0xd0, // SETITEM local_map["k"] = true
+        0x69, // LDLOC1
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = local_map
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM
+        0x40, // RET
+    ])
+    .expect("host runtime should propagate SETITEM through extracted local aliases");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
+fn call_helper_updates_nested_map_argument_alias_through_host_runtime() {
+    let result = execute_script(&[
+        0x57, 0x02, 0x00, // INITSLOT 2 locals, 0 args
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x08, // PUSHT
+        0xd0, // SETITEM source["k"] = true
+        0x70, // STLOC0
+        0x12, // PUSH2
+        0xc3, // NEWARRAY
+        0x71, // STLOC1
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x09, // PUSHF
+        0xd0, // SETITEM target["k"] = false
+        0x69, // LDLOC1
+        0x50, // SWAP
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM parent[1] = target
+        0x68, // LDLOC0
+        0x69, // LDLOC1
+        0x34, 0x0b, // CALL helper
+        0x45, // DROP
+        0x69, // LDLOC1
+        0x11, // PUSH1
+        0xce, // PICKITEM parent[1]
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM
+        0x40, // RET
+        0x57, 0x01, 0x02, // helper: INITSLOT 1 local, 2 args
+        0x78, // LDARG0
+        0x11, // PUSH1
+        0xce, // PICKITEM arg0[1]
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0x79, // LDARG1
+        0x0c, 0x01, b'k', // PUSHDATA1 "k"
+        0xce, // PICKITEM source["k"]
+        0xd0, // SETITEM local_map["k"] = source["k"]
+        0x78, // LDARG0
+        0x68, // LDLOC0
+        0x11, // PUSH1
+        0x50, // SWAP
+        0xd0, // SETITEM arg0[1] = local_map
+        0x11, // PUSH1
+        0x40, // RET
+    ])
+    .expect("host runtime helper call should propagate nested map argument aliases");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
 }
 
 #[test]
@@ -3663,6 +3883,363 @@ fn helper_syscalls_preserve_large_arguments_before_callt_in_host_runtime() {
 }
 
 #[test]
+fn large_proxy_update_arguments_survive_helper_calls_before_callt_in_host_runtime() {
+    let callt_update_api = neo_riscv_guest::CALLT_MARKER;
+    let message = b"upgrade: CheckWitness failed!";
+    let mut script = vec![
+        0x57,
+        0x00,
+        0x02, // INITSLOT 0 locals, 2 args
+        0x0c,
+        message.len() as u8,
+    ];
+    script.extend_from_slice(message);
+    let auth_call = script.len();
+    script.extend_from_slice(&[0x34, 0x00]); // patched CALL auth helper
+    let assert_call = script.len();
+    script.extend_from_slice(&[0x34, 0x00]); // patched CALL assertion helper
+    script.extend_from_slice(&[
+        0x79, // LDARG1 manifest
+        0x78, // LDARG0 nef
+        0x37, 0x00, 0x00, // CALLT 0 -> ContractManagement.update
+        0x40, // RET
+    ]);
+
+    let auth_helper = script.len();
+    script.extend_from_slice(&[
+        0x08, // PUSHT
+        0x40, // RET
+    ]);
+
+    let assert_helper = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x78, // LDARG0 condition
+        0xaa, // NOT
+        0x26, 0x00, // patched JMPIFNOT return
+        0x79, // LDARG1 message
+        0x3a, // THROW
+    ]);
+    let assert_return = script.len();
+    script.push(0x40); // RET
+
+    script[auth_call + 1] = (auth_helper as isize - auth_call as isize) as i8 as u8;
+    script[assert_call + 1] = (assert_helper as isize - assert_call as isize) as i8 as u8;
+    script[assert_helper + 6] = (assert_return as isize - (assert_helper + 5) as isize) as i8 as u8;
+
+    let mut manifest = Vec::with_capacity(6851);
+    manifest.extend_from_slice(
+        br#"{"name":"Proxy","groups":[],"features":{},"supportedstandards":[],"abi":{"methods":["#,
+    );
+    manifest.resize(6851 - 2, b'm');
+    manifest.extend_from_slice(b"}");
+    manifest.extend_from_slice(b"}");
+    let nef = vec![0x4e; 4345];
+
+    let result = execute_script_with_host_and_stack(
+        &script,
+        vec![
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+            if api == callt_update_api {
+                assert_eq!(
+                    stack,
+                    &[
+                        StackValue::ByteString(manifest.clone()),
+                        StackValue::ByteString(nef.clone()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        },
+    )
+    .expect("large Proxy.update arguments should reach CALLT unchanged");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn large_proxy_update_arguments_survive_initializer_before_callt_in_host_runtime() {
+    let callt_update_api = neo_riscv_guest::CALLT_MARKER;
+    let message = b"upgrade: CheckWitness failed!";
+    let mut script = vec![
+        0x57,
+        0x00,
+        0x02, // INITSLOT 0 locals, 2 args
+        0x0c,
+        message.len() as u8,
+    ];
+    script.extend_from_slice(message);
+    let auth_call = script.len();
+    script.extend_from_slice(&[0x34, 0x00]); // patched CALL auth helper
+    let assert_call = script.len();
+    script.extend_from_slice(&[0x34, 0x00]); // patched CALL assertion helper
+    script.extend_from_slice(&[
+        0x79, // LDARG1 manifest
+        0x78, // LDARG0 nef
+        0x37, 0x00, 0x00, // CALLT 0 -> ContractManagement.update
+        0x40, // RET
+    ]);
+
+    let auth_helper = script.len();
+    script.extend_from_slice(&[
+        0x08, // PUSHT
+        0x40, // RET
+    ]);
+
+    let assert_helper = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x78, // LDARG0 condition
+        0xaa, // NOT
+        0x26, 0x00, // patched JMPIFNOT return
+        0x79, // LDARG1 message
+        0x3a, // THROW
+    ]);
+    let assert_return = script.len();
+    script.push(0x40); // RET
+
+    let initializer_ip = script.len();
+    script.extend_from_slice(&[
+        0x56, 0x01, // INITSSLOT 1
+        0x10, // PUSH0
+        0x60, // STSFLD0
+        0x40, // RET
+    ]);
+
+    script[auth_call + 1] = (auth_helper as isize - auth_call as isize) as i8 as u8;
+    script[assert_call + 1] = (assert_helper as isize - assert_call as isize) as i8 as u8;
+    script[assert_helper + 6] = (assert_return as isize - (assert_helper + 5) as isize) as i8 as u8;
+
+    let manifest = vec![b'm'; 6851];
+    let nef = vec![0x4e; 4345];
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        vec![
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        0,
+        initializer_ip,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+            if api == callt_update_api {
+                assert_eq!(
+                    stack,
+                    &[
+                        StackValue::ByteString(manifest.clone()),
+                        StackValue::ByteString(nef.clone()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        },
+    )
+    .expect("large Proxy.update arguments should survive _initialize and reach CALLT unchanged");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn initializer_host_call_preserves_large_method_arguments_in_host_runtime() {
+    let get_context_api = neo_riscv_abi::interop_hash("System.Storage.GetContext");
+    let callt_update_api = neo_riscv_guest::CALLT_MARKER;
+    let mut script = vec![
+        0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
+        0x79, // LDARG1 manifest
+        0x78, // LDARG0 nef
+        0x37, 0x00, 0x00, // CALLT 0
+        0x40, // RET
+    ];
+
+    let initializer_ip = script.len();
+    script.extend_from_slice(&[
+        0x56,
+        0x01, // INITSSLOT 1
+        0x41, // SYSCALL Storage.GetContext
+        get_context_api.to_le_bytes()[0],
+        get_context_api.to_le_bytes()[1],
+        get_context_api.to_le_bytes()[2],
+        get_context_api.to_le_bytes()[3],
+        0x45, // DROP context
+        0x0d, // PUSHDATA2 large scratch allocation after the host call
+    ]);
+    let initializer_scratch = vec![0x5a; 5_000];
+    script.extend_from_slice(&(initializer_scratch.len() as u16).to_le_bytes());
+    script.extend_from_slice(&initializer_scratch);
+    script.extend_from_slice(&[
+        0x45, // DROP scratch
+        0x10, // PUSH0
+        0x60, // STSFLD0
+        0x40, // RET
+    ]);
+
+    let mut manifest = Vec::with_capacity(6851);
+    manifest.extend_from_slice(
+        br#"{"name":"Proxy","groups":[],"features":{},"supportedstandards":[],"abi":{"methods":["#,
+    );
+    manifest.resize(6851, b'm');
+    manifest[4272] = b':';
+    let mut nef = vec![0x4e; 4345];
+    nef[4272] = 0x67;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        vec![
+            StackValue::ByteString(manifest.clone()),
+            StackValue::ByteString(nef.clone()),
+        ],
+        0,
+        initializer_ip,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+            if api == get_context_api {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Interop(1)],
+                });
+            }
+            if api == callt_update_api {
+                assert_eq!(
+                    stack,
+                    &[
+                        StackValue::ByteString(manifest.clone()),
+                        StackValue::ByteString(nef.clone()),
+                    ]
+                );
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::Null],
+                });
+            }
+            Err(format!("unexpected syscall 0x{api:08x}"))
+        },
+    )
+    .expect("initializer host calls must not corrupt deferred method arguments");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+}
+
+#[test]
+fn large_proxy_update_arguments_survive_pushdata_pack_and_contract_call_in_host_runtime() {
+    let contract_call_api = neo_riscv_abi::interop_hash("System.Contract.Call");
+    let mut manifest = vec![b'm'; 6851];
+    manifest[0..23].copy_from_slice(br#"{"name":"Proxy","groups"#);
+    manifest[4272] = b':';
+    let mut nef = vec![0x4e; 4345];
+    nef[4272] = 0x67;
+    nef[4273] = 0x09;
+    nef[4274] = 0x0c;
+    nef[4275] = 0x02;
+
+    let mut script = Vec::new();
+    script.push(0x0d); // PUSHDATA2 manifest
+    script.extend_from_slice(&(manifest.len() as u16).to_le_bytes());
+    script.extend_from_slice(&manifest);
+    script.push(0x0d); // PUSHDATA2 nef
+    script.extend_from_slice(&(nef.len() as u16).to_le_bytes());
+    script.extend_from_slice(&nef);
+    script.push(0x12); // PUSH2
+    script.push(0xc0); // PACK -> [nef, manifest]
+    script.push(0x1f); // PUSH15 / CallFlags.All
+    script.push(0x0c); // PUSHDATA1 "update"
+    script.push(6);
+    script.extend_from_slice(b"update");
+    script.push(0x0c); // PUSHDATA1 contract hash
+    script.push(20);
+    script.extend_from_slice(&[0xcb; 20]);
+    script.push(0x41); // SYSCALL System.Contract.Call
+    script.extend_from_slice(&contract_call_api.to_le_bytes());
+    script.push(0x40); // RET
+
+    let mut observed = None;
+    let result = execute_script_with_host(
+        &script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api != contract_call_api {
+                return Err(format!("unexpected syscall 0x{api:08x}"));
+            }
+
+            observed = Some(stack.to_vec());
+            Ok(HostCallbackResult {
+                stack: vec![StackValue::Null],
+            })
+        },
+    )
+    .expect("PUSHDATA2 dynamic call arguments should reach Contract.Call unchanged");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Null]);
+    assert_eq!(
+        observed,
+        Some(vec![
+            StackValue::Array(vec![
+                StackValue::ByteString(nef),
+                StackValue::ByteString(manifest),
+            ]),
+            StackValue::Integer(15),
+            StackValue::ByteString(b"update".to_vec()),
+            StackValue::ByteString(vec![0xcb; 20]),
+        ])
+    );
+}
+
+#[test]
 fn custom_host_callback_can_return_two_integers() {
     let api = neo_riscv_abi::interop_hash("System.Test.Multi");
     let mut script = vec![0x41];
@@ -4265,6 +4842,11 @@ struct FfiAttributeState {
     observed_checkwitness: Option<Vec<StackValue>>,
 }
 
+struct FfiInitializerWitnessState {
+    init_complete_count: usize,
+    observed_checkwitness: Option<Vec<StackValue>>,
+}
+
 unsafe extern "C" fn ffi_storage_context_callback(
     user_data: *mut c_void,
     api: u32,
@@ -4526,6 +5108,102 @@ unsafe extern "C" fn ffi_callt_array_callback(
     true
 }
 
+unsafe extern "C" fn ffi_callt_string_setitem_callback(
+    _user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let stack = if api == platform_api {
+        vec![StackValue::ByteString(b"NEO".to_vec())]
+    } else if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+        Vec::new()
+    } else if api == neo_riscv_guest::CALLT_MARKER {
+        let mut next = match unsafe {
+            copy_test_native_stack_items(input_stack_ptr.cast_mut(), input_stack_len)
+        } {
+            Ok(stack) => stack,
+            Err(_) => return false,
+        };
+        match next.pop() {
+            Some(StackValue::Integer(1)) => {}
+            _ => return false,
+        }
+        let nested_script = [0x0c, 0x01, b'1', 0x40]; // PUSHDATA1 "1"; RET
+        let mut nested_output = NativeExecutionResult {
+            fee_consumed_pico: 0,
+            state: 0,
+            stack_ptr: ptr::null_mut(),
+            stack_len: 0,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+        let invoked = unsafe {
+            neo_riscv_host::neo_riscv_execute_script_with_host_and_result_limit(
+                nested_script.as_ptr(),
+                nested_script.len(),
+                0,
+                1,
+                0x40,
+                0,
+                53,
+                0,
+                100_000_000,
+                0,
+                ptr::null(),
+                0,
+                ptr::null_mut(),
+                ffi_callt_string_setitem_callback,
+                ffi_mixed_free_callback,
+                &mut nested_output,
+            )
+        };
+        if !invoked || nested_output.state != 0 {
+            unsafe {
+                neo_riscv_free_execution_result(&mut nested_output);
+            }
+            return false;
+        }
+        let nested_stack = match unsafe {
+            copy_test_native_stack_items(nested_output.stack_ptr, nested_output.stack_len)
+        } {
+            Ok(stack) => stack,
+            Err(_) => {
+                unsafe {
+                    neo_riscv_free_execution_result(&mut nested_output);
+                }
+                return false;
+            }
+        };
+        unsafe {
+            neo_riscv_free_execution_result(&mut nested_output);
+        }
+        next.extend(nested_stack);
+        next
+    } else {
+        return false;
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
 unsafe extern "C" fn ffi_callt_null_helper_callback(
     _user_data: *mut c_void,
     api: u32,
@@ -4691,6 +5369,30 @@ unsafe extern "C" fn ffi_callt_transaction_then_signers_callback(
         };
     }
     true
+}
+
+#[test]
+fn result_limit_trims_internal_halt_stack_before_abi_conversion() {
+    let script = [0x11, 0x12, 0x40]; // PUSH1, PUSH2, RET
+    let result = execute_script_with_host_and_stack_and_ip_with_result_limit(
+        &script,
+        Vec::new(),
+        0,
+        1,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 0,
+            exec_fee_factor_pico: 0,
+        },
+        |_api, _ip, _ctx, _stack| Ok(HostCallbackResult { stack: Vec::new() }),
+    )
+    .expect("result-limited execution should halt");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
 }
 
 #[test]
@@ -5606,6 +6308,268 @@ fn callt_array_result_round_trips_with_live_args_in_host_runtime() {
 }
 
 #[test]
+fn callt_string_result_can_setitem_into_live_array_after_cat_in_host_runtime() {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let mut script = Vec::new();
+    for _ in 0..6 {
+        script.push(0x41); // SYSCALL
+        script.extend_from_slice(&platform_api.to_le_bytes());
+        script.push(0x45); // DROP
+    }
+    script.push(0x40); // RET from initializer
+    let method_ip = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x05, // INITSLOT 0 locals, 5 args
+        0x78, // LDARG0 live array retained in argument slots
+        0x0c, 0x0b, // PUSHDATA1 length 11
+    ]);
+    script.extend_from_slice(b"Blind Box #");
+    script.extend_from_slice(&[
+        0x7c, // LDARG4 numeric suffix
+        0x37, 0x00, 0x00, // CALLT 0 -> itoa-like string conversion
+        0x8b, // CAT
+        0x4a, // DUP
+        0x78, // LDARG0
+        0x11, // PUSH1
+        0x51, // ROT -> array, index, value for SETITEM
+        0xd0, // SETITEM
+        0x45, // DROP duplicated string
+        0x40, // RET
+    ]);
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        vec![
+            StackValue::Integer(1),
+            StackValue::Null,
+            StackValue::Null,
+            StackValue::Null,
+            StackValue::Array(vec![
+                StackValue::ByteString(vec![0; 20]),
+                StackValue::Null,
+                StackValue::Integer(0),
+                StackValue::Integer(0),
+                StackValue::Integer(1),
+                StackValue::Null,
+                StackValue::Null,
+            ]),
+        ],
+        method_ip,
+        0,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == platform_api {
+                return Ok(HostCallbackResult {
+                    stack: vec![StackValue::ByteString(b"NEO".to_vec())],
+                });
+            }
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult { stack: Vec::new() });
+            }
+            if api == neo_riscv_guest::CALLT_MARKER {
+                let mut next = stack.to_vec();
+                let value = next.pop().expect("CALLT input should include an integer");
+                assert_eq!(value, StackValue::Integer(1));
+                next.push(StackValue::ByteString(b"1".to_vec()));
+                return Ok(HostCallbackResult { stack: next });
+            }
+
+            Err(format!(
+                "unexpected callback api 0x{api:08x}; stack={stack:?}"
+            ))
+        },
+    )
+    .expect("CALLT string result should survive CAT and SETITEM into a live array");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Array(vec![
+            StackValue::ByteString(vec![0; 20]),
+            StackValue::Buffer(b"Blind Box #1".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::Integer(1),
+            StackValue::Null,
+            StackValue::Null,
+        ])]
+    );
+}
+
+#[test]
+fn ffi_callt_string_result_can_setitem_into_live_array_after_cat() {
+    let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
+    let mut script = Vec::new();
+    for _ in 0..6 {
+        script.push(0x41); // SYSCALL
+        script.extend_from_slice(&platform_api.to_le_bytes());
+        script.push(0x45); // DROP
+    }
+    script.push(0x40); // RET from initializer
+    let method_ip = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x05, // INITSLOT 0 locals, 5 args
+        0x78, // LDARG0 live array retained in argument slots
+        0x0c, 0x0b, // PUSHDATA1 length 11
+    ]);
+    script.extend_from_slice(b"Blind Box #");
+    script.extend_from_slice(&[
+        0x7c, // LDARG4 numeric suffix
+        0x37, 0x00, 0x00, // CALLT 0 -> itoa-like string conversion
+        0x8b, // CAT
+        0x4a, // DUP
+        0x78, // LDARG0
+        0x11, // PUSH1
+        0x51, // ROT -> array, index, value for SETITEM
+        0xd0, // SETITEM
+        0x45, // DROP duplicated string
+        0x40, // RET
+    ]);
+
+    let initial_stack = vec![
+        StackValue::Integer(1),
+        StackValue::Null,
+        StackValue::Null,
+        StackValue::Null,
+        StackValue::Array(vec![
+            StackValue::ByteString(vec![0; 20]),
+            StackValue::Null,
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::Integer(1),
+            StackValue::Null,
+            StackValue::Null,
+        ]),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            method_ip,
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            ptr::null_mut(),
+            ffi_callt_string_setitem_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::Array(vec![
+            StackValue::ByteString(vec![0; 20]),
+            StackValue::Buffer(b"Blind Box #1".to_vec()),
+            StackValue::Integer(0),
+            StackValue::Integer(0),
+            StackValue::Integer(1),
+            StackValue::Null,
+            StackValue::Null,
+        ])]
+    );
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn ffi_callt_retains_consumed_mutations_before_later_setitem() {
+    let script = vec![
+        0x57, 0x00, 0x01, // INITSLOT 0 locals, 1 arg
+        0x78, // LDARG0
+        0x10, // PUSH0
+        0x11, // PUSH1
+        0xd0, // SETITEM arg0[0] = 1; consumes arg0 and records mutation
+        0x11, // PUSH1
+        0x37, 0x00, 0x00, // CALLT 0 across a non-empty consumed_mutations vector
+        0x45, // DROP CALLT string result
+        0x78, // LDARG0
+        0x11, // PUSH1
+        0x12, // PUSH2
+        0xd0, // SETITEM arg0[1] = 2
+        0x78, // LDARG0
+        0x40, // RET
+    ];
+    let initial_stack = vec![StackValue::Array(vec![StackValue::Null, StackValue::Null])];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host(
+            script.as_ptr(),
+            script.len(),
+            0,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            ptr::null_mut(),
+            ffi_callt_string_setitem_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    assert!(invoked, "ffi execute should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::Array(vec![
+            StackValue::Integer(1),
+            StackValue::Integer(2),
+        ])]
+    );
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
 fn callt_array_result_round_trips_with_live_args_in_ffi_host_runtime() {
     let script = vec![
         0x57, 0x02, 0x04, // INITSLOT 2 locals, 4 args
@@ -5984,6 +6948,1012 @@ fn attribute_test_path_with_static_slot_initialization() -> Vec<u8> {
     script.extend_from_slice(&target);
     script.extend_from_slice(&init);
     script
+}
+
+#[test]
+fn initializer_entrypoint_preserves_static_fields_in_host_runtime() {
+    let script = [
+        0x58, // LDSFLD0
+        0x40, // RET
+        0x56, 0x01, // INITSSLOT 1
+        0x17, // PUSH7
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let mut init_complete_count = 0usize;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        Vec::new(),
+        0,
+        2,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                init_complete_count += 1;
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("host runtime must preserve _initialize static fields for target method");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(7)]);
+    assert_eq!(init_complete_count, 1);
+}
+
+#[test]
+fn initializer_entrypoint_preserves_hash_static_fields_in_host_runtime() {
+    let mut script = vec![
+        0x5d, // LDSFLD5
+        0x40, // RET
+        0x56, 0x09, // INITSSLOT 9
+        0x0c, 0x14, // PUSHDATA1 20
+    ];
+    let hash0 = vec![
+        0xbd, 0xdf, 0x40, 0x98, 0xf8, 0x78, 0xc9, 0xfb, 0x33, 0xc0, 0x3f, 0xcf, 0x36, 0x82, 0xa6,
+        0x04, 0x3c, 0xd5, 0x35, 0x86,
+    ];
+    script.extend_from_slice(&hash0);
+    script.extend_from_slice(&[
+        0x60, // STSFLD0
+        0x0c, 0x14, // PUSHDATA1 20
+        0xb4, 0x91, 0x39, 0xa1, 0x47, 0xf6, 0x77, 0x84, 0xd3, 0x13, 0x67, 0x13, 0x6e, 0xb5, 0x69,
+        0x40, 0x31, 0xa5, 0x75, 0xfb, 0x61, // STSFLD1
+        0x0c, 0x14, // PUSHDATA1 20
+        0x2a, 0x4c, 0x9a, 0x4d, 0x40, 0x22, 0x67, 0x8b, 0x03, 0xef, 0x1b, 0xbe, 0x08, 0x34, 0xf9,
+        0x66, 0x46, 0x0d, 0xc4, 0x48, 0x62, // STSFLD2
+        0x0c, 0x14, // PUSHDATA1 20
+        0x20, 0xf0, 0xbe, 0xa4, 0x50, 0xad, 0xa7, 0xb9, 0x03, 0xb8, 0x97, 0x49, 0xd7, 0xc9, 0xbb,
+        0xc1, 0x60, 0xb1, 0x48, 0xcd, 0x63, // STSFLD3
+        0x03, 0x00, 0x00, 0x8a, 0x5d, 0x78, 0x45, 0x63, 0x01, // PUSHINT64
+        0x65, // STSFLD5
+        0x0c, 0x07, b'e', b'n', b't', b'e', b'r', b'e', b'd', 0x64, // STSFLD4
+        0x0c, 0x05, b'a', b's', b's', b'e', b't', 0x66, // STSFLD6
+        0x0c, 0x08, b'c', b'o', b'n', b't', b'r', b'a', b'c', b't', 0x67, 0x07, // STSFLD 7
+        0x0c, 0x0b, b't', b'o', b't', b'a', b'l', b'S', b'u', b'p', b'p', b'l', b'y', 0x67,
+        0x08, // STSFLD 8
+        0x40, // RET
+    ]);
+    let mut init_complete_count = 0usize;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        Vec::new(),
+        0,
+        2,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                init_complete_count += 1;
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("initializer must preserve 20-byte hash static fields");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(0x0163_4578_5d8a_0000)]
+    );
+    assert_eq!(init_complete_count, 1);
+}
+
+#[test]
+fn initializer_entrypoint_allows_deploy_to_compare_hash_static_fields_in_host_runtime() {
+    let mut script = vec![
+        0x57, 0x00, 0x02, // target: INITSLOT 0 locals, 2 args
+        0x5a, // LDSFLD2
+        0x0c, 0x01, 0x00, // PUSHDATA1 [0]
+        0x8b, // CAT
+        0xdb, 0x21, // CONVERT Integer
+        0x5b, // LDSFLD3
+        0x0c, 0x01, 0x00, // PUSHDATA1 [0]
+        0x8b, // CAT
+        0xdb, 0x21, // CONVERT Integer
+        0xb5, // LT
+        0x40, // RET
+        0x56, 0x09, // initializer: INITSSLOT 9
+        0x0c, 0x14, // PUSHDATA1 20
+        0xbd, 0xdf, 0x40, 0x98, 0xf8, 0x78, 0xc9, 0xfb, 0x33, 0xc0, 0x3f, 0xcf, 0x36, 0x82, 0xa6,
+        0x04, 0x3c, 0xd5, 0x35, 0x86, 0x60, // STSFLD0
+        0x0c, 0x14, // PUSHDATA1 20
+        0xb4, 0x91, 0x39, 0xa1, 0x47, 0xf6, 0x77, 0x84, 0xd3, 0x13, 0x67, 0x13, 0x6e, 0xb5, 0x69,
+        0x40, 0x31, 0xa5, 0x75, 0xfb, 0x61, // STSFLD1
+        0x0c, 0x14, // PUSHDATA1 20
+        0x2a, 0x4c, 0x9a, 0x4d, 0x40, 0x22, 0x67, 0x8b, 0x03, 0xef, 0x1b, 0xbe, 0x08, 0x34, 0xf9,
+        0x66, 0x46, 0x0d, 0xc4, 0x48, 0x62, // STSFLD2
+        0x0c, 0x14, // PUSHDATA1 20
+        0x20, 0xf0, 0xbe, 0xa4, 0x50, 0xad, 0xa7, 0xb9, 0x03, 0xb8, 0x97, 0x49, 0xd7, 0xc9, 0xbb,
+        0xc1, 0x60, 0xb1, 0x48, 0xcd, 0x63, // STSFLD3
+    ];
+    script.extend_from_slice(&[
+        0x40, // RET
+    ]);
+
+    let initializer_ip = 19;
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        vec![StackValue::Null, StackValue::Boolean(true)],
+        0,
+        initializer_ip,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 860833102,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 10_000_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("initializer must allow target method to compare UInt160-sized integer conversions");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
+fn initializer_entrypoint_continues_to_later_target_method_in_host_runtime() {
+    let script = [
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x17, // PUSH7
+        0x60, // STSFLD0
+        0x40, // RET
+        0x58, // target: LDSFLD0
+        0x40, // RET
+    ];
+    let mut init_complete_count = 0usize;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        Vec::new(),
+        5,
+        0,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                init_complete_count += 1;
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("initializer must continue into a target method located after it");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(7)]);
+    assert_eq!(init_complete_count, 1);
+}
+
+#[test]
+fn initializer_entrypoint_preserves_target_method_arguments_in_host_runtime() {
+    let script = [
+        0x57, 0x00, 0x02, // target: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0x79, // LDARG1
+        0x40, // RET
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x11, // PUSH1
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let witness = vec![0x41; 20];
+    let mut init_complete_count = 0usize;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        &script,
+        vec![
+            StackValue::Integer(22),
+            StackValue::ByteString(witness.clone()),
+        ],
+        0,
+        6,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                init_complete_count += 1;
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback api 0x{api:08x}"))
+        },
+    )
+    .expect("initializer must not corrupt target method arguments");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::ByteString(witness), StackValue::Integer(22)]
+    );
+    assert_eq!(init_complete_count, 1);
+}
+
+unsafe extern "C" fn ffi_initializer_only_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    if api != neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+        return false;
+    }
+
+    unsafe {
+        *(user_data as *mut usize) += 1;
+        *output = NativeHostResult {
+            stack_ptr: ptr::null_mut(),
+            stack_len: 0,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+unsafe extern "C" fn ffi_initializer_witness_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiInitializerWitnessState) };
+    if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+        state.init_complete_count += 1;
+        unsafe {
+            *output = NativeHostResult {
+                stack_ptr: ptr::null_mut(),
+                stack_len: 0,
+                error_ptr: ptr::null_mut(),
+                error_len: 0,
+            };
+        }
+        return true;
+    }
+
+    if api == neo_riscv_abi::interop_hash("System.Runtime.CheckWitness") {
+        state.observed_checkwitness = Some(
+            unsafe { copy_test_native_stack_items(input_stack_ptr.cast_mut(), input_stack_len) }
+                .unwrap_or_default(),
+        );
+        let (stack_ptr, stack_len) = build_native_stack_items(&[StackValue::Boolean(true)]);
+        unsafe {
+            *output = NativeHostResult {
+                stack_ptr,
+                stack_len,
+                error_ptr: ptr::null_mut(),
+                error_len: 0,
+            };
+        }
+        return true;
+    }
+
+    false
+}
+
+struct FfiInitializerStoragePutState {
+    init_complete_count: usize,
+    observed_keys: Vec<Vec<u8>>,
+}
+
+struct FfiInitializerStorageGetThenCallState {
+    init_complete_count: usize,
+    get_calls: usize,
+}
+
+unsafe extern "C" fn ffi_initializer_storage_put_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiInitializerStoragePutState) };
+    if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+        state.init_complete_count += 1;
+        unsafe {
+            *output = NativeHostResult {
+                stack_ptr: ptr::null_mut(),
+                stack_len: 0,
+                error_ptr: ptr::null_mut(),
+                error_len: 0,
+            };
+        }
+        return true;
+    }
+
+    if api == neo_riscv_abi::interop_hash("System.Storage.Put") {
+        let stack = unsafe {
+            copy_test_native_stack_items(input_stack_ptr.cast_mut(), input_stack_len)
+                .unwrap_or_default()
+        };
+        let key = stack
+            .iter()
+            .filter_map(|item| match item {
+                StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => Some(bytes.clone()),
+                _ => None,
+            })
+            .find(|bytes| bytes.ends_with(b"AuditFee") || bytes.ends_with(b"EpochDuration"))
+            .unwrap_or_default();
+        state.observed_keys.push(key);
+        unsafe {
+            *output = NativeHostResult {
+                stack_ptr: ptr::null_mut(),
+                stack_len: 0,
+                error_ptr: ptr::null_mut(),
+                error_len: 0,
+            };
+        }
+        return true;
+    }
+
+    false
+}
+
+unsafe extern "C" fn ffi_initializer_storage_get_then_call_callback(
+    user_data: *mut c_void,
+    api: u32,
+    _instruction_pointer: usize,
+    _trigger: u8,
+    _network: u32,
+    _address_version: u8,
+    _timestamp: u64,
+    _gas_left: i64,
+    _input_stack_ptr: *const neo_riscv_host::NativeStackItem,
+    _input_stack_len: usize,
+    output: *mut NativeHostResult,
+) -> bool {
+    let state = unsafe { &mut *(user_data as *mut FfiInitializerStorageGetThenCallState) };
+    let result_stack = if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+        state.init_complete_count += 1;
+        Vec::new()
+    } else if api == neo_riscv_abi::interop_hash("System.Storage.GetContext") {
+        vec![StackValue::Integer(1)]
+    } else if api == neo_riscv_abi::interop_hash("System.Storage.Get") {
+        state.get_calls += 1;
+        vec![StackValue::ByteString(vec![0x41; 20])]
+    } else {
+        return false;
+    };
+
+    let (stack_ptr, stack_len) = build_native_stack_items(&result_stack);
+    unsafe {
+        *output = NativeHostResult {
+            stack_ptr,
+            stack_len,
+            error_ptr: ptr::null_mut(),
+            error_len: 0,
+        };
+    }
+    true
+}
+
+fn build_static_prefix_storage_put_script() -> (Vec<u8>, usize, usize) {
+    fn push_data(script: &mut Vec<u8>, bytes: &[u8]) {
+        assert!(bytes.len() <= u8::MAX as usize);
+        script.push(0x0c); // PUSHDATA1
+        script.push(bytes.len() as u8);
+        script.extend_from_slice(bytes);
+    }
+
+    fn emit_storage_put_call(script: &mut Vec<u8>, key: &[u8], value: &[u8]) -> usize {
+        push_data(script, value);
+        push_data(script, key);
+        script.push(0x10); // PUSH0 storage context token for the test host.
+        let call_ip = script.len();
+        script.push(0x35); // CALL_L helper
+        script.extend_from_slice(&0i32.to_le_bytes());
+        call_ip
+    }
+
+    let mut script = vec![0x56, 0x06]; // INITSSLOT 6
+    push_data(&mut script, b"config");
+    script.extend_from_slice(&[
+        0xdb, 0x30, // CONVERT Buffer
+        0x65, // STSFLD5
+        0x40, // RET
+    ]);
+
+    let target_ip = script.len();
+    let first_call_ip = emit_storage_put_call(&mut script, b"AuditFee", &[0x80, 0xf0, 0xfa, 0x02]);
+    let second_call_ip = emit_storage_put_call(&mut script, b"EpochDuration", &[0xf0, 0x00]);
+    script.push(0x40); // RET
+
+    let helper_ip = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x02, 0x03, // INITSLOT 2 locals, 3 args
+        0x79, // LDARG1
+        0xdb, 0x30, // CONVERT Buffer
+        0x70, // STLOC0
+        0x5d, // LDSFLD5
+        0x4a, // DUP
+        0xd8, // ISNULL
+        0x26, 0x05, // JMPIFNOT +5
+        0x45, // DROP
+        0x0c, 0x00, // PUSHDATA1 empty
+        0x68, // LDLOC0
+        0x8b, // CAT
+        0x71, // STLOC1
+        0x78, // LDARG0
+        0x69, // LDLOC1
+        0x7a, // LDARG2
+        0x53, // REVERSE3
+        0x41, // SYSCALL Storage.Put
+    ]);
+    script.extend_from_slice(&neo_riscv_abi::interop_hash("System.Storage.Put").to_le_bytes());
+    script.extend_from_slice(&[
+        0x21, // NOP, matching neo-go emitted syscall padding.
+        0x40, // RET
+    ]);
+
+    for call_ip in [first_call_ip, second_call_ip] {
+        let offset = helper_ip as i32 - call_ip as i32;
+        script[call_ip + 1..call_ip + 5].copy_from_slice(&offset.to_le_bytes());
+    }
+
+    (script, target_ip, 0)
+}
+
+fn build_storage_get_then_call_l_script() -> (Vec<u8>, usize, usize) {
+    let get_context = neo_riscv_abi::interop_hash("System.Storage.GetContext");
+    let get = neo_riscv_abi::interop_hash("System.Storage.Get");
+
+    let target_ip = 0;
+    let mut script = vec![0x57, 0x01, 0x02]; // target: INITSLOT 1 local, 2 args
+    script.push(0x41); // SYSCALL Storage.GetContext
+    script.extend_from_slice(&get_context.to_le_bytes());
+    script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x88, // NEWBUFFER
+        0x4a, // DUP, keep an alias to the buffer after SETITEM consumes one copy
+        0x10, // PUSH0
+        0x11, // PUSH1
+        0xd0, // SETITEM
+        0x45, // DROP retained buffer alias
+        0x79, // LDARG1 storage key
+        0x41, // SYSCALL Storage.Get
+    ]);
+    script.extend_from_slice(&get.to_le_bytes());
+    script.extend_from_slice(&[
+        0x70, // STLOC0
+        0x68, // LDLOC0
+        0x0b, // PUSHNULL
+        0x97, // EQUAL
+        0xaa, // NOT
+        0x39, // ASSERT
+        0x78, // LDARG0
+    ]);
+    let call_ip = script.len();
+    script.push(0x35); // CALL_L helper
+    script.extend_from_slice(&0i32.to_le_bytes());
+    script.push(0x40); // RET
+
+    let helper_ip = script.len();
+    script.extend_from_slice(&[
+        0x57, 0x00, 0x01, // INITSLOT 0 locals, 1 arg
+        0x78, // LDARG0
+        0x40, // RET
+    ]);
+
+    let initializer_ip = script.len();
+    script.extend_from_slice(&[
+        0x56, 0x01, // INITSSLOT 1
+        0x11, // PUSH1
+        0x60, // STSFLD0
+        0x40, // RET
+    ]);
+
+    let offset = helper_ip as i32 - call_ip as i32;
+    script[call_ip + 1..call_ip + 5].copy_from_slice(&offset.to_le_bytes());
+
+    (script, target_ip, initializer_ip)
+}
+
+#[test]
+fn initializer_static_field_prefix_survives_repeated_storage_puts_in_ffi_host_runtime() {
+    let (script, target_ip, initializer_ip) = build_static_prefix_storage_put_script();
+    let mut state = FfiInitializerStoragePutState {
+        init_complete_count: 0,
+        observed_keys: Vec::new(),
+    };
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+    let initial_stack = vec![StackValue::ByteString(vec![0x80, 0xf0, 0xfa, 0x02])];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            target_ip,
+            initializer_ip,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut state) as *mut FfiInitializerStoragePutState as *mut c_void,
+            ffi_initializer_storage_put_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    assert_eq!(state.init_complete_count, 1);
+    assert_eq!(
+        state.observed_keys,
+        vec![b"configAuditFee".to_vec(), b"configEpochDuration".to_vec()]
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn initializer_storage_get_then_call_l_survives_alias_mutation_in_ffi_host_runtime() {
+    let (script, target_ip, initializer_ip) = build_storage_get_then_call_l_script();
+    let recipient = vec![0x33; 20];
+    let initial_stack = vec![
+        StackValue::ByteString(b"vote".to_vec()),
+        StackValue::ByteString(recipient.clone()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut state = FfiInitializerStorageGetThenCallState {
+        init_complete_count: 0,
+        get_calls: 0,
+    };
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            target_ip,
+            initializer_ip,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut state) as *mut FfiInitializerStorageGetThenCallState as *mut c_void,
+            ffi_initializer_storage_get_then_call_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi result stack should decode");
+    assert_eq!(stack, vec![StackValue::ByteString(recipient)]);
+    assert_eq!(state.init_complete_count, 1);
+    assert_eq!(state.get_calls, 1);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn initializer_entrypoint_preserves_target_method_arguments_in_ffi_host_runtime() {
+    let script = [
+        0x57, 0x00, 0x02, // target: INITSLOT 0 locals, 2 args
+        0x78, // LDARG0
+        0x79, // LDARG1
+        0x40, // RET
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x11, // PUSH1
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let witness = vec![0x41; 20];
+    let initial_stack = vec![
+        StackValue::Integer(22),
+        StackValue::ByteString(witness.clone()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut init_complete_count = 0usize;
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            0,
+            6,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut init_complete_count) as *mut usize as *mut c_void,
+            ffi_initializer_only_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi result stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::ByteString(witness), StackValue::Integer(22)]
+    );
+    assert_eq!(init_complete_count, 1);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn initializer_entrypoint_preserves_ldarg0_for_checkwitness_in_ffi_host_runtime() {
+    let check_witness = neo_riscv_abi::interop_hash("System.Runtime.CheckWitness");
+    let mut script = vec![
+        0x57, 0x08, 0x0a, // target: INITSLOT 8 locals, 10 args
+        0x0c, 0x09, // PUSHDATA1 "Forbidden"
+    ];
+    script.extend_from_slice(b"Forbidden");
+    script.extend_from_slice(&[
+        0x78, // LDARG0
+        0x41, // SYSCALL Runtime.CheckWitness
+    ]);
+    script.extend_from_slice(&check_witness.to_le_bytes());
+    script.extend_from_slice(&[
+        0x40, // RET
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x11, // PUSH1
+        0x60, // STSFLD0
+        0x40, // RET
+    ]);
+    let initializer_ip = script.len() - 5;
+    let sender = vec![
+        0x46, 0xf6, 0xda, 0x5a, 0x7a, 0x14, 0x99, 0x50, 0x50, 0xae, 0xee, 0xe8, 0x8f, 0x32, 0x0a,
+        0x2c, 0xb3, 0x93, 0xcf, 0x40,
+    ];
+    let initial_stack = vec![
+        StackValue::ByteString(b"nspcc_logo".to_vec()),
+        StackValue::ByteString(vec![0x4e; 662]),
+        StackValue::ByteString(b"https://twitter.com/neospcc".to_vec()),
+        StackValue::ByteString(b"None".to_vec()),
+        StackValue::ByteString(b"https://github.com/nspcc-dev".to_vec()),
+        StackValue::ByteString(b"org@nspcc.ru".to_vec()),
+        StackValue::ByteString(b"https://nspcc.ru/en".to_vec()),
+        StackValue::ByteString(b"Europe".to_vec()),
+        StackValue::ByteString(b"NeoSPCC".to_vec()),
+        StackValue::ByteString(sender.clone()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut state = FfiInitializerWitnessState {
+        init_complete_count: 0,
+        observed_checkwitness: None,
+    };
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            0,
+            initializer_ip,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut state) as *mut FfiInitializerWitnessState as *mut c_void,
+            ffi_initializer_witness_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    assert_eq!(state.init_complete_count, 1);
+    assert_eq!(
+        state.observed_checkwitness,
+        Some(vec![StackValue::ByteString(sender)])
+    );
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn initializer_entrypoint_preserves_large_ten_argument_stack_in_ffi_host_runtime() {
+    let script = [
+        0x57, 0x00, 0x0a, // target: INITSLOT 0 locals, 10 args
+        0x78, // LDARG0
+        0x7f, 0x09, // LDARG9
+        0x40, // RET
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x11, // PUSH1
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let sender = vec![
+        0x46, 0xf6, 0xda, 0x5a, 0x7a, 0x14, 0x99, 0x50, 0x50, 0xae, 0xee, 0xe8, 0x8f, 0x32, 0x0a,
+        0x2c, 0xb3, 0x93, 0xcf, 0x40,
+    ];
+    let logo = b"nspcc_logo".to_vec();
+    let initial_stack = vec![
+        StackValue::ByteString(logo.clone()),
+        StackValue::ByteString(vec![0x4e; 662]),
+        StackValue::ByteString(b"https://twitter.com/neospcc".to_vec()),
+        StackValue::ByteString(b"None".to_vec()),
+        StackValue::ByteString(b"https://github.com/nspcc-dev".to_vec()),
+        StackValue::ByteString(b"org@nspcc.ru".to_vec()),
+        StackValue::ByteString(b"https://nspcc.ru/en".to_vec()),
+        StackValue::ByteString(b"Europe".to_vec()),
+        StackValue::ByteString(b"NeoSPCC".to_vec()),
+        StackValue::ByteString(sender.clone()),
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut init_complete_count = 0usize;
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer(
+            script.as_ptr(),
+            script.len(),
+            0,
+            7,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut init_complete_count) as *mut usize as *mut c_void,
+            ffi_initializer_only_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi result stack should decode");
+    assert_eq!(
+        stack,
+        vec![StackValue::ByteString(sender), StackValue::ByteString(logo)]
+    );
+    assert_eq!(init_complete_count, 1);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
+}
+
+#[test]
+fn initializer_entrypoint_preserves_nested_array_arguments_in_ffi_host_runtime() {
+    let mut script = vec![
+        0x57, 0x02, 0x05, // target: INITSLOT 2 locals, 5 args
+        0x79, // LDARG1
+        0xd9, 0x40, // ISTYPE Array
+        0x39, // ASSERT
+        0x79, // LDARG1
+        0x40, // RET
+    ];
+    let initializer_ip = script.len();
+    script.extend_from_slice(&[
+        0x56, 0x12, // initializer: INITSSLOT 18
+        0x0c, 0x03, b'A', b'C', b'C', 0x60, // static 0
+        0x0c, 0x05, b'G', b'H', b'O', b'S', b'T', 0x61, // static 1
+        0x10, 0x62, // static 2
+        0x0c, 0x08, b'd', b'e', b'p', b'l', b'o', b'y', b'e', b'd', 0x63, // static 3
+        0x0c, 0x06, b'p', b'a', b'u', b's', b'e', b'd', 0x64, // static 4
+        0x40, // RET
+    ]);
+
+    let royalty = br#"[{"address":"NbNNVPCHPrbxTQrv8aYAQ1WodyKF1AJKto","value":"10"}]"#.to_vec();
+    let metadata = br#"{"name":"Mushroomy","description":"Simple mushroom at peace in the forest.","image":"ipfs://Qma6dpRndfkaQXHTDYK1isebGknSn57pYxueobRK6G2goc","tokenURI":"","attributes":[{"type":"Stinkybadass","value":"Stinkybadass","display":""}],"properties":{"has_locked":false,"creator":"NbNNVPCHPrbxTQrv8aYAQ1WodyKF1AJKto","royalties":1000,"type":1}}"#.to_vec();
+    let royalties = StackValue::Array(vec![StackValue::ByteString(royalty); 10]);
+    let locked = StackValue::Array(vec![StackValue::ByteString(Vec::new()); 10]);
+    let metadata_items = StackValue::Array(vec![StackValue::ByteString(metadata); 10]);
+    let owner = StackValue::ByteString(vec![
+        0xa9, 0x88, 0x27, 0xa7, 0x6b, 0xfe, 0x6e, 0xe6, 0x45, 0x54, 0x6d, 0xde, 0x37, 0x8b, 0x83,
+        0x7e, 0x0b, 0x6b, 0x4f, 0x78,
+    ]);
+    let initial_stack = vec![
+        StackValue::ByteString(Vec::new()),
+        royalties.clone(),
+        locked,
+        metadata_items.clone(),
+        owner,
+    ];
+    let (initial_stack_ptr, initial_stack_len) = build_native_stack_items(&initial_stack);
+    let mut init_complete_count = 0usize;
+    let mut output = NativeExecutionResult {
+        fee_consumed_pico: 0,
+        state: 0,
+        stack_ptr: ptr::null_mut(),
+        stack_len: 0,
+        error_ptr: ptr::null_mut(),
+        error_len: 0,
+    };
+
+    let invoked = unsafe {
+        neo_riscv_execute_script_with_host_and_initializer_and_result_limit(
+            script.as_ptr(),
+            script.len(),
+            0,
+            initializer_ip,
+            1,
+            0x40,
+            0,
+            53,
+            0,
+            100_000_000,
+            0,
+            initial_stack_ptr,
+            initial_stack_len,
+            (&mut init_complete_count) as *mut usize as *mut c_void,
+            ffi_initializer_only_callback,
+            ffi_mixed_free_callback,
+            &mut output,
+        )
+    };
+
+    unsafe {
+        free_native_stack_items(initial_stack_ptr, initial_stack_len);
+    }
+
+    assert!(invoked, "ffi execute with initializer should be invoked");
+    assert_eq!(output.state, 0, "ffi execution should halt");
+    let stack = unsafe { copy_test_native_stack_items(output.stack_ptr, output.stack_len) }
+        .expect("ffi result stack should decode");
+    assert_eq!(stack, vec![metadata_items]);
+    assert_eq!(init_complete_count, 1);
+
+    unsafe {
+        neo_riscv_free_execution_result(&mut output);
+    }
 }
 
 #[test]
@@ -6559,6 +8529,90 @@ fn test_try_catch_throw_simple() {
 }
 
 #[test]
+fn try_catch_catches_pickitem_type_error_in_host_runtime() {
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // INITSLOT 1 local, 0 args
+        0x3b, 0x08, 0x00, // TRY catch=+8, finally=0
+        0x08, // PUSHT (non-indexable item)
+        0x10, // PUSH0 (index)
+        0xce, // PICKITEM -> catchable type error
+        0x3d, 0x06, // ENDTRY +6 -> RET
+        0x70, // STLOC0 (catch stores thrown message)
+        0x11, // PUSH1
+        0x3d, 0x02, // ENDTRY +2 -> RET
+        0x40, // RET
+    ];
+
+    let result = execute_script_with_host(
+        script,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, stack| Err(format!("unexpected callback 0x{api:08x}: {stack:?}")),
+    )
+    .expect("host runtime should catch PICKITEM type errors inside TRY");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn initializer_then_target_catches_pickitem_type_error_in_host_runtime() {
+    let script: &[u8] = &[
+        0x57, 0x01, 0x00, // target: INITSLOT 1 local, 0 args
+        0x3b, 0x08, 0x00, // TRY catch=+8, finally=0
+        0x08, // PUSHT (non-indexable item)
+        0x10, // PUSH0 (index)
+        0xce, // PICKITEM -> catchable type error
+        0x3d, 0x06, // ENDTRY +6 -> RET
+        0x70, // STLOC0 (catch stores thrown message)
+        0x11, // PUSH1
+        0x3d, 0x02, // ENDTRY +2 -> RET
+        0x40, // RET
+        0x56, 0x01, // initializer: INITSSLOT 1
+        0x10, // PUSH0
+        0x60, // STSFLD0
+        0x40, // RET
+    ];
+    let mut init_complete_count = 0usize;
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer(
+        script,
+        Vec::new(),
+        0,
+        12,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _ctx, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                init_complete_count += 1;
+                return Ok(HostCallbackResult {
+                    stack: stack.to_vec(),
+                });
+            }
+
+            Err(format!("unexpected callback 0x{api:08x}: {stack:?}"))
+        },
+    )
+    .expect("target method should catch PICKITEM type errors after _initialize co-execution");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+    assert_eq!(init_complete_count, 1);
+}
+
+#[test]
 fn gas_exhaustion_through_polkavm() {
     // Run a script with very low gas — should FAULT or return error mentioning gas/charge
     let result = execute_script_with_context(
@@ -6700,6 +8754,25 @@ fn biginteger_through_host_callback() {
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::BigInteger(big_value)]);
+}
+
+#[test]
+fn pow_accepts_big_integer_result_through_host_runtime() {
+    let result = execute_script(&[
+        0x12, // PUSH2
+        0x00, 0x40, // PUSHINT8 64
+        0xa3, // POW -> 2^64
+        0x40, // RET
+    ])
+    .expect("host runtime should support POW results wider than i64");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(
+        result.stack,
+        vec![StackValue::BigInteger(vec![
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ])]
+    );
 }
 
 #[test]

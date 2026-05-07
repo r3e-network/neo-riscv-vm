@@ -415,7 +415,6 @@ proptest! {
 // =============================================================================
 
 #[test]
-#[ignore = "requires MAX_STACK_SIZE check in guest interpreter"]
 fn newarray_at_max_stack_size() {
     // PUSHINT16 2048, NEWARRAY → should succeed (MAX_STACK_SIZE)
     let mut script = vec![0x01]; // PUSHINT16
@@ -427,7 +426,6 @@ fn newarray_at_max_stack_size() {
 }
 
 #[test]
-#[ignore = "requires MAX_STACK_SIZE check in guest interpreter"]
 fn newarray_exceeds_max_stack_size() {
     // PUSHINT16 2049, NEWARRAY → should FAULT
     let mut script = vec![0x01]; // PUSHINT16
@@ -438,7 +436,17 @@ fn newarray_exceeds_max_stack_size() {
 }
 
 #[test]
-#[ignore = "requires MAX_STACK_SIZE check in guest interpreter"]
+fn newarray_t_exceeds_max_stack_size() {
+    // PUSHINT16 2049, NEWARRAY_T Integer → should FAULT
+    let mut script = vec![0x01]; // PUSHINT16
+    script.extend_from_slice(&2049u16.to_le_bytes());
+    script.push(0xc4); // NEWARRAY_T
+    script.push(0x21); // Integer
+    let result = execute_script(&script);
+    assert!(result.is_err(), "NEWARRAY_T > MAX_STACK_SIZE should FAULT");
+}
+
+#[test]
 fn newstruct_exceeds_max_stack_size() {
     // PUSHINT16 2049, NEWSTRUCT → should FAULT
     let mut script = vec![0x01];

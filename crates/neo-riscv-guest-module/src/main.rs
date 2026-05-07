@@ -22,8 +22,10 @@ use neo_riscv_abi::{callback_codec, fast_codec, ExecutionResult, StackValue};
 use neo_riscv_guest::SyscallProvider;
 
 // Keep enough heap headroom for 1MB MaxItemSize allocations alongside
-// interpreter state and callback decoding buffers.
-const ARENA_SIZE: usize = 8 * 1024 * 1024;
+// interpreter state and callback decoding buffers. Mainnet NeoVM compatibility
+// needs this above 16 MiB for large historical stack-heavy calls such as
+// GhostMarket.NFT.fixRoyalties at block 470449.
+const ARENA_SIZE: usize = 32 * 1024 * 1024;
 const SCRATCH_BUF_SIZE: usize = 2 * 1024 * 1024;
 const PANIC_BUF_SIZE: usize = 256;
 const TRACE_HEAD_SIZE: usize = 32;
@@ -350,6 +352,11 @@ impl SyscallProvider for PolkaVmSyscallProvider {
         }
         Ok(())
     }
+
+    fn initializer_complete(&mut self, ip: usize) -> Result<(), alloc::string::String> {
+        let mut stack = Vec::new();
+        self.syscall(neo_riscv_guest::INITIALIZER_COMPLETE_MARKER, ip, &mut stack)
+    }
 }
 
 static RESULT_BYTES: StaticVec = StaticVec::new();
@@ -419,6 +426,30 @@ pub extern "C" fn get_trace_syscall_ip() -> u32 {
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
+pub extern "C" fn get_last_interpreter_ip() -> u32 {
+    neo_riscv_guest::last_interpreter_ip()
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn get_last_result_stage() -> u32 {
+    neo_riscv_guest::last_result_stage()
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn get_last_result_stack_len() -> u32 {
+    neo_riscv_guest::last_result_stack_len()
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn get_last_result_limit() -> u32 {
+    neo_riscv_guest::last_result_limit()
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_req_len() -> u32 {
     unsafe { TRACE_REQ_LEN }
 }
@@ -462,7 +493,96 @@ pub extern "C" fn execute(
     stack_len: u32,
     initial_ip: u32,
 ) {
-    let result = execute_inner(script_ptr, script_len, stack_ptr, stack_len, initial_ip);
+    let result = execute_inner(
+        script_ptr,
+        script_len,
+        stack_ptr,
+        stack_len,
+        initial_ip,
+        None,
+        u32::MAX,
+    );
+    store_result(result, u32::MAX);
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn execute_with_result_limit(
+    script_ptr: u32,
+    script_len: u32,
+    stack_ptr: u32,
+    stack_len: u32,
+    initial_ip: u32,
+    result_limit: u32,
+) {
+    let result = execute_inner(
+        script_ptr,
+        script_len,
+        stack_ptr,
+        stack_len,
+        initial_ip,
+        None,
+        result_limit,
+    );
+    store_result(result, result_limit);
+}
+
+static mut NEXT_RESULT_LIMIT: u32 = u32::MAX;
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn set_result_limit(result_limit: u32) {
+    unsafe {
+        NEXT_RESULT_LIMIT = result_limit;
+    }
+}
+
+fn take_result_limit() -> u32 {
+    unsafe {
+        let result_limit = NEXT_RESULT_LIMIT;
+        NEXT_RESULT_LIMIT = u32::MAX;
+        result_limit
+    }
+}
+
+#[no_mangle]
+#[polkavm_derive::polkavm_export]
+pub extern "C" fn execute_with_initializer(
+    script_ptr: u32,
+    script_len: u32,
+    stack_ptr: u32,
+    stack_len: u32,
+    initial_ip: u32,
+    initializer_ip: u32,
+) {
+    let result_limit = take_result_limit();
+    let result = execute_inner(
+        script_ptr,
+        script_len,
+        stack_ptr,
+        stack_len,
+        initial_ip,
+        Some(initializer_ip),
+        result_limit,
+    );
+    store_result(result, result_limit);
+}
+
+fn store_result(mut result: Result<ExecutionResult, alloc::string::String>, result_limit: u32) {
+    if let Ok(ref mut execution_result) = result {
+        if matches!(execution_result.state, neo_riscv_abi::VmState::Halt)
+            && result_limit != u32::MAX
+        {
+            let keep = result_limit as usize;
+            if keep == 0 {
+                execution_result.stack.clear();
+            } else if execution_result.stack.len() > keep {
+                let start = execution_result.stack.len() - keep;
+                execution_result.stack.drain(0..start);
+            }
+        }
+    }
+
     unsafe {
         // Serialize result; if serialization fails (e.g., allocator exhaustion),
         // store a serialized error so the host gets a meaningful fault message.
@@ -481,6 +601,8 @@ fn execute_inner(
     stack_ptr: u32,
     stack_len: u32,
     initial_ip: u32,
+    initializer_ip: Option<u32>,
+    result_limit: u32,
 ) -> Result<ExecutionResult, alloc::string::String> {
     unsafe {
         ALLOCATOR.reset();
@@ -507,10 +629,52 @@ fn execute_inner(
     };
 
     let mut provider = PolkaVmSyscallProvider;
-    neo_riscv_guest::interpret_with_stack_and_syscalls_at(
-        script,
-        initial_stack,
-        initial_ip as usize,
-        &mut provider,
-    )
+    if let Some(initializer_ip) = initializer_ip {
+        if result_limit == u32::MAX {
+            neo_riscv_guest::interpret_with_stack_and_syscalls_at_with_initializer(
+                script,
+                initial_stack,
+                initial_ip as usize,
+                initializer_ip as usize,
+                &mut provider,
+            )
+        } else {
+            neo_riscv_guest::interpret_with_stack_and_syscalls_at_with_initializer_and_result_limit(
+                script,
+                initial_stack,
+                initial_ip as usize,
+                initializer_ip as usize,
+                result_limit as usize,
+                &mut provider,
+            )
+        }
+    } else if result_limit == u32::MAX {
+        neo_riscv_guest::interpret_with_stack_and_syscalls_at(
+            script,
+            initial_stack,
+            initial_ip as usize,
+            &mut provider,
+        )
+    } else {
+        neo_riscv_guest::interpret_with_stack_and_syscalls_at_with_result_limit(
+            script,
+            initial_stack,
+            initial_ip as usize,
+            result_limit as usize,
+            &mut provider,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ARENA_SIZE;
+
+    #[test]
+    fn mainnet_470449_requires_heap_headroom_above_16_mib() {
+        assert!(
+            ARENA_SIZE >= 32 * 1024 * 1024,
+            "mainnet block 470449 GhostMarket.NFT.fixRoyalties exhausted a 16 MiB guest arena"
+        );
+    }
 }

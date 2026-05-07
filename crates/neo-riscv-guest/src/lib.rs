@@ -10,8 +10,91 @@ use crate::helpers::*;
 
 use crate::opcodes::*;
 use crate::runtime_types::{
-    find_affected_indices, propagate_update, to_abi_stack, CompoundIds, StackValue,
+    compound_id, find_affected_indices, propagate_aliases_from_sources, propagate_update,
+    to_abi_stack, CompoundIds, StackValue,
 };
+use core::sync::atomic::{AtomicU32, Ordering};
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
+
+static LAST_INTERPRETER_IP: AtomicU32 = AtomicU32::new(u32::MAX);
+static LAST_RESULT_STAGE: AtomicU32 = AtomicU32::new(0);
+static LAST_RESULT_STACK_LEN: AtomicU32 = AtomicU32::new(0);
+static LAST_RESULT_LIMIT: AtomicU32 = AtomicU32::new(u32::MAX);
+
+#[inline]
+fn record_interpreter_ip(ip: usize) {
+    let value = if ip <= u32::MAX as usize {
+        ip as u32
+    } else {
+        u32::MAX
+    };
+    LAST_INTERPRETER_IP.store(value, Ordering::Relaxed);
+}
+
+pub fn last_interpreter_ip() -> u32 {
+    LAST_INTERPRETER_IP.load(Ordering::Relaxed)
+}
+
+pub fn last_result_stage() -> u32 {
+    LAST_RESULT_STAGE.load(Ordering::Relaxed)
+}
+
+pub fn last_result_stack_len() -> u32 {
+    LAST_RESULT_STACK_LEN.load(Ordering::Relaxed)
+}
+
+pub fn last_result_limit() -> u32 {
+    LAST_RESULT_LIMIT.load(Ordering::Relaxed)
+}
+
+fn propagate_active_aliases_into_saved_frame(
+    saved_locals: &mut [StackValue],
+    saved_args: &mut [StackValue],
+    stack: &[StackValue],
+    locals: &[StackValue],
+    args: &[StackValue],
+    static_fields: &[StackValue],
+    alt_stack: &[StackValue],
+    consumed_mutations: &[StackValue],
+) {
+    for targets in [saved_locals, saved_args] {
+        propagate_aliases_from_sources(targets, stack);
+        propagate_aliases_from_sources(targets, locals);
+        propagate_aliases_from_sources(targets, args);
+        propagate_aliases_from_sources(targets, static_fields);
+        propagate_aliases_from_sources(targets, alt_stack);
+        propagate_aliases_from_sources(targets, consumed_mutations);
+    }
+}
+
+fn remember_consumed_mutation(consumed_mutations: &mut Vec<StackValue>, updated: &StackValue) {
+    let Some(id) = compound_id(updated) else {
+        return;
+    };
+
+    if let Some(existing) = consumed_mutations
+        .iter_mut()
+        .find(|value| compound_id(value) == Some(id))
+    {
+        *existing = updated.clone();
+    } else {
+        consumed_mutations.push(updated.clone());
+    }
+}
+
+#[inline]
+fn reset_consumed_mutations(consumed_mutations: &mut Vec<StackValue>) {
+    if cfg!(target_arch = "riscv32") {
+        // Avoid walking and dropping potentially large alias-tracking values on
+        // the PolkaVM/riscv32 path. The guest allocator is reset per execution.
+        unsafe {
+            core::ptr::write(consumed_mutations, Vec::new());
+        }
+    } else {
+        consumed_mutations.clear();
+    }
+}
 
 #[derive(Debug, Clone)]
 struct TryFrame {
@@ -25,6 +108,7 @@ struct TryFrame {
 
 /// Fixed-capacity stack for TryFrames — avoids heap allocation to prevent
 /// PolkaVM bump allocator corruption during host_call round-trips.
+const MAX_STACK_SIZE: usize = 2048;
 const MAX_TRY_NESTING: usize = 16;
 const MAX_CALL_DEPTH: usize = 64;
 
@@ -74,6 +158,37 @@ impl CallStack {
         self.len
     }
 
+    #[cfg(target_arch = "riscv32")]
+    fn push_frame_refs(
+        &mut self,
+        return_ip: usize,
+        locals: &[StackValue],
+        args: &[StackValue],
+        initialized: bool,
+    ) -> Result<(), String> {
+        if self.len >= MAX_CALL_DEPTH {
+            return Err("call depth exceeds maximum".to_string());
+        }
+
+        let retained_offset = self.retained_len;
+        let buf = unsafe { RETAINED_CALL_STACK_BUF.as_mut_slice() };
+        let args_len = encode_retained_prefix_to_slice(args, &mut buf[retained_offset..])?;
+        let locals_offset = retained_offset + args_len;
+        let locals_len = encode_retained_prefix_to_slice(locals, &mut buf[locals_offset..])?;
+        self.retained_len = locals_offset + locals_len;
+
+        self.frames[self.len] = core::mem::MaybeUninit::new(CallFrame {
+            return_ip,
+            initialized,
+            retained_offset,
+            args_len,
+            locals_len,
+        });
+        self.len += 1;
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "riscv32"))]
     fn push_frame(
         &mut self,
         return_ip: usize,
@@ -141,7 +256,10 @@ impl CallStack {
             )?;
 
             let mut locals = Vec::new();
-            decode_retained_prefix_into(&bytes[locals_offset..end], &mut locals)?;
+            decode_retained_prefix_into(
+                &bytes[locals_offset..locals_offset + frame.locals_len],
+                &mut locals,
+            )?;
 
             self.retained_len = frame.retained_offset;
             Ok(Some((frame.return_ip, locals, args, frame.initialized)))
@@ -249,6 +367,10 @@ pub trait SyscallProvider {
         stack: &mut Vec<AbiStackValue>,
     ) -> Result<(), String>;
 
+    fn initializer_complete(&mut self, _ip: usize) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Handle CALLT opcode. The default encodes the token with a distinctive
     /// marker so the host can distinguish CALLT from regular SYSCALL.
     fn callt(
@@ -268,6 +390,7 @@ pub trait SyscallProvider {
 /// This pattern is checked via (api >> 16) == 0x4354.
 pub const CALLT_MARKER: u32 = 0x4354_0000;
 pub const CALLT_MARKER_HI: u16 = 0x4354;
+pub const INITIALIZER_COMPLETE_MARKER: u32 = 0x494e_4954;
 
 pub fn interpret_with_syscalls<H: SyscallProvider>(
     script: &[u8],
@@ -290,15 +413,106 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
     initial_ip: usize,
     host: &mut H,
 ) -> Result<ExecutionResult, String> {
+    interpret_with_stack_and_syscalls_at_internal(
+        script,
+        initial_stack,
+        initial_ip,
+        None,
+        None,
+        host,
+    )
+}
+
+pub fn interpret_with_stack_and_syscalls_at_with_result_limit<H: SyscallProvider>(
+    script: &[u8],
+    initial_stack: Vec<AbiStackValue>,
+    initial_ip: usize,
+    result_stack_limit: usize,
+    host: &mut H,
+) -> Result<ExecutionResult, String> {
+    interpret_with_stack_and_syscalls_at_internal(
+        script,
+        initial_stack,
+        initial_ip,
+        None,
+        Some(result_stack_limit),
+        host,
+    )
+}
+
+pub fn interpret_with_stack_and_syscalls_at_with_initializer<H: SyscallProvider>(
+    script: &[u8],
+    initial_stack: Vec<AbiStackValue>,
+    initial_ip: usize,
+    initializer_ip: usize,
+    host: &mut H,
+) -> Result<ExecutionResult, String> {
+    interpret_with_stack_and_syscalls_at_internal(
+        script,
+        initial_stack,
+        initial_ip,
+        Some(initializer_ip),
+        None,
+        host,
+    )
+}
+
+pub fn interpret_with_stack_and_syscalls_at_with_initializer_and_result_limit<
+    H: SyscallProvider,
+>(
+    script: &[u8],
+    initial_stack: Vec<AbiStackValue>,
+    initial_ip: usize,
+    initializer_ip: usize,
+    result_stack_limit: usize,
+    host: &mut H,
+) -> Result<ExecutionResult, String> {
+    interpret_with_stack_and_syscalls_at_internal(
+        script,
+        initial_stack,
+        initial_ip,
+        Some(initializer_ip),
+        Some(result_stack_limit),
+        host,
+    )
+}
+
+fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
+    script: &[u8],
+    initial_stack: Vec<AbiStackValue>,
+    initial_ip: usize,
+    initializer_ip: Option<usize>,
+    result_stack_limit: Option<usize>,
+    host: &mut H,
+) -> Result<ExecutionResult, String> {
+    LAST_INTERPRETER_IP.store(u32::MAX, Ordering::Relaxed);
+    LAST_RESULT_STAGE.store(0, Ordering::Relaxed);
+    LAST_RESULT_STACK_LEN.store(0, Ordering::Relaxed);
+    LAST_RESULT_LIMIT.store(u32::MAX, Ordering::Relaxed);
+
     if initial_ip > script.len() {
         return Err("initial instruction pointer out of bounds".to_string());
     }
+    if initializer_ip.is_some_and(|ip| ip > script.len()) {
+        return Err("initializer instruction pointer out of bounds".to_string());
+    }
     let mut ids = CompoundIds::default();
-    let mut stack = initial_stack
+    let mut method_initial_stack = initial_stack
         .into_iter()
         .map(|item| ids.import_abi(item))
         .collect::<Vec<_>>();
-    let mut ip = initial_ip;
+    let mut running_initializer = initializer_ip.is_some();
+    let retained_initializer_method_stack_len = if running_initializer {
+        retain_initializer_method_stack(&method_initial_stack)?
+    } else {
+        None
+    };
+    let mut stack = if running_initializer {
+        Vec::new()
+    } else {
+        core::mem::take(&mut method_initial_stack)
+    };
+    let mut ip = initializer_ip.unwrap_or(initial_ip);
     let mut locals: Vec<StackValue> = Vec::with_capacity(16);
     let mut args: Vec<StackValue> = Vec::with_capacity(16);
     let mut static_fields: Vec<StackValue> = Vec::with_capacity(16);
@@ -307,6 +521,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
     let mut alt_stack: Vec<StackValue> = Vec::with_capacity(16);
     let mut try_frames = TryStack::new();
     let mut call_stack = CallStack::new();
+    let mut consumed_mutations: Vec<StackValue> = Vec::with_capacity(16);
     let mut pending_error: Option<String> = None;
     let mut previous_opcode_was_callt = false;
 
@@ -319,11 +534,23 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     .map(|frame| frame.call_depth)
                     .unwrap_or(call_stack.len());
                 while call_stack.len() > frame_call_depth {
-                    if let Some((_, saved_locals, saved_args, saved_init)) =
+                    if let Some((_, mut saved_locals, mut saved_args, saved_init)) =
                         call_stack.pop_and_restore()?
                     {
+                        let current_mutations = core::mem::take(&mut consumed_mutations);
+                        propagate_active_aliases_into_saved_frame(
+                            &mut saved_locals,
+                            &mut saved_args,
+                            &stack,
+                            &locals,
+                            &args,
+                            &static_fields,
+                            &alt_stack,
+                            &current_mutations,
+                        );
                         locals = saved_locals;
                         args = saved_args;
+                        reset_consumed_mutations(&mut consumed_mutations);
                         slots_initialized = saved_init;
                     }
                 }
@@ -360,7 +587,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         }
 
         // Stack overflow check: NeoVM faults when stack exceeds 2048 items.
-        if stack.len() > 2048 {
+        if stack.len() > MAX_STACK_SIZE {
             return Err("stack overflow".to_string());
         }
 
@@ -369,6 +596,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         }
 
         let opcode = script[ip];
+        record_interpreter_ip(ip);
         host.on_instruction(opcode)?;
         let callt_result_pending_store = previous_opcode_was_callt;
         previous_opcode_was_callt = false;
@@ -641,6 +869,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     &mut locals,
                     &mut static_fields,
                     &mut alt_stack,
+                    &mut consumed_mutations,
                     &mut ids,
                 ) {
                     if try_frames.is_empty() {
@@ -666,6 +895,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     &mut locals,
                     &mut static_fields,
                     &mut alt_stack,
+                    &mut consumed_mutations,
                     &mut ids,
                 ) {
                     if try_frames.is_empty() {
@@ -731,8 +961,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if slots_initialized {
                     return Err("slots already initialized".to_string());
                 }
-                // NeoVM keeps arguments and locals in separate slot arrays.
-                let new_locals = vec![StackValue::Null; local_count];
+                // NeoVM keeps arguments and locals in separate slot arrays. Arguments
+                // are consumed from the evaluation stack before local slots are created.
                 let new_args = if cfg!(target_arch = "riscv32") && arg_count > 0 {
                     let buf = unsafe { RETAINED_ARGS_BUF.as_mut_slice() };
                     ensure_retained_capacity(buf, 0, 4)?;
@@ -758,6 +988,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     }
                     restored
                 };
+                let new_locals = vec![StackValue::Null; local_count];
                 args = new_args;
                 locals = new_locals;
                 slots_initialized = true;
@@ -927,7 +1158,8 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if count > bytes.len() {
                     return Err("count out of range for LEFT".to_string());
                 }
-                stack.push(StackValue::ByteString(bytes[..count].to_vec()));
+                // NeoVM splice operations materialize a mutable Buffer result.
+                stack.push(ids.buffer(bytes[..count].to_vec()));
             }
             NEWBUFFER => {
                 let count = pop_integer(&mut stack)?;
@@ -998,25 +1230,25 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Boolean(!vm_equal(&left, &right)));
             }
             LT => {
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 stack.push(StackValue::Boolean(
                     matches!(comparison, Some((left, right)) if left < right),
                 ));
             }
             LE => {
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 stack.push(StackValue::Boolean(
                     matches!(comparison, Some((left, right)) if left <= right),
                 ));
             }
             GT => {
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 stack.push(StackValue::Boolean(
                     matches!(comparison, Some((left, right)) if left > right),
                 ));
             }
             GE => {
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 stack.push(StackValue::Boolean(
                     matches!(comparison, Some((left, right)) if left >= right),
                 ));
@@ -1025,71 +1257,69 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
             // ARITHMETIC OPERATIONS (0x99-0xbb)
             // =============================================================================
             SIGN => {
-                let value = pop_numeric_i128(&mut stack)?;
-                stack.push(StackValue::Integer(value.signum() as i64));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(StackValue::Integer(bigint_sign(&value)));
             }
             ABS => {
-                let value = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(
-                    value
-                        .checked_abs()
-                        .ok_or_else(|| "integer overflow for ABS".to_string())?,
-                ));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    bigint_abs(value),
+                    "integer overflow for ABS",
+                )?);
             }
             NEGATE => {
-                let value = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(
-                    value
-                        .checked_neg()
-                        .ok_or_else(|| "integer overflow for NEGATE".to_string())?,
-                ));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    -value,
+                    "integer overflow for NEGATE",
+                )?);
             }
             ADD => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                let sum = left
-                    .checked_add(right)
-                    .ok_or_else(|| "integer overflow for ADD".to_string())?;
-                stack.push(numeric_result_i128(sum));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    left + right,
+                    "integer overflow for ADD",
+                )?);
             }
             INC => {
-                let value = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(
-                    value
-                        .checked_add(1)
-                        .ok_or_else(|| "integer overflow for INC".to_string())?,
-                ));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    value + BigInt::from(1),
+                    "integer overflow for INC",
+                )?);
             }
             SUB => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                let difference = left
-                    .checked_sub(right)
-                    .ok_or_else(|| "integer overflow for SUB".to_string())?;
-                stack.push(numeric_result_i128(difference));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    left - right,
+                    "integer overflow for SUB",
+                )?);
             }
             POW => {
-                let exponent = pop_numeric_value(&mut stack)?;
-                if exponent < 0 {
+                let exponent = pop_numeric_bigint(&mut stack)?;
+                if exponent < BigInt::from(0) {
                     return Err("negative exponent for POW".to_string());
                 }
-                let base = pop_numeric_value(&mut stack)?;
-                let mut result: i128 = 1;
-                for _ in 0..(exponent as u64) {
-                    result = result
-                        .checked_mul(i128::from(base))
-                        .ok_or_else(|| "integer overflow for POW".to_string())?;
-                }
-                stack.push(StackValue::Integer(
-                    i64::try_from(result).map_err(|_| "integer overflow for POW".to_string())?,
-                ));
+                let exponent = exponent
+                    .to_u32()
+                    .ok_or_else(|| "exponent too large for POW".to_string())?;
+                let base = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    base.pow(exponent),
+                    "integer overflow for POW",
+                )?);
             }
             SQRT => {
-                let value = pop_numeric_value(&mut stack)?;
-                if value < 0 {
+                let value = pop_numeric_bigint(&mut stack)?;
+                if value < BigInt::from(0) {
                     return Err("negative value for SQRT".to_string());
                 }
-                stack.push(StackValue::Integer(integer_sqrt(value as u64) as i64));
+                stack.push(numeric_result_bigint(
+                    value.sqrt(),
+                    "integer overflow for SQRT",
+                )?);
             }
             MODMUL => {
                 let modulus = pop_numeric_value(&mut stack)?;
@@ -1121,7 +1351,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if shift >= 0 {
                     stack.push(value.shift_left(shift as u32)?);
                 } else {
-                    stack.push(value.shift_right((-shift) as u32));
+                    stack.push(value.shift_right((-shift) as u32)?);
                 }
             }
             SHR => {
@@ -1131,7 +1361,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     return Err("shift count out of range for SHR".to_string());
                 }
                 if shift >= 0 {
-                    stack.push(value.shift_right(shift as u32));
+                    stack.push(value.shift_right(shift as u32)?);
                 } else {
                     stack.push(value.shift_left((-shift) as u32)?);
                 }
@@ -1233,6 +1463,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if count < 0 {
                     return Err("negative count for NEWARRAY".to_string());
                 }
+                if count > MAX_STACK_SIZE as i64 {
+                    return Err("NEWARRAY count exceeds maximum stack size".to_string());
+                }
                 stack.push(ids.array(vec![StackValue::Null; count as usize]));
             }
             NEWARRAY_T => {
@@ -1242,6 +1475,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let count = pop_integer(&mut stack)?;
                 if count < 0 {
                     return Err("negative count for NEWARRAY_T".to_string());
+                }
+                if count > MAX_STACK_SIZE as i64 {
+                    return Err("NEWARRAY_T count exceeds maximum stack size".to_string());
                 }
                 let kind = script[ip + 1];
                 let default_value = match kind {
@@ -1261,6 +1497,9 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if count < 0 {
                     return Err("negative count for NEWSTRUCT".to_string());
                 }
+                if count > MAX_STACK_SIZE as i64 {
+                    return Err("NEWSTRUCT count exceeds maximum stack size".to_string());
+                }
                 stack.push(ids.r#struct(vec![StackValue::Null; count as usize]));
             }
             NEWMAP => {
@@ -1270,14 +1509,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 let item = pop_item(&mut stack)?;
                 let size = match item {
                     StackValue::ByteString(bytes) => bytes.len() as i64,
+                    StackValue::Integer(value) => encode_integer(value).len() as i64,
+                    StackValue::BigInteger(bytes) => bytes.len() as i64,
+                    StackValue::Boolean(_) => 1,
                     StackValue::Array(_, items) => items.len() as i64,
                     StackValue::Struct(_, items) => items.len() as i64,
                     StackValue::Map(_, items) => items.len() as i64,
-                    StackValue::Null => 0,
                     StackValue::Buffer(_, bytes) => bytes.len() as i64,
-                    StackValue::Integer(_)
-                    | StackValue::BigInteger(_)
-                    | StackValue::Boolean(_)
+                    StackValue::Null
                     | StackValue::Pointer(_)
                     | StackValue::Interop(_)
                     | StackValue::Iterator(_) => {
@@ -1357,6 +1596,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Array(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1364,12 +1604,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
                     StackValue::Struct(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Struct(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1377,6 +1619,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1384,69 +1627,93 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
             }
             PICKITEM => {
-                let key_or_index = pop_item(&mut stack)?;
-                let item = pop_item(&mut stack)?;
-                match item {
-                    StackValue::Map(_, items) => {
-                        // Map key can be any primitive type
-                        validate_map_key(&key_or_index)?;
-                        let value = items
-                            .iter()
-                            .find(|(candidate, _)| primitive_key_equals(candidate, &key_or_index))
-                            .map(|(_, value)| value.clone())
-                            .ok_or_else(|| "key not found for PICKITEM".to_string())?;
-                        stack.push(value);
-                    }
-                    _ => {
-                        // Array, Struct, Buffer, ByteString: key must be integer index
-                        let index = match key_or_index {
-                            StackValue::Integer(v) if v >= 0 => v as usize,
-                            StackValue::Boolean(v) => {
-                                if v {
-                                    1
-                                } else {
-                                    0
-                                }
-                            }
-                            StackValue::Null => 0,
-                            _ => {
-                                return Err(
-                                    "PICKITEM index must be a non-negative integer".to_string()
-                                )
-                            }
-                        };
+                let pick_result =
+                    (|| -> Result<(), String> {
+                        let key_or_index = pop_item(&mut stack)?;
+                        let item = pop_item(&mut stack)?;
                         match item {
-                            StackValue::Array(_, items) | StackValue::Struct(_, items) => {
+                            StackValue::Map(_, items) => {
+                                // Map key can be any primitive type
+                                validate_map_key(&key_or_index)?;
                                 let value = items
-                                    .get(index)
-                                    .cloned()
-                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
-                                if cfg!(target_arch = "riscv32") {
-                                    core::mem::forget(items);
-                                }
+                                    .iter()
+                                    .find(|(candidate, _)| {
+                                        primitive_key_equals(candidate, &key_or_index)
+                                    })
+                                    .map(|(_, value)| value.clone())
+                                    .ok_or_else(|| "key not found for PICKITEM".to_string())?;
                                 stack.push(value);
                             }
-                            StackValue::Buffer(_, bytes) => {
-                                let value = bytes
-                                    .get(index)
-                                    .copied()
-                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
-                                stack.push(StackValue::Integer(i64::from(value)));
-                            }
-                            StackValue::ByteString(bytes) => {
-                                let value = bytes
-                                    .get(index)
-                                    .copied()
-                                    .ok_or_else(|| "index out of range for PICKITEM".to_string())?;
-                                stack.push(StackValue::Integer(i64::from(value)));
-                            }
                             _ => {
-                                return Err(
-                                    "PICKITEM expects an array, map, or byte string".to_string()
-                                )
+                                // Array, Struct, Buffer, ByteString and Integer-like values:
+                                // key must be an integer index. NeoVM treats Integer as its
+                                // little-endian signed byte representation for PICKITEM; old
+                                // mainnet contracts rely on this for integer payload routing.
+                                let index = match key_or_index {
+                                    StackValue::Integer(v) if v >= 0 => v as usize,
+                                    StackValue::Boolean(v) => {
+                                        if v {
+                                            1
+                                        } else {
+                                            0
+                                        }
+                                    }
+                                    StackValue::Null => 0,
+                                    _ => {
+                                        return Err("PICKITEM index must be a non-negative integer"
+                                            .to_string())
+                                    }
+                                };
+                                match item {
+                                    StackValue::Array(_, items) | StackValue::Struct(_, items) => {
+                                        let value = items.get(index).cloned().ok_or_else(|| {
+                                            "index out of range for PICKITEM".to_string()
+                                        })?;
+                                        if cfg!(target_arch = "riscv32") {
+                                            core::mem::forget(items);
+                                        }
+                                        stack.push(value);
+                                    }
+                                    StackValue::Buffer(_, bytes) => {
+                                        let value = bytes.get(index).copied().ok_or_else(|| {
+                                            "index out of range for PICKITEM".to_string()
+                                        })?;
+                                        stack.push(StackValue::Integer(i64::from(value)));
+                                    }
+                                    StackValue::ByteString(bytes) => {
+                                        let value = bytes.get(index).copied().ok_or_else(|| {
+                                            "index out of range for PICKITEM".to_string()
+                                        })?;
+                                        stack.push(StackValue::Integer(i64::from(value)));
+                                    }
+                                    StackValue::Integer(value) => {
+                                        let bytes = encode_integer(value);
+                                        let value = bytes.get(index).copied().ok_or_else(|| {
+                                            "index out of range for PICKITEM".to_string()
+                                        })?;
+                                        stack.push(StackValue::Integer(i64::from(value)));
+                                    }
+                                    StackValue::BigInteger(bytes) => {
+                                        let value = bytes.get(index).copied().ok_or_else(|| {
+                                            "index out of range for PICKITEM".to_string()
+                                        })?;
+                                        stack.push(StackValue::Integer(i64::from(value)));
+                                    }
+                                    _ => return Err(
+                                        "PICKITEM expects an array, map, byte string, or integer"
+                                            .to_string(),
+                                    ),
+                                }
                             }
                         }
+                        Ok(())
+                    })();
+                if let Err(error) = pick_result {
+                    if try_frames.is_empty() {
+                        return Err(error);
                     }
+                    pending_error = Some(error);
+                    continue;
                 }
             }
             SETITEM => {
@@ -1473,6 +1740,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         };
                         bytes[index as usize] = byte;
                         let updated = StackValue::Buffer(id, bytes);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1480,6 +1748,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1490,6 +1759,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Array(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1497,6 +1767,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1507,6 +1778,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Struct(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1514,6 +1786,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1528,6 +1801,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             items.push((key, ids.clone_struct_for_storage(&value)));
                         }
                         let updated = StackValue::Map(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1535,6 +1809,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1552,6 +1827,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Array(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1559,6 +1835,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1569,6 +1846,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Struct(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1576,6 +1854,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1587,6 +1866,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .ok_or_else(|| "key not found for REMOVE".to_string())?;
                         items.remove(index);
                         let updated = StackValue::Map(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1594,6 +1874,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             Some(&affected),
                         );
                     }
@@ -1605,45 +1886,53 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 match item {
                     StackValue::Array(id, _) => {
                         let updated = StackValue::Array(id, Vec::new());
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
                     StackValue::Struct(id, _) => {
                         let updated = StackValue::Struct(id, Vec::new());
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
                     StackValue::Map(id, _) => {
                         let updated = StackValue::Map(id, Vec::new());
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
                     StackValue::Buffer(id, _) => {
                         let updated = StackValue::Buffer(id, Vec::new());
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
@@ -1658,12 +1947,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty array".to_string())?;
                         let updated = StackValue::Array(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                         stack.push(updated);
@@ -1674,12 +1965,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty struct".to_string())?;
                         let updated = StackValue::Struct(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                         stack.push(updated);
@@ -1690,12 +1983,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty map".to_string())?;
                         let updated = StackValue::Map(id, entries);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                         stack.push(updated);
@@ -1707,12 +2002,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty buffer".to_string())?;
                         let updated = StackValue::Buffer(id, bytes);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                         stack.push(updated);
@@ -1738,40 +2035,50 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Array(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
                     StackValue::Struct(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Struct(id, items);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
                     StackValue::Buffer(id, mut bytes) => {
                         bytes.reverse();
                         let updated = StackValue::Buffer(id, bytes);
+                        remember_consumed_mutation(&mut consumed_mutations, &updated);
                         propagate_update(
                             &updated,
                             &mut stack,
                             &mut locals,
                             &mut args,
                             &mut static_fields,
+                            &mut alt_stack,
                             None,
                         );
                     }
-                    _ => return Err("REVERSEITEMS expects an array, struct, or buffer".to_string()),
+                    _ => {
+                        return Err(format!(
+                            "REVERSEITEMS expects an array, struct, or buffer at ip {ip}: {item:?}"
+                        ));
+                    }
                 }
             }
             // =============================================================================
@@ -1830,42 +2137,41 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
             }
             MUL => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                let product = left
-                    .checked_mul(right)
-                    .ok_or_else(|| "integer overflow for MUL".to_string())?;
-                stack.push(numeric_result_i128(product));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    left * right,
+                    "integer overflow for MUL",
+                )?);
             }
             DIV => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                if right == 0 {
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                if right == BigInt::from(0) {
                     return Err("division by zero for DIV".to_string());
                 }
-                let quotient = left
-                    .checked_div(right)
-                    .ok_or_else(|| "integer overflow for DIV".to_string())?;
-                stack.push(numeric_result_i128(quotient));
+                stack.push(numeric_result_bigint(
+                    left / right,
+                    "integer overflow for DIV",
+                )?);
             }
             MOD => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                if right == 0 {
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                if right == BigInt::from(0) {
                     return Err("division by zero for MOD".to_string());
                 }
-                let remainder = left
-                    .checked_rem(right)
-                    .ok_or_else(|| "integer overflow for MOD".to_string())?;
-                stack.push(numeric_result_i128(remainder));
+                stack.push(numeric_result_bigint(
+                    left % right,
+                    "integer overflow for MOD",
+                )?);
             }
             DEC => {
-                let value = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(
-                    value
-                        .checked_sub(1)
-                        .ok_or_else(|| "integer overflow for DEC".to_string())?,
-                ));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    value - BigInt::from(1),
+                    "integer overflow for DEC",
+                )?);
             }
             BOOLAND => {
                 let right = pop_boolean(&mut stack)?;
@@ -1882,19 +2188,25 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 stack.push(StackValue::Boolean(helpers::boolean_value(&value)?));
             }
             MIN => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(if left < right { left } else { right }));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    if left < right { left } else { right },
+                    "integer overflow for MIN",
+                )?);
             }
             MAX => {
-                let right = pop_numeric_i128(&mut stack)?;
-                let left = pop_numeric_i128(&mut stack)?;
-                stack.push(numeric_result_i128(if left > right { left } else { right }));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    if left > right { left } else { right },
+                    "integer overflow for MAX",
+                )?);
             }
             WITHIN => {
-                let upper = pop_numeric_i128(&mut stack)?;
-                let lower = pop_numeric_i128(&mut stack)?;
-                let value = pop_numeric_i128(&mut stack)?;
+                let upper = pop_numeric_bigint(&mut stack)?;
+                let lower = pop_numeric_bigint(&mut stack)?;
+                let value = pop_numeric_bigint(&mut stack)?;
                 stack.push(StackValue::Boolean(value >= lower && value < upper));
             }
             RIGHT => {
@@ -1909,7 +2221,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 let start = bytes.len() - count;
                 bytes = bytes[start..].to_vec();
-                stack.push(StackValue::ByteString(bytes));
+                stack.push(ids.buffer(bytes));
             }
             SUBSTR => {
                 let count = pop_integer(&mut stack)?;
@@ -1930,7 +2242,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 if end > bytes.len() {
                     return Err("index + count out of range for SUBSTR".to_string());
                 }
-                stack.push(StackValue::ByteString(bytes[index..end].to_vec()));
+                stack.push(ids.buffer(bytes[index..end].to_vec()));
             }
             MEMCPY => {
                 // NeoVM MEMCPY: stack = [dst, di, src, si, count] (count on top)
@@ -1960,12 +2272,14 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 }
                 dst_bytes[di..di + count].copy_from_slice(&src_bytes[si..si + count]);
                 let updated = StackValue::Buffer(dst_id, dst_bytes);
+                remember_consumed_mutation(&mut consumed_mutations, &updated);
                 propagate_update(
                     &updated,
                     &mut stack,
                     &mut locals,
                     &mut args,
                     &mut static_fields,
+                    &mut alt_stack,
                     None,
                 );
             }
@@ -2199,10 +2513,25 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     "CALL",
                 )?;
                 let return_ip = ip + advance;
-                let saved_locals = core::mem::take(&mut locals);
-                let saved_args = core::mem::take(&mut args);
                 let saved_init = slots_initialized;
-                call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                reset_consumed_mutations(&mut consumed_mutations);
+                #[cfg(target_arch = "riscv32")]
+                {
+                    call_stack.push_frame_refs(return_ip, &locals, &args, saved_init)?;
+                    // The frame has been encoded into RETAINED_CALL_STACK_BUF. Avoid
+                    // moving or dropping active Vecs immediately after host calls on
+                    // PolkaVM/riscv32; the VM allocator is reset per execution.
+                    unsafe {
+                        core::ptr::write(&mut locals, Vec::new());
+                        core::ptr::write(&mut args, Vec::new());
+                    }
+                }
+                #[cfg(not(target_arch = "riscv32"))]
+                {
+                    let saved_locals = core::mem::take(&mut locals);
+                    let saved_args = core::mem::take(&mut args);
+                    call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                }
                 slots_initialized = false;
                 ip = compute_jump_target_offset(ip, offset, script.len(), "CALL")?;
                 continue;
@@ -2214,10 +2543,22 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     _ => return Err("CALLA expects a pointer".to_string()),
                 };
                 let return_ip = ip + 1;
-                let saved_locals = core::mem::take(&mut locals);
-                let saved_args = core::mem::take(&mut args);
                 let saved_init = slots_initialized;
-                call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                reset_consumed_mutations(&mut consumed_mutations);
+                #[cfg(target_arch = "riscv32")]
+                {
+                    call_stack.push_frame_refs(return_ip, &locals, &args, saved_init)?;
+                    unsafe {
+                        core::ptr::write(&mut locals, Vec::new());
+                        core::ptr::write(&mut args, Vec::new());
+                    }
+                }
+                #[cfg(not(target_arch = "riscv32"))]
+                {
+                    let saved_locals = core::mem::take(&mut locals);
+                    let saved_args = core::mem::take(&mut args);
+                    call_stack.push_frame(return_ip, saved_locals, saved_args, saved_init)?;
+                }
                 slots_initialized = false;
                 if offset > script.len() {
                     return Err("CALLA target out of bounds".to_string());
@@ -2322,7 +2663,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     },
                     "JMPGT",
                 )?;
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 if let Some((left, right)) = comparison {
                     if left > right {
                         ip = compute_jump_target_offset(ip, offset, script.len(), "JMPGT")?;
@@ -2344,7 +2685,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     },
                     "JMPGE",
                 )?;
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 if let Some((left, right)) = comparison {
                     if left >= right {
                         ip = compute_jump_target_offset(ip, offset, script.len(), "JMPGE")?;
@@ -2366,7 +2707,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     },
                     "JMPLT",
                 )?;
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 if let Some((left, right)) = comparison {
                     if left < right {
                         ip = compute_jump_target_offset(ip, offset, script.len(), "JMPLT")?;
@@ -2388,7 +2729,7 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                     },
                     "JMPLE",
                 )?;
-                let comparison = pop_integer_pair_allowing_null_false(&mut stack)?;
+                let comparison = pop_bigint_pair_allowing_null_false(&mut stack)?;
                 if let Some((left, right)) = comparison {
                     if left <= right {
                         ip = compute_jump_target_offset(ip, offset, script.len(), "JMPLE")?;
@@ -2399,11 +2740,23 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                 continue;
             }
             RET => {
-                if let Some((return_ip, saved_locals, saved_args, saved_init)) =
+                if let Some((return_ip, mut saved_locals, mut saved_args, saved_init)) =
                     call_stack.pop_and_restore()?
                 {
+                    let current_mutations = core::mem::take(&mut consumed_mutations);
+                    propagate_active_aliases_into_saved_frame(
+                        &mut saved_locals,
+                        &mut saved_args,
+                        &stack,
+                        &locals,
+                        &args,
+                        &static_fields,
+                        &alt_stack,
+                        &current_mutations,
+                    );
                     locals = saved_locals;
                     args = saved_args;
+                    reset_consumed_mutations(&mut consumed_mutations);
                     slots_initialized = saved_init;
                     while try_frames
                         .last_mut()
@@ -2412,6 +2765,31 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
                         try_frames.pop();
                     }
                     ip = return_ip;
+                    continue;
+                }
+                if running_initializer {
+                    restore_initializer_method_stack(
+                        &mut method_initial_stack,
+                        retained_initializer_method_stack_len,
+                    )?;
+                    complete_initializer_retaining_state(
+                        host,
+                        ip,
+                        &mut method_initial_stack,
+                        &mut static_fields,
+                    )?;
+                    stack = core::mem::take(&mut method_initial_stack);
+                    ip = initial_ip;
+                    locals = Vec::with_capacity(16);
+                    args = Vec::with_capacity(16);
+                    slots_initialized = false;
+                    alt_stack = Vec::with_capacity(16);
+                    try_frames = TryStack::new();
+                    call_stack = CallStack::new();
+                    pending_error = None;
+                    previous_opcode_was_callt = false;
+                    running_initializer = false;
+                    reset_consumed_mutations(&mut consumed_mutations);
                     continue;
                 }
                 break 'main_loop;
@@ -2573,14 +2951,66 @@ pub fn interpret_with_stack_and_syscalls_at<H: SyscallProvider>(
         ip += 1;
     }
 
+    LAST_RESULT_STAGE.store(1, Ordering::Relaxed);
+    LAST_RESULT_STACK_LEN.store(stack.len().min(u32::MAX as usize) as u32, Ordering::Relaxed);
+    LAST_RESULT_LIMIT.store(
+        result_stack_limit
+            .unwrap_or(usize::MAX)
+            .min(u32::MAX as usize) as u32,
+        Ordering::Relaxed,
+    );
+    trim_halt_stack_for_result_limit(&mut stack, result_stack_limit);
+    LAST_RESULT_STAGE.store(2, Ordering::Relaxed);
+    LAST_RESULT_STACK_LEN.store(stack.len().min(u32::MAX as usize) as u32, Ordering::Relaxed);
+    let abi_stack = to_abi_stack(&stack);
+    LAST_RESULT_STAGE.store(3, Ordering::Relaxed);
+    core::mem::forget(stack);
+    core::mem::forget(locals);
+    core::mem::forget(args);
+    core::mem::forget(static_fields);
+    core::mem::forget(alt_stack);
+    core::mem::forget(method_initial_stack);
+    core::mem::forget(consumed_mutations);
+    core::mem::forget(pending_error);
+    core::mem::forget(call_stack);
+    core::mem::forget(try_frames);
+    LAST_RESULT_STAGE.store(4, Ordering::Relaxed);
+
     Ok(ExecutionResult {
         fee_consumed_pico: 0,
         state: VmState::Halt,
-        stack: to_abi_stack(&stack),
+        stack: abi_stack,
         fault_message: None,
         fault_ip: None,
         fault_locals: None,
     })
+}
+
+fn trim_halt_stack_for_result_limit(
+    stack: &mut Vec<StackValue>,
+    result_stack_limit: Option<usize>,
+) {
+    let Some(keep) = result_stack_limit else {
+        return;
+    };
+
+    // The guest uses a per-execution bump allocator. Forgetting discarded
+    // return-stack debris avoids recursive Drop on deep historical compound
+    // values; the whole arena is reset before the next execution.
+    let old_stack = core::mem::take(stack);
+    if keep == 0 {
+        core::mem::forget(old_stack);
+    } else if old_stack.len() > keep {
+        let start = old_stack.len() - keep;
+        let mut kept = Vec::with_capacity(keep);
+        for item in old_stack.iter().skip(start) {
+            kept.push(item.clone());
+        }
+        *stack = kept;
+        core::mem::forget(old_stack);
+    } else {
+        *stack = old_stack;
+    }
 }
 
 struct NoSyscalls;

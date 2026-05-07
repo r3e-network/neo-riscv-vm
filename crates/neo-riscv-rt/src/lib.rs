@@ -204,6 +204,7 @@ impl Context {
     }
 
     /// Pops and discards the top value from the evaluation stack.
+    #[allow(clippy::should_implement_trait)]
     pub fn drop(&mut self) {
         let _ = self.pop();
     }

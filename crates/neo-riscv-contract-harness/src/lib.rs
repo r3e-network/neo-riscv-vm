@@ -132,7 +132,9 @@ fn debug_record(
         if DEBUG_LEN + needed > DEBUG_BUF_SIZE {
             return;
         }
-        let base = DEBUG_BUF.as_mut_ptr().add(DEBUG_LEN);
+        let base = core::ptr::addr_of_mut!(DEBUG_BUF)
+            .cast::<u8>()
+            .add(DEBUG_LEN);
         base.write(step);
         base.add(1).cast::<u32>().write(api);
         base.add(5).cast::<u32>().write(stack_len);
@@ -176,7 +178,7 @@ fn maybe_debug_record(
 
 /// Export: pointer to the debug buffer.
 pub fn get_debug_ptr() -> u32 {
-    unsafe { DEBUG_BUF.as_ptr() as u32 }
+    core::ptr::addr_of_mut!(DEBUG_BUF).cast::<u8>() as u32
 }
 
 /// Export: number of bytes written to the debug buffer.
@@ -210,10 +212,8 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
     // Runtime.CheckWitness often appears in auth guards directly before ASSERT.
     // Avoid heap allocations on this path to reduce the chance of guest-memory
     // corruption around ecalli in the PolkaVM bump-allocator environment.
-    if hash == 0x8cec27f8 {
-        if try_check_witness_fast_path(ctx, hash) {
-            return;
-        }
+    if hash == 0x8cec27f8 && try_check_witness_fast_path(ctx, hash) {
+        return;
     }
 
     // RAW entry record — write before anything else to confirm entry

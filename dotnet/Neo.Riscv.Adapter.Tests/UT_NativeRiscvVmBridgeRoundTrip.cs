@@ -100,6 +100,32 @@ public class UT_NativeRiscvVmBridgeRoundTrip
     }
 
     [TestMethod]
+    public void NonVoidContractCallIgnoresCalleeStackDebris()
+    {
+        var keep = new Integer(99);
+        var debris = new Integer(7);
+        var result = new Integer(42);
+        var inputStack = new StackItem[]
+        {
+            keep,
+            new ByteString(UInt160.Zero.ToArray()),
+            new ByteString("method"u8.ToArray()),
+            new Neo.VM.Types.Array(System.Array.Empty<StackItem>()),
+            new Integer((int)CallFlags.All),
+        };
+
+        var next = NativeRiscvVmBridge.BuildContractCallReturnStack(
+            inputStack,
+            consumedArgumentCount: 4,
+            ContractParameterType.Integer,
+            new StackItem[] { debris, result });
+
+        Assert.AreEqual(2, next.Length);
+        Assert.AreSame(keep, next[0]);
+        Assert.AreSame(result, next[1]);
+    }
+
+    [TestMethod]
     public void DynamicContractCallPushesNullForEmptyResult()
     {
         var keep = new Integer(99);

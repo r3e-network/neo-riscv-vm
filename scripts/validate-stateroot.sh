@@ -9,7 +9,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOST_LIB="${VM_DIR}/target/release/libneo_riscv_host.so"
+. "${SCRIPT_DIR}/resolve-host-lib.sh"
+HOST_LIB="${HOST_LIB:-$(resolve_host_lib "${VM_DIR}" release)}"
 TEST_PROJECT="${VM_DIR}/dotnet/Neo.Riscv.Adapter.Tests/Neo.Riscv.Adapter.Tests.csproj"
 FILTER="ClassName=Neo.Riscv.Adapter.Tests.UT_StateRootConsistency"
 

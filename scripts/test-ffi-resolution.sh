@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LIB_PATH="${NEO_RISCV_HOST_LIB:-${ROOT_DIR}/target/release/libneo_riscv_host.so}"
+. "${ROOT_DIR}/scripts/resolve-host-lib.sh"
+LIB_PATH="${NEO_RISCV_HOST_LIB:-$(resolve_host_lib "${ROOT_DIR}" release)}"
 
 echo "Testing FFI library resolution..."
 

@@ -6,8 +6,9 @@ VM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CORE_DIR="${CORE_DIR:-$(cd "${VM_DIR}/../neo-riscv-core" 2>/dev/null && pwd)}"
 NODE_DIR="${NODE_DIR:-$(cd "${VM_DIR}/../neo-riscv-node" 2>/dev/null && pwd)}"
 DEVPACK_DIR="${DEVPACK_DIR:-$(cd "${VM_DIR}/../neo-riscv-devpack" 2>/dev/null && pwd)}"
+. "${SCRIPT_DIR}/resolve-host-lib.sh"
 
-HOST_LIB="${VM_DIR}/target/release/libneo_riscv_host.so"
+HOST_LIB="${HOST_LIB:-$(resolve_host_lib "${VM_DIR}" release)}"
 PLUGIN_BUNDLE_DIR="${VM_DIR}/dist/Plugins"
 
 CORE_PROJECTS=(

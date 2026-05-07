@@ -8,6 +8,7 @@ using Neo.SmartContract.RiscV;
 using Neo.VM;
 using Neo.VM.Types;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Neo.Riscv.Adapter.Tests;
 
@@ -42,6 +43,52 @@ public class UT_RiscvApplicationEngineMethodDispatch
             Assert.AreEqual(VMState.HALT, state);
             Assert.IsNotNull(bridge.LastRequest);
             Assert.AreEqual("main", bridge.LastRequest!.Method);
+        }
+        finally
+        {
+            ApplicationEngine.Provider = previousProvider;
+        }
+    }
+
+    [TestMethod]
+    public void DirectRiscVExecutionRequestCarriesArgumentsBottomToTop()
+    {
+        var bridge = new CapturingBridge();
+        var previousProvider = ApplicationEngine.Provider;
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+
+        try
+        {
+            ApplicationEngine.Provider = new RiscvApplicationEngineProvider(bridge);
+            using var engine = (RiscvApplicationEngine)ApplicationEngine.Create(
+                TriggerType.Application,
+                null,
+                snapshot,
+                settings: AdapterTestProtocolSettings.Default,
+                gas: ApplicationEngine.TestModeGas);
+            var contract = CreateRiscVContract("main", 3);
+            var method = contract.Manifest.Abi.GetMethod("main", 3);
+
+            Assert.IsNotNull(method);
+            var context = engine.LoadContract(contract, method!, CallFlags.All);
+            var args = new StackItem[]
+            {
+                new Integer(128),
+                new Integer(1),
+                new Integer(381),
+            };
+            for (var i = args.Length - 1; i >= 0; i--)
+                context.EvaluationStack.Push(args[i]);
+
+            var state = engine.Execute();
+
+            Assert.AreEqual(VMState.HALT, state);
+            Assert.IsNotNull(bridge.LastRequest);
+            Assert.AreEqual(3, bridge.LastRequest!.InitialStack.Count);
+            Assert.AreEqual(381, bridge.LastRequest.InitialStack[0].GetInteger());
+            Assert.AreEqual(1, bridge.LastRequest.InitialStack[1].GetInteger());
+            Assert.AreEqual(128, bridge.LastRequest.InitialStack[2].GetInteger());
         }
         finally
         {
@@ -118,7 +165,7 @@ public class UT_RiscvApplicationEngineMethodDispatch
         Assert.AreEqual(NativeContract.Ledger.CurrentIndex(snapshot), NativeRiscvVmBridge.ResolveNativeContractSnapshotIndex(engine));
     }
 
-    private static ContractState CreateRiscVContract()
+    private static ContractState CreateRiscVContract(string methodName = "main", int parameterCount = 0)
     {
         var script = new byte[] { 0x50, 0x56, 0x4d, 0x00, 0x01, 0x02, 0x03, 0x04 };
         var nef = new NefFile
@@ -148,8 +195,14 @@ public class UT_RiscvApplicationEngineMethodDispatch
                     [
                         new ContractMethodDescriptor
                         {
-                            Name = "main",
-                            Parameters = [],
+                            Name = methodName,
+                            Parameters = Enumerable.Range(0, parameterCount)
+                                .Select(index => new ContractParameterDefinition
+                                {
+                                    Name = $"arg{index}",
+                                    Type = ContractParameterType.Integer,
+                                })
+                                .ToArray(),
                             ReturnType = ContractParameterType.Void,
                             Offset = 0,
                             Safe = false,

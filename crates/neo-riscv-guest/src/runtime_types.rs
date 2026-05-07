@@ -209,7 +209,7 @@ fn clone_bytes(bytes: &[u8]) -> Vec<u8> {
 }
 
 #[inline]
-fn compound_id(value: &StackValue) -> Option<u64> {
+pub(crate) fn compound_id(value: &StackValue) -> Option<u64> {
     match value {
         StackValue::Array(id, _)
         | StackValue::Struct(id, _)
@@ -250,6 +250,7 @@ pub(crate) fn propagate_update(
     locals: &mut [StackValue],
     args: &mut [StackValue],
     static_fields: &mut [StackValue],
+    alt_stack: &mut [StackValue],
     affected_stack_indices: Option<&[usize]>,
 ) {
     match affected_stack_indices {
@@ -277,6 +278,46 @@ pub(crate) fn propagate_update(
     }
     for value in static_fields {
         replace_alias(value, updated);
+    }
+    for value in alt_stack {
+        replace_alias(value, updated);
+    }
+}
+
+pub(crate) fn propagate_aliases_from_sources(targets: &mut [StackValue], sources: &[StackValue]) {
+    for source in sources {
+        propagate_alias_from_source(targets, source);
+    }
+}
+
+fn propagate_alias_from_source(targets: &mut [StackValue], source: &StackValue) {
+    if compound_id(source).is_some() {
+        for target in targets.iter_mut() {
+            replace_alias(target, source);
+        }
+    }
+
+    match source {
+        StackValue::Array(_, items) | StackValue::Struct(_, items) => {
+            for item in items {
+                propagate_alias_from_source(targets, item);
+            }
+        }
+        StackValue::Map(_, items) => {
+            for (key, value) in items {
+                propagate_alias_from_source(targets, key);
+                propagate_alias_from_source(targets, value);
+            }
+        }
+        StackValue::Buffer(_, _)
+        | StackValue::Integer(_)
+        | StackValue::BigInteger(_)
+        | StackValue::ByteString(_)
+        | StackValue::Boolean(_)
+        | StackValue::Pointer(_)
+        | StackValue::Interop(_)
+        | StackValue::Iterator(_)
+        | StackValue::Null => {}
     }
 }
 

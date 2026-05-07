@@ -84,7 +84,9 @@ namespace Neo.SmartContract.RiscV
             int initialInstructionPointer,
             ExecutionScope scope,
             Script? pointerScript = null,
-            int pointerPositionDelta = 0)
+            int pointerPositionDelta = 0,
+            int? initializerInstructionPointer = null,
+            int? resultStackLimit = null)
         {
             var scriptPtr = Marshal.AllocHGlobal(script.Length);
             NativeExecutionResult nativeResult = default;
@@ -102,12 +104,72 @@ namespace Neo.SmartContract.RiscV
             {
                 if (TraceEnabled)
                 {
-                    Trace($"execute script initialIp={initialInstructionPointer} scriptHex={Convert.ToHexString(script)}");
+                    Trace($"execute script initialIp={initialInstructionPointer} initializerIp={initializerInstructionPointer?.ToString() ?? "<none>"} resultLimit={resultStackLimit?.ToString() ?? "<none>"} scriptHex={Convert.ToHexString(script)}");
                     for (var i = 0; i < initialStack.Length; i++)
                         Trace($"execute initialStack[{i}] value={DescribeStackItem(initialStack[i])}");
                 }
                 Marshal.Copy(script, 0, scriptPtr, script.Length);
-                if (!_executeScript(
+                var executed = (initializerInstructionPointer, resultStackLimit) switch
+                {
+                    (int initializerIp, int limit) => _executeScriptWithInitializerAndResultLimit is null
+                        ? throw new InvalidOperationException("Loaded native RISC-V host library does not support result-limited _initialize co-execution.")
+                        : _executeScriptWithInitializerAndResultLimit(
+                            scriptPtr,
+                            (nuint)script.Length,
+                            (nuint)initialInstructionPointer,
+                            (nuint)initializerIp,
+                            (nuint)limit,
+                            (byte)request.Trigger,
+                            request.NetworkMagic,
+                            request.AddressVersion,
+                            request.PersistingTimestamp,
+                            request.GasLeft,
+                            checked((long)request.Engine.ExecFeePicoFactor),
+                            initialState.StackPtr,
+                            initialState.StackLen,
+                            GCHandle.ToIntPtr(callbackHandle),
+                            _hostCallbackPtr,
+                            _hostFreeCallbackPtr,
+                            out nativeResult),
+                    (int initializerIp, null) => _executeScriptWithInitializer is null
+                        ? throw new InvalidOperationException("Loaded native RISC-V host library does not support _initialize co-execution.")
+                        : _executeScriptWithInitializer(
+                            scriptPtr,
+                            (nuint)script.Length,
+                            (nuint)initialInstructionPointer,
+                            (nuint)initializerIp,
+                            (byte)request.Trigger,
+                            request.NetworkMagic,
+                            request.AddressVersion,
+                            request.PersistingTimestamp,
+                            request.GasLeft,
+                            checked((long)request.Engine.ExecFeePicoFactor),
+                            initialState.StackPtr,
+                            initialState.StackLen,
+                            GCHandle.ToIntPtr(callbackHandle),
+                            _hostCallbackPtr,
+                            _hostFreeCallbackPtr,
+                            out nativeResult),
+                    (null, int limit) => _executeScriptWithResultLimit is null
+                        ? throw new InvalidOperationException("Loaded native RISC-V host library does not support result-limited NeoVM execution.")
+                        : _executeScriptWithResultLimit(
+                            scriptPtr,
+                            (nuint)script.Length,
+                            (nuint)initialInstructionPointer,
+                            (nuint)limit,
+                            (byte)request.Trigger,
+                            request.NetworkMagic,
+                            request.AddressVersion,
+                            request.PersistingTimestamp,
+                            request.GasLeft,
+                            checked((long)request.Engine.ExecFeePicoFactor),
+                            initialState.StackPtr,
+                            initialState.StackLen,
+                            GCHandle.ToIntPtr(callbackHandle),
+                            _hostCallbackPtr,
+                            _hostFreeCallbackPtr,
+                            out nativeResult),
+                    (null, null) => _executeScript(
                         scriptPtr,
                         (nuint)script.Length,
                         (nuint)initialInstructionPointer,
@@ -122,7 +184,9 @@ namespace Neo.SmartContract.RiscV
                         GCHandle.ToIntPtr(callbackHandle),
                         _hostCallbackPtr,
                         _hostFreeCallbackPtr,
-                        out nativeResult))
+                        out nativeResult),
+                };
+                if (!executed)
                     throw new InvalidOperationException("Native RISC-V ABI call failed.");
 
                 var stack = ReadStack(nativeResult.StackPtr, nativeResult.StackLen, request.Engine.ReferenceCounter, scope, decodeStorageContextTokens: true);

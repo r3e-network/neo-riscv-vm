@@ -1,0 +1,28 @@
+{
+  "segments": [
+    {
+      "name": "genesmixer-bitwise-2219045",
+      "start": 2219000,
+      "end": 2219100,
+      "reason": "Historical GenesMixer mixed primitive bitwise mismatch at 2219045"
+    },
+    {
+      "name": "genesmixer-followup-2219363",
+      "start": 2219320,
+      "end": 2219400,
+      "reason": "Same GenesMixer fault family observed at 2219363"
+    },
+    {
+      "name": "early-assert-faults",
+      "start": 17000,
+      "end": 21300,
+      "reason": "Early expected FAULT-heavy contracts used as fault/oracle sanity band"
+    },
+    {
+      "name": "method-missing-fault-44538",
+      "start": 44480,
+      "end": 44600,
+      "reason": "Expected method-missing application FAULT band from active mainnet replay"
+    }
+  ]
+}

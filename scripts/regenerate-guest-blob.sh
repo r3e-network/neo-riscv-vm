@@ -8,6 +8,14 @@ GUEST_BLOB="${ROOT_DIR}/crates/neo-riscv-guest-module/guest.polkavm"
 GUEST_TARGET_JSON="${TARGET_DIR}/neo-riscv32-polkavm.json"
 GUEST_TARGET="$(basename "${GUEST_TARGET_JSON}" .json)"
 GUEST_ELF="${TARGET_DIR}/${GUEST_TARGET}/release/neo-riscv-guest-module"
+if [[ -n "${CARGO_NIGHTLY:-}" ]]; then
+  read -r -a CARGO_NIGHTLY_CMD <<< "${CARGO_NIGHTLY}"
+else
+  CARGO_NIGHTLY_CMD=(cargo +nightly)
+fi
+if [[ -n "${RUSTC_NIGHTLY:-}" && -z "${RUSTC:-}" ]]; then
+  export RUSTC="${RUSTC_NIGHTLY}"
+fi
 
 if ! command -v polkatool >/dev/null 2>&1; then
   echo "polkatool is required to regenerate guest.polkavm" >&2
@@ -15,8 +23,9 @@ if ! command -v polkatool >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! cargo +nightly --version >/dev/null 2>&1; then
+if ! "${CARGO_NIGHTLY_CMD[@]}" --version >/dev/null 2>&1; then
   echo "cargo +nightly is required to regenerate guest.polkavm" >&2
+  echo "Set CARGO_NIGHTLY to a nightly cargo binary if rustup proxy is unavailable." >&2
   echo "Install it with: rustup toolchain install nightly" >&2
   exit 1
 fi
@@ -36,7 +45,7 @@ else
   ' "${ORIGINAL_TARGET_JSON}" > "${GUEST_TARGET_JSON}"
 fi
 
-cargo +nightly build \
+"${CARGO_NIGHTLY_CMD[@]}" build \
   --manifest-path "${GUEST_MANIFEST}" \
   --release \
   --target "${GUEST_TARGET_JSON}" \

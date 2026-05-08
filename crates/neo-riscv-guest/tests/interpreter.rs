@@ -1016,10 +1016,47 @@ fn executes_numnotequal_on_bytestrings() {
 
 #[test]
 fn ge_with_null_operand_returns_false() {
-    let result = interpret(&[0x0b, 0x11, 0xb8, 0x40])
-        .expect("guest interpreter should match NeoVM GE null semantics");
+    let result = interpret(&[
+        0x0b, 0x11, 0xb8, // Null >= 1 => false
+        0x0b, 0x0b, 0xb5, // Null < Null => false
+        0x0b, 0x0b, 0xb6, // Null <= Null => false
+        0x0b, 0x0b, 0xb7, // Null > Null => false
+        0x0b, 0x0b, 0xb8, // Null >= Null => false
+        0x40,
+    ])
+    .expect("guest interpreter should match NeoVM null comparison semantics");
 
-    assert_eq!(result.stack, vec![StackValue::Boolean(false)]);
+    assert_eq!(
+        result.stack,
+        vec![
+            StackValue::Boolean(false),
+            StackValue::Boolean(false),
+            StackValue::Boolean(false),
+            StackValue::Boolean(false),
+            StackValue::Boolean(false),
+        ]
+    );
+}
+
+#[test]
+fn comparison_with_null_and_buffer_returns_false_like_neovm() {
+    let result = interpret(&[
+        0x0b, // PUSHNULL
+        0x0c, 0x01, 0x33, // PUSHDATA1 0x33
+        0xdb, 0x30, // CONVERT Buffer
+        0xb5, // LT
+        0x0c, 0x01, 0x33, // PUSHDATA1 0x33
+        0xdb, 0x30, // CONVERT Buffer
+        0x0b, // PUSHNULL
+        0xb5, // LT
+        0x40,
+    ])
+    .expect("guest interpreter should match NeoVM null comparison short-circuit");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Boolean(false), StackValue::Boolean(false)]
+    );
 }
 
 #[test]
@@ -1125,7 +1162,7 @@ fn executes_shl_and_shr() {
 #[test]
 fn shr_preserves_bytestring_type() {
     let result = interpret(&[0x0c, 0x02, 0x00, 0x01, 0x10, 0xa9, 0x40])
-        .expect("guest interpreter should preserve byte string type for SHR");
+        .expect("guest interpreter should preserve byte string type for zero-shift SHR");
 
     assert_eq!(result.stack, vec![StackValue::ByteString(vec![0x00, 0x01])]);
 }
@@ -1153,20 +1190,44 @@ fn shr_accepts_big_integer_operand() {
 }
 
 #[test]
-fn shr_preserves_wide_bytestring_type() {
+fn shr_converts_wide_bytestring_result_to_integer_like_neovm() {
     let result = interpret(&[
         0x0c, // PUSHDATA1 2^72
         10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x18, // PUSH8
         0xa9, // SHR -> 2^64
         0x40, // RET
     ])
-    .expect("SHR should preserve ByteString type for wide values");
+    .expect("SHR should match NeoVM ByteString-to-integer shift semantics");
 
     assert_eq!(
         result.stack,
-        vec![StackValue::ByteString(vec![
+        vec![StackValue::BigInteger(vec![
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
         ])]
+    );
+}
+
+#[test]
+fn zero_shift_preserves_null_and_boolean_like_neovm() {
+    let result = interpret(&[
+        0x0b, 0x10, 0xa8, // Null << 0 => Null
+        0x08, 0x10, 0xa8, // true << 0 => true
+        0x40,
+    ])
+    .expect("zero shift should preserve original stack item");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Null, StackValue::Boolean(true)]
+    );
+}
+
+#[test]
+fn negative_shift_count_faults_like_neovm() {
+    let error = interpret(&[0x11, 0x0f, 0xa8]).expect_err("SHL by -1 should fault like NeoVM");
+    assert!(
+        error.contains("shift count out of range"),
+        "error should mention shift range: {error}"
     );
 }
 
@@ -1550,6 +1611,51 @@ fn executes_modpow_and_mod_inverse() {
 }
 
 #[test]
+fn modpow_zero_exponent_is_reduced_by_modulus_like_neovm() {
+    let result = interpret(&[
+        0x10, // base 0
+        0x10, // exponent 0
+        0x11, // modulus 1
+        0xa6, // MODPOW
+        0x10, // base 0
+        0x10, // exponent 0
+        0x0f, // modulus -1
+        0xa6, // MODPOW
+        0x40,
+    ])
+    .expect("MODPOW exponent zero should reduce by modulus");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(0), StackValue::Integer(0)]
+    );
+}
+
+#[test]
+fn modpow_zero_inverse_faults_like_neovm() {
+    let error = interpret(&[0x10, 0x0f, 0x11, 0xa6])
+        .expect_err("MODPOW inverse of zero should fault like NeoVM");
+    assert!(
+        error.contains("modular inverse") || error.contains("inverse"),
+        "error should mention modular inverse: {error}"
+    );
+}
+
+#[test]
+fn modpow_invalid_inverse_inputs_fault_like_neovm() {
+    for (name, script) in [
+        ("modulus one", [0x11, 0x0f, 0x11, 0xa6]),
+        ("negative base", [0x0f, 0x0f, 0x1f, 0xa6]),
+    ] {
+        let error = interpret(&script).unwrap_err();
+        assert!(
+            error.contains("inverse") || error.contains("modulus"),
+            "{name} error should mention inverse/modulus: {error}"
+        );
+    }
+}
+
+#[test]
 fn executes_not() {
     let result = interpret(&[0x11, 0xaa, 0x40]).expect("guest interpreter should support NOT");
 
@@ -1727,6 +1833,90 @@ fn executes_invert_on_boolean() {
         interpret(&[0x08, 0x90, 0x40]).expect("guest interpreter should support INVERT on boolean");
 
     assert_eq!(result.stack, vec![StackValue::Integer(-2)]);
+}
+
+#[test]
+fn invert_faults_on_null_like_neovm() {
+    let error = interpret(&[0x0b, 0x90]).expect_err("INVERT on Null should fault like NeoVM");
+    assert!(
+        error.contains("INVERT expects"),
+        "error should mention INVERT incompatibility: {error}"
+    );
+}
+
+#[test]
+fn numeric_ops_fault_on_null_like_neovm() {
+    for (name, opcode) in [
+        ("SIGN", 0x99),
+        ("ABS", 0x9a),
+        ("NEGATE", 0x9b),
+        ("INC", 0x9c),
+        ("DEC", 0x9d),
+        ("NZ", 0xb1),
+    ] {
+        let error =
+            interpret(&[0x0b, opcode]).expect_err(&format!("{name} on Null should fault like NeoVM"));
+        assert!(
+            error.contains("expected integer-compatible value"),
+            "{name} error should mention numeric incompatibility: {error}"
+        );
+    }
+}
+
+#[test]
+fn numeric_ops_fault_on_buffer_like_neovm() {
+    for (name, opcode) in [
+        ("SIGN", 0x99),
+        ("ABS", 0x9a),
+        ("NEGATE", 0x9b),
+        ("INC", 0x9c),
+        ("DEC", 0x9d),
+        ("NZ", 0xb1),
+    ] {
+        let error = interpret(&[
+            0x0c, 0x01, 0x33, // PUSHDATA1 0x33
+            0xdb, 0x30, // CONVERT Buffer
+            opcode,
+        ])
+        .expect_err(&format!("{name} on Buffer should fault like NeoVM"));
+        assert!(
+            error.contains("expected integer-compatible value"),
+            "{name} error should mention numeric incompatibility: {error}"
+        );
+    }
+}
+
+#[test]
+fn integer_comparison_faults_on_buffer_like_neovm() {
+    let scripts: &[(&str, &[u8])] = &[
+        (
+            "left Buffer",
+            &[
+                0x0c, 0x01, 0x33, // PUSHDATA1 0x33
+                0xdb, 0x30, // CONVERT Buffer
+                0x10, // PUSH0
+                0xb5, // LT
+            ],
+        ),
+        (
+            "right Buffer",
+            &[
+                0x10, // PUSH0
+                0x0c, 0x01, 0x33, // PUSHDATA1 0x33
+                0xdb, 0x30, // CONVERT Buffer
+                0xb5, // LT
+            ],
+        ),
+    ];
+
+    for (name, script) in scripts {
+        let error =
+            interpret(script).expect_err(&format!("LT with {name} should fault like NeoVM"));
+        assert!(
+            error.contains("expected integer on stack"),
+            "LT {name} error should mention integer incompatibility: {error}"
+        );
+    }
 }
 
 #[test]
@@ -2077,6 +2267,15 @@ fn istype_checks_integer_type() {
         interpret(&[0x11, 0xd9, 0x21, 0x40]).expect("guest interpreter should support ISTYPE");
 
     assert_eq!(result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
+fn istype_any_faults_like_neovm() {
+    let error = interpret(&[0x11, 0xd9, 0x00]).expect_err("ISTYPE Any should fault like NeoVM");
+    assert!(
+        error.contains("unsupported ISTYPE kind 0x00"),
+        "error should mention unsupported Any type: {error}"
+    );
 }
 
 #[test]

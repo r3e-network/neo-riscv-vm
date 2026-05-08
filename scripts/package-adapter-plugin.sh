@@ -3,17 +3,33 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${ROOT_DIR}/dist/Plugins/Neo.Riscv.Adapter"
+if [[ -n "${CARGO_STABLE:-}" ]]; then
+  read -r -a CARGO_STABLE_CMD <<< "${CARGO_STABLE}"
+else
+  CARGO_STABLE_CMD=(cargo)
+fi
 
 echo "[package] root: ${ROOT_DIR}"
 echo "[package] out:  ${OUT_DIR}"
 
 dotnet --version >/dev/null
-cargo --version >/dev/null
+"${CARGO_STABLE_CMD[@]}" --version >/dev/null
 
 mkdir -p "${OUT_DIR}"
 
+echo "[package] regenerating guest.polkavm…"
+if [[ -n "${RUSTC_NIGHTLY:-}" ]]; then
+  RUSTC="${RUSTC_NIGHTLY}" bash "${ROOT_DIR}/scripts/regenerate-guest-blob.sh"
+else
+  bash "${ROOT_DIR}/scripts/regenerate-guest-blob.sh"
+fi
+
 echo "[package] building native host library (release)…"
-cargo build -p neo-riscv-host --release
+if [[ -n "${RUSTC_STABLE:-}" ]]; then
+  RUSTC="${RUSTC_STABLE}" "${CARGO_STABLE_CMD[@]}" build -p neo-riscv-host --release
+else
+  "${CARGO_STABLE_CMD[@]}" build -p neo-riscv-host --release
+fi
 
 HOST_LIB_LINUX="${ROOT_DIR}/target/release/libneo_riscv_host.so"
 HOST_LIB_MACOS="${ROOT_DIR}/target/release/libneo_riscv_host.dylib"

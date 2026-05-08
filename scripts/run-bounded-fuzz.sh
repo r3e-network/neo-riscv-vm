@@ -30,6 +30,11 @@ FUZZ_TARGETS=(
 DEFAULT_TIME_PER_TARGET=120
 DEFAULT_RUNS_PER_TARGET=100
 DEFAULT_FUZZ_SEED=42
+if [[ -n "${CARGO_NIGHTLY:-}" ]]; then
+  read -r -a CARGO_NIGHTLY_CMD <<< "${CARGO_NIGHTLY}"
+else
+  CARGO_NIGHTLY_CMD=(cargo +nightly)
+fi
 
 TIME_PER_TARGET="${TIME_PER_TARGET:-$DEFAULT_TIME_PER_TARGET}"
 RUNS_PER_TARGET="${RUNS_PER_TARGET:-$DEFAULT_RUNS_PER_TARGET}"
@@ -40,16 +45,25 @@ if ! command -v cargo-fuzz >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! cargo +nightly --version >/dev/null 2>&1; then
+if ! "${CARGO_NIGHTLY_CMD[@]}" --version >/dev/null 2>&1; then
   echo "cargo +nightly is required for instrumented fuzzing. Install it with: rustup toolchain install nightly" >&2
+  echo "Set CARGO_NIGHTLY to a nightly cargo binary if rustup proxy is unavailable." >&2
   exit 1
 fi
 
 export RUST_BACKTRACE=1
 
+run_cargo_nightly() {
+  if [[ -n "${RUSTC_NIGHTLY:-}" ]]; then
+    RUSTC="${RUSTC_NIGHTLY}" "${CARGO_NIGHTLY_CMD[@]}" "$@"
+  else
+    "${CARGO_NIGHTLY_CMD[@]}" "$@"
+  fi
+}
+
 build_target() {
   local target="$1"
-  cargo +nightly fuzz build "$target" >/dev/null
+  run_cargo_nightly fuzz build "$target" >/dev/null
 }
 
 target_corpus_sources() {

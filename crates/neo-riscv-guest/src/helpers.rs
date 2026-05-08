@@ -94,32 +94,33 @@ pub(crate) fn pop_integer(stack: &mut Vec<StackValue>) -> Result<i64, String> {
 pub(crate) fn pop_bigint_pair_allowing_null_false(
     stack: &mut Vec<StackValue>,
 ) -> Result<Option<(BigInt, BigInt)>, String> {
-    let right = pop_optional_bigint_for_comparison(stack)?;
-    let left = pop_optional_bigint_for_comparison(stack)?;
-    Ok(match (left, right) {
-        (Some(left), Some(right)) => Some((left, right)),
-        (None, None) => Some((BigInt::zero(), BigInt::zero())),
-        _ => None,
-    })
+    let right = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+    let left = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+
+    if matches!(left, StackValue::Null) || matches!(right, StackValue::Null) {
+        return Ok(None);
+    }
+
+    Ok(Some((
+        bigint_for_comparison(left)?,
+        bigint_for_comparison(right)?,
+    )))
 }
 
-pub(crate) fn pop_optional_bigint_for_comparison(
-    stack: &mut Vec<StackValue>,
-) -> Result<Option<BigInt>, String> {
-    match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(Some(BigInt::from(value))),
-        Some(StackValue::BigInteger(value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
-        Some(StackValue::ByteString(value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
-        Some(StackValue::Boolean(value)) => Ok(Some(BigInt::from(if value { 1 } else { 0 }))),
-        Some(StackValue::Pointer(_)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Array(..)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Struct(..)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Map(..)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Buffer(_, value)) => Ok(Some(decode_signed_le_bytes_bigint(&value)?)),
-        Some(StackValue::Interop(_)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Iterator(_)) => Err("expected integer on stack".to_string()),
-        Some(StackValue::Null) => Ok(None),
-        None => Err("stack underflow".to_string()),
+fn bigint_for_comparison(value: StackValue) -> Result<BigInt, String> {
+    match value {
+        StackValue::Integer(value) => Ok(BigInt::from(value)),
+        StackValue::BigInteger(value) => decode_signed_le_bytes_bigint(&value),
+        StackValue::ByteString(value) => decode_signed_le_bytes_bigint(&value),
+        StackValue::Boolean(value) => Ok(BigInt::from(if value { 1 } else { 0 })),
+        StackValue::Pointer(_) => Err("expected integer on stack".to_string()),
+        StackValue::Array(..) => Err("expected integer on stack".to_string()),
+        StackValue::Struct(..) => Err("expected integer on stack".to_string()),
+        StackValue::Map(..) => Err("expected integer on stack".to_string()),
+        StackValue::Buffer(_, _) => Err("expected integer on stack".to_string()),
+        StackValue::Interop(_) => Err("expected integer on stack".to_string()),
+        StackValue::Iterator(_) => Err("expected integer on stack".to_string()),
+        StackValue::Null => Err("expected integer on stack".to_string()),
     }
 }
 
@@ -129,8 +130,8 @@ pub(crate) fn pop_shift_count(stack: &mut Vec<StackValue>) -> Result<i64, String
         Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
         Some(StackValue::ByteString(value)) => decode_signed_le_bytes(&value),
         Some(StackValue::BigInteger(value)) => decode_signed_le_bytes(&value),
-        Some(StackValue::Null) => Ok(0),
-        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes(&bytes),
+        Some(StackValue::Null) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Buffer(_, _)) => Err("expected integer-compatible value".to_string()),
         Some(_) => Err("expected integer-compatible shift count".to_string()),
         None => Err("stack underflow".to_string()),
     }
@@ -142,12 +143,12 @@ pub(crate) fn pop_numeric_value(stack: &mut Vec<StackValue>) -> Result<i64, Stri
         Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
         Some(StackValue::ByteString(value)) => decode_signed_le_bytes(&value),
         Some(StackValue::BigInteger(value)) => decode_signed_le_bytes(&value),
-        Some(StackValue::Null) => Ok(0),
+        Some(StackValue::Null) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Pointer(_)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Map(..)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes(&bytes),
+        Some(StackValue::Buffer(_, _)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Interop(_)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Iterator(_)) => Err("expected integer-compatible value".to_string()),
         None => Err("stack underflow".to_string()),
@@ -160,8 +161,8 @@ pub(crate) fn pop_numeric_bigint(stack: &mut Vec<StackValue>) -> Result<BigInt, 
         Some(StackValue::Boolean(value)) => Ok(BigInt::from(if value { 1 } else { 0 })),
         Some(StackValue::ByteString(value)) => decode_signed_le_bytes_bigint(&value),
         Some(StackValue::BigInteger(value)) => decode_signed_le_bytes_bigint(&value),
-        Some(StackValue::Null) => Ok(BigInt::zero()),
-        Some(StackValue::Buffer(_, bytes)) => decode_signed_le_bytes_bigint(&bytes),
+        Some(StackValue::Null) => Err("expected integer-compatible value".to_string()),
+        Some(StackValue::Buffer(_, _)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Pointer(_)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Array(..)) => Err("expected integer-compatible value".to_string()),
         Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
@@ -172,29 +173,20 @@ pub(crate) fn pop_numeric_bigint(stack: &mut Vec<StackValue>) -> Result<BigInt, 
     }
 }
 
-pub(crate) fn pop_shift_value(stack: &mut Vec<StackValue>) -> Result<ShiftValue, String> {
-    match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(ShiftValue::Integer(BigInt::from(value))),
-        Some(StackValue::Boolean(value)) => {
-            Ok(ShiftValue::Integer(BigInt::from(if value { 1 } else { 0 })))
-        }
-        Some(StackValue::ByteString(value)) => Ok(ShiftValue::ByteString(
-            decode_signed_le_bytes_bigint(&value)?,
-        )),
-        Some(StackValue::BigInteger(value)) => {
-            Ok(ShiftValue::Integer(decode_signed_le_bytes_bigint(&value)?))
-        }
-        Some(StackValue::Null) => Ok(ShiftValue::Integer(BigInt::zero())),
-        Some(StackValue::Pointer(_)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Array(..)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Struct(..)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Map(..)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Buffer(_, bytes)) => Ok(ShiftValue::ByteString(
-            decode_signed_le_bytes_bigint(&bytes)?,
-        )),
-        Some(StackValue::Interop(_)) => Err("expected integer-compatible shift value".to_string()),
-        Some(StackValue::Iterator(_)) => Err("expected integer-compatible shift value".to_string()),
-        None => Err("stack underflow".to_string()),
+pub(crate) fn shift_value_from_item(value: StackValue) -> Result<ShiftValue, String> {
+    match value {
+        StackValue::Integer(value) => Ok(ShiftValue(BigInt::from(value))),
+        StackValue::Boolean(value) => Ok(ShiftValue(BigInt::from(if value { 1 } else { 0 }))),
+        StackValue::ByteString(value) => Ok(ShiftValue(decode_signed_le_bytes_bigint(&value)?)),
+        StackValue::BigInteger(value) => Ok(ShiftValue(decode_signed_le_bytes_bigint(&value)?)),
+        StackValue::Null => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Pointer(_) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Array(..) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Struct(..) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Map(..) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Buffer(_, _) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Interop(_) => Err("expected integer-compatible shift value".to_string()),
+        StackValue::Iterator(_) => Err("expected integer-compatible shift value".to_string()),
     }
 }
 
@@ -1302,49 +1294,15 @@ pub(crate) fn decode_signed_le_bytes_bigint(bytes: &[u8]) -> Result<BigInt, Stri
     Ok(BigInt::from_signed_bytes_le(bytes))
 }
 
-pub(crate) enum ShiftValue {
-    Integer(BigInt),
-    ByteString(BigInt),
-}
+pub(crate) struct ShiftValue(BigInt);
 
 impl ShiftValue {
     pub(crate) fn shift_left(self, shift: u32) -> Result<StackValue, String> {
-        let value = match &self {
-            ShiftValue::Integer(value) | ShiftValue::ByteString(value) => {
-                value.clone() << (shift as usize)
-            }
-        };
-        self.shift_result(value, "integer overflow for SHL")
+        numeric_result_bigint(self.0 << (shift as usize), "integer overflow for SHL")
     }
 
     pub(crate) fn shift_right(self, shift: u32) -> Result<StackValue, String> {
-        let value = match &self {
-            ShiftValue::Integer(value) | ShiftValue::ByteString(value) => {
-                value.clone() >> (shift as usize)
-            }
-        };
-        self.shift_result(value, "integer overflow for SHR")
-    }
-
-    fn shift_result(self, value: BigInt, overflow_message: &str) -> Result<StackValue, String> {
-        match self {
-            ShiftValue::Integer(_) => numeric_result_bigint(value, overflow_message),
-            ShiftValue::ByteString(_) => {
-                let bytes = minimal_signed_bytes(value);
-                if bytes.len() > MAX_INTEGER_SIZE {
-                    return Err(overflow_message.to_string());
-                }
-                Ok(StackValue::ByteString(bytes))
-            }
-        }
-    }
-}
-
-fn minimal_signed_bytes(value: BigInt) -> Vec<u8> {
-    if value.is_zero() {
-        Vec::new()
-    } else {
-        trim_le_bytes(value.to_signed_bytes_le())
+        numeric_result_bigint(self.0 >> (shift as usize), "integer overflow for SHR")
     }
 }
 
@@ -1404,9 +1362,9 @@ pub(crate) fn mod_pow(base: i64, exponent: i64, modulus: i64) -> Result<i64, Str
         return Err("negative exponent for MODPOW".to_string());
     }
 
-    let mut result: i128 = 1;
-    let mut power = i128::from(base);
     let modulus = i128::from(modulus);
+    let mut result: i128 = 1 % modulus;
+    let mut power = i128::from(base);
     let mut exponent = exponent as u64;
 
     while exponent > 0 {
@@ -1423,6 +1381,13 @@ pub(crate) fn mod_pow(base: i64, exponent: i64, modulus: i64) -> Result<i64, Str
 }
 
 pub(crate) fn mod_inverse(value: i64, modulus: i64) -> Result<i64, String> {
+    if value <= 0 {
+        return Err("value has no modular inverse".to_string());
+    }
+    if modulus <= 1 {
+        return Err("invalid modulus for modular inverse".to_string());
+    }
+
     let mut t: i128 = 0;
     let mut new_t: i128 = 1;
     let mut r: i128 = i128::from(modulus);

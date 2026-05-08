@@ -15,7 +15,7 @@ use crate::runtime_types::{
 };
 use core::sync::atomic::{AtomicU32, Ordering};
 use num_bigint::BigInt;
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, Zero};
 
 static LAST_INTERPRETER_IP: AtomicU32 = AtomicU32::new(u32::MAX);
 static LAST_RESULT_STAGE: AtomicU32 = AtomicU32::new(0);
@@ -1190,7 +1190,6 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Boolean(v) => {
                         stack.push(StackValue::Integer(if v { -2 } else { -1 }))
                     }
-                    StackValue::Null => stack.push(StackValue::Integer(-1)),
                     _ => return Err("INVERT expects an integer or boolean".to_string()),
                 }
             }
@@ -1344,26 +1343,26 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
             }
             SHL => {
                 let shift = pop_shift_count(&mut stack)?;
-                let value = pop_shift_value(&mut stack)?;
-                if !(-256..=256).contains(&shift) {
+                let value = pop_item(&mut stack)?;
+                if !(0..=256).contains(&shift) {
                     return Err("shift count out of range for SHL".to_string());
                 }
-                if shift >= 0 {
-                    stack.push(value.shift_left(shift as u32)?);
+                if shift == 0 {
+                    stack.push(value);
                 } else {
-                    stack.push(value.shift_right((-shift) as u32)?);
+                    stack.push(shift_value_from_item(value)?.shift_left(shift as u32)?);
                 }
             }
             SHR => {
                 let shift = pop_shift_count(&mut stack)?;
-                let value = pop_shift_value(&mut stack)?;
-                if !(-256..=256).contains(&shift) {
+                let value = pop_item(&mut stack)?;
+                if !(0..=256).contains(&shift) {
                     return Err("shift count out of range for SHR".to_string());
                 }
-                if shift >= 0 {
-                    stack.push(value.shift_right(shift as u32)?);
+                if shift == 0 {
+                    stack.push(value);
                 } else {
-                    stack.push(value.shift_left((-shift) as u32)?);
+                    stack.push(shift_value_from_item(value)?.shift_right(shift as u32)?);
                 }
             }
             NOT => {
@@ -2184,8 +2183,8 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 stack.push(StackValue::Boolean(left || right));
             }
             NZ => {
-                let value = pop_item(&mut stack)?;
-                stack.push(StackValue::Boolean(helpers::boolean_value(&value)?));
+                let value = pop_numeric_bigint(&mut stack)?;
+                stack.push(StackValue::Boolean(!value.is_zero()));
             }
             MIN => {
                 let right = pop_numeric_bigint(&mut stack)?;
@@ -2312,7 +2311,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 let item = pop_item(&mut stack)?;
                 // NeoVM StackItemType enum values
                 let result = match kind {
-                    0x00 => true,                                   // Any - always true
+                    0x00 => return Err("unsupported ISTYPE kind 0x00".to_string()), // Any
                     0x10 => matches!(item, StackValue::Pointer(_)), // Pointer
                     0x20 => matches!(item, StackValue::Boolean(_)), // Boolean
                     0x21 => matches!(item, StackValue::Integer(_) | StackValue::BigInteger(_)), // Integer

@@ -1201,6 +1201,38 @@ fn executes_and_on_bytestrings() {
 }
 
 #[test]
+fn bitwise_ops_accept_mixed_primitive_numeric_values() {
+    let int_and_bytes = interpret(&[
+        0x1f, // PUSH15
+        0x0c, // PUSHDATA1
+        0x01, 0x33, // 0x33
+        0x91, // AND
+        0x40, // RET
+    ])
+    .expect("AND should accept Integer and ByteString operands");
+    assert_eq!(int_and_bytes.stack, vec![StackValue::Integer(3)]);
+
+    let bool_or_int = interpret(&[
+        0x08, // PUSHT
+        0x1f, // PUSH15
+        0x92, // OR
+        0x40, // RET
+    ])
+    .expect("OR should accept Boolean and Integer operands");
+    assert_eq!(bool_or_int.stack, vec![StackValue::Integer(15)]);
+
+    let bytes_xor_int = interpret(&[
+        0x0c, // PUSHDATA1
+        0x01, 0x0f, // 0x0f
+        0x1f, // PUSH15
+        0x93, // XOR
+        0x40, // RET
+    ])
+    .expect("XOR should accept ByteString and Integer operands");
+    assert_eq!(bytes_xor_int.stack, vec![StackValue::Integer(0)]);
+}
+
+#[test]
 fn executes_keys_on_map() {
     let result = interpret(&[
         0x12, 0x13, 0x12, 0x11, 0x12, 0xbe, // map {1:2, 3:2}

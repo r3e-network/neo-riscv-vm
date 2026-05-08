@@ -1649,24 +1649,21 @@ pub(crate) fn bitwise_result<F>(
 where
     F: Fn(u8, u8) -> u8,
 {
-    match (left, right) {
-        (StackValue::Boolean(l), StackValue::Boolean(r)) => Ok(StackValue::Integer(i64::from(op(
-            if *l { 1 } else { 0 },
-            if *r { 1 } else { 0 },
-        )))),
-        (StackValue::Integer(l), StackValue::Integer(r)) => {
-            Ok(StackValue::Integer(bytes_to_integer(
-                &bitwise_signed_bytes(&encode_integer(*l), &encode_integer(*r), op)?,
-            )))
-        }
-        (StackValue::BigInteger(l), StackValue::BigInteger(r)) => {
-            Ok(bigint_or_integer(bitwise_signed_bytes(l, r, op)?))
-        }
-        (StackValue::ByteString(l), StackValue::ByteString(r)) => {
-            Ok(bigint_or_integer(bitwise_signed_bytes(l, r, op)?))
-        }
-        (StackValue::Null, StackValue::Null) => Ok(StackValue::Integer(i64::from(op(0, 0)))),
-        _ => Err("bitwise op expects matching integer, boolean, or byte string types".to_string()),
+    let left_bytes = bitwise_operand_bytes(left)?;
+    let right_bytes = bitwise_operand_bytes(right)?;
+    Ok(bigint_or_integer(bitwise_signed_bytes(
+        &left_bytes,
+        &right_bytes,
+        op,
+    )?))
+}
+
+fn bitwise_operand_bytes(value: &StackValue) -> Result<Vec<u8>, String> {
+    match value {
+        StackValue::Integer(value) => Ok(encode_integer(*value)),
+        StackValue::BigInteger(value) | StackValue::ByteString(value) => Ok(value.clone()),
+        StackValue::Boolean(value) => Ok(encode_integer(if *value { 1 } else { 0 })),
+        _ => Err("bitwise op expects primitive numeric or byte string operands".to_string()),
     }
 }
 

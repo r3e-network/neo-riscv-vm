@@ -370,27 +370,29 @@ impl Context {
 
     /// Pops the last item from the array at the top of the stack and pushes it.
     pub fn pop_item(&mut self) {
-        // We need to pop from the array, then push the popped value.
-        // Get the item first by working on the top of stack.
-        let item = {
-            let collection = self.stack.last_mut();
-            match collection {
-                Some(StackValue::Array(ref mut items)) => {
-                    if items.is_empty() {
-                        None
-                    } else {
-                        Some(items.pop().unwrap())
-                    }
+        match self.pop() {
+            StackValue::Array(mut items) => match items.pop() {
+                Some(value) => self.push(value),
+                None => self.fault("POPITEM: array is empty"),
+            },
+            StackValue::Struct(mut items) => match items.pop() {
+                Some(value) => self.push(value),
+                None => self.fault("POPITEM: struct is empty"),
+            },
+            StackValue::Map(mut pairs) => match pairs.pop() {
+                Some((key, value)) => {
+                    self.push(key);
+                    self.push(value);
                 }
-                _ => {
-                    self.fault("POPITEM: not an array");
-                    return;
-                }
+                None => self.fault("POPITEM: map is empty"),
+            },
+            StackValue::Buffer(mut bytes) => match bytes.pop() {
+                Some(value) => self.push_int(i64::from(value)),
+                None => self.fault("POPITEM: buffer is empty"),
+            },
+            _ => {
+                self.fault("POPITEM: not a collection");
             }
-        };
-        match item {
-            Some(val) => self.push(val),
-            None => self.fault("POPITEM: array is empty"),
         }
     }
 

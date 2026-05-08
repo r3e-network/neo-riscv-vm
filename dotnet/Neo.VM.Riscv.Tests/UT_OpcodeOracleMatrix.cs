@@ -82,6 +82,32 @@ public class UT_OpcodeOracleMatrix
         Assert.IsTrue(
             caseNames.Any(name => name.StartsWith("InvalidEncoding(CONVERT-invalid-type)", StringComparison.Ordinal)),
             "Matrix must include invalid StackItemType operand coverage.");
+
+        foreach (var requiredSemanticCase in new[]
+                 {
+                     "PICKITEM(Array,Integer1)",
+                     "PICKITEM(Map,ByteString0f)",
+                     "SETITEM(Array,Integer1,Integer15)",
+                     "SETITEM(Map,ByteString0f,Integer15)",
+                     "APPEND(Array,Integer15)",
+                     "REMOVE(Array,Integer0)",
+                     "REMOVE(Map,ByteString0f)",
+                     "HASKEY(Map,ByteString0f)",
+                     "KEYS(Map)",
+                     "VALUES(Map)",
+                     "POPITEM(Array)",
+                     "REVERSEITEMS(Array)",
+                     "CLEARITEMS(Map)",
+                     "StackSemantic(DEPTH-DUP-OVER-PICK-ROLL)",
+                     "StackSemantic(TUCK-SWAP-ROT-REVERSEN)",
+                     "ControlFlow(CALL-nested-return)",
+                     "ControlFlow(TRY-catch-path)",
+                 })
+        {
+            Assert.IsTrue(
+                caseNames.Contains(requiredSemanticCase, StringComparer.Ordinal),
+                $"Missing semantic oracle matrix coverage: {requiredSemanticCase}");
+        }
     }
 
     [TestMethod]
@@ -94,6 +120,23 @@ public class UT_OpcodeOracleMatrix
         var failures = new List<string>();
 
         Assert.HasCount(count, cases, "Differential fuzz generator must produce the requested deterministic case count.");
+
+        var requiredSeeds = new[]
+                 {
+                     "DifferentialFuzz(seeded-collection-array-mutation)",
+                     "DifferentialFuzz(seeded-collection-map-mutation)",
+                     "DifferentialFuzz(seeded-stack-reordering)",
+                     "DifferentialFuzz(seeded-control-flow)",
+                 };
+        if (count >= requiredSeeds.Length)
+        {
+            foreach (var requiredSeed in requiredSeeds)
+            {
+                Assert.IsTrue(
+                    cases.Any(testCase => string.Equals(testCase.Name, requiredSeed, StringComparison.Ordinal)),
+                    $"Differential fuzz must include high-value deterministic seed: {requiredSeed}");
+            }
+        }
 
         foreach (var testCase in cases)
         {
@@ -213,6 +256,15 @@ public class UT_OpcodeOracleMatrix
             yield return BuildTernaryCase(opCode, left, right, modulus);
 
         foreach (var testCase in BuildInvalidEncodingCases())
+            yield return testCase;
+
+        foreach (var testCase in BuildCollectionSemanticCases())
+            yield return testCase;
+
+        foreach (var testCase in BuildStackSemanticCases())
+            yield return testCase;
+
+        foreach (var testCase in BuildControlFlowSemanticCases())
             yield return testCase;
 
         foreach (var testCase in BuildAllOpcodeSmokeCases())
@@ -427,6 +479,251 @@ public class UT_OpcodeOracleMatrix
         return sb.ToArray();
     }
 
+    private static IEnumerable<MatrixCase> BuildCollectionSemanticCases()
+    {
+        yield return BuildArrayPickItemCase();
+        yield return BuildMapPickItemCase();
+        yield return BuildArraySetItemCase();
+        yield return BuildMapSetItemCase();
+        yield return BuildArrayAppendCase();
+        yield return BuildArrayRemoveCase();
+        yield return BuildMapRemoveCase();
+        yield return BuildMapHasKeyCase();
+        yield return BuildMapKeysCase();
+        yield return BuildMapValuesCase();
+        yield return BuildArrayPopItemCase();
+        yield return BuildArrayReverseItemsCase();
+        yield return BuildMapClearItemsCase();
+    }
+
+    private static MatrixCase BuildArrayPickItemCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitTwoIntegerArray(sb);
+        OperandSpec.IntegerOne.Emit(sb);
+        sb.Emit(OpCode.PICKITEM);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("PICKITEM(Array,Integer1)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapPickItemCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        OperandSpec.ByteString0f.Emit(sb);
+        sb.Emit(OpCode.PICKITEM);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("PICKITEM(Map,ByteString0f)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildArraySetItemCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitTwoIntegerArray(sb);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.IntegerOne.Emit(sb);
+        OperandSpec.IntegerFifteen.Emit(sb);
+        sb.Emit(OpCode.SETITEM);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("SETITEM(Array,Integer1,Integer15)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapSetItemCase()
+    {
+        using var sb = new ScriptBuilder();
+        sb.Emit(OpCode.NEWMAP);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.ByteString0f.Emit(sb);
+        OperandSpec.IntegerFifteen.Emit(sb);
+        sb.Emit(OpCode.SETITEM);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("SETITEM(Map,ByteString0f,Integer15)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildArrayAppendCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitSingleIntegerArray(sb);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.IntegerFifteen.Emit(sb);
+        sb.Emit(OpCode.APPEND);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("APPEND(Array,Integer15)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildArrayRemoveCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitTwoIntegerArray(sb);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.IntegerZero.Emit(sb);
+        sb.Emit(OpCode.REMOVE);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("REMOVE(Array,Integer0)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapRemoveCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.ByteString0f.Emit(sb);
+        sb.Emit(OpCode.REMOVE);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("REMOVE(Map,ByteString0f)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapHasKeyCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        OperandSpec.ByteString0f.Emit(sb);
+        sb.Emit(OpCode.HASKEY);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("HASKEY(Map,ByteString0f)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapKeysCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        sb.Emit(OpCode.KEYS);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("KEYS(Map)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapValuesCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        sb.Emit(OpCode.VALUES);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("VALUES(Map)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildArrayPopItemCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitTwoIntegerArray(sb);
+        sb.Emit(OpCode.POPITEM);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("POPITEM(Array)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildArrayReverseItemsCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitTwoIntegerArray(sb);
+        sb.Emit(OpCode.DUP);
+        sb.Emit(OpCode.REVERSEITEMS);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("REVERSEITEMS(Array)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildMapClearItemsCase()
+    {
+        using var sb = new ScriptBuilder();
+        EmitMapWithByteStringEntry(sb);
+        sb.Emit(OpCode.DUP);
+        sb.Emit(OpCode.CLEARITEMS);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("CLEARITEMS(Map)", sb.ToArray());
+    }
+
+    private static IEnumerable<MatrixCase> BuildStackSemanticCases()
+    {
+        yield return BuildStackDepthPickRollCase();
+        yield return BuildStackTuckReverseNCase();
+    }
+
+    private static MatrixCase BuildStackDepthPickRollCase()
+    {
+        using var sb = new ScriptBuilder();
+        OperandSpec.IntegerOne.Emit(sb);
+        OperandSpec.IntegerFifteen.Emit(sb);
+        sb.Emit(OpCode.DEPTH);
+        sb.Emit(OpCode.DUP);
+        sb.Emit(OpCode.OVER);
+        OperandSpec.IntegerTwo.Emit(sb);
+        sb.Emit(OpCode.PICK);
+        OperandSpec.IntegerThree.Emit(sb);
+        sb.Emit(OpCode.ROLL);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("StackSemantic(DEPTH-DUP-OVER-PICK-ROLL)", sb.ToArray());
+    }
+
+    private static MatrixCase BuildStackTuckReverseNCase()
+    {
+        using var sb = new ScriptBuilder();
+        OperandSpec.IntegerOne.Emit(sb);
+        OperandSpec.IntegerTwo.Emit(sb);
+        OperandSpec.IntegerThree.Emit(sb);
+        sb.Emit(OpCode.TUCK);
+        sb.Emit(OpCode.SWAP);
+        sb.Emit(OpCode.ROT);
+        OperandSpec.IntegerFour.Emit(sb);
+        sb.Emit(OpCode.REVERSEN);
+        sb.Emit(OpCode.RET);
+        return new MatrixCase("StackSemantic(TUCK-SWAP-ROT-REVERSEN)", sb.ToArray());
+    }
+
+    private static IEnumerable<MatrixCase> BuildControlFlowSemanticCases()
+    {
+        yield return new MatrixCase("ControlFlow(CALL-nested-return)", NestedCallCase());
+        yield return new MatrixCase("ControlFlow(TRY-catch-path)", TryCatchPathCase());
+    }
+
+    private static byte[] NestedCallCase() =>
+    [
+        (byte)OpCode.CALL, 0x06,
+        (byte)OpCode.PUSH9,
+        (byte)OpCode.RET,
+        (byte)OpCode.NOP,
+        (byte)OpCode.NOP,
+        (byte)OpCode.PUSH1,
+        (byte)OpCode.CALL, 0x04,
+        (byte)OpCode.ADD,
+        (byte)OpCode.RET,
+        (byte)OpCode.PUSH2,
+        (byte)OpCode.RET,
+    ];
+
+    private static byte[] TryCatchPathCase() =>
+    [
+        (byte)OpCode.TRY, 0x06, 0x00,
+        (byte)OpCode.PUSH1,
+        (byte)OpCode.THROW,
+        (byte)OpCode.ABORT,
+        (byte)OpCode.PUSH2,
+        (byte)OpCode.ENDTRY, 0x03,
+        (byte)OpCode.ABORT,
+        (byte)OpCode.RET,
+    ];
+
+    private static void EmitSingleIntegerArray(ScriptBuilder sb)
+    {
+        OperandSpec.IntegerOne.Emit(sb);
+        OperandSpec.IntegerOne.Emit(sb);
+        sb.Emit(OpCode.PACK);
+    }
+
+    private static void EmitTwoIntegerArray(ScriptBuilder sb)
+    {
+        OperandSpec.IntegerFifteen.Emit(sb);
+        OperandSpec.IntegerOne.Emit(sb);
+        OperandSpec.IntegerTwo.Emit(sb);
+        sb.Emit(OpCode.PACK);
+    }
+
+    private static void EmitMapWithByteStringEntry(ScriptBuilder sb)
+    {
+        sb.Emit(OpCode.NEWMAP);
+        sb.Emit(OpCode.DUP);
+        OperandSpec.ByteString0f.Emit(sb);
+        OperandSpec.IntegerOne.Emit(sb);
+        sb.Emit(OpCode.SETITEM);
+    }
+
     private static byte[] TryNormalShortCase() =>
     [
         (byte)OpCode.TRY, 0x06, 0x00,
@@ -460,6 +757,10 @@ public class UT_OpcodeOracleMatrix
     private static IEnumerable<MatrixCase> GenerateDifferentialFuzzCases(int seed, int count)
     {
         var rng = new Random(seed);
+        var seededCases = BuildDifferentialSeedCases().Take(count).ToArray();
+        foreach (var seededCase in seededCases)
+            yield return seededCase;
+
         var operands = new[]
         {
             OperandSpec.Null,
@@ -476,6 +777,9 @@ public class UT_OpcodeOracleMatrix
             OperandSpec.ByteString33,
             OperandSpec.BufferEmpty,
             OperandSpec.Buffer33,
+            OperandSpec.ArrayEmpty,
+            OperandSpec.StructEmpty,
+            OperandSpec.MapEmpty,
         };
         var unary = new[]
         {
@@ -495,7 +799,7 @@ public class UT_OpcodeOracleMatrix
             OpCode.BOOLAND, OpCode.BOOLOR,
         };
 
-        for (var caseIndex = 0; caseIndex < count; caseIndex++)
+        for (var caseIndex = 0; caseIndex < count - seededCases.Length; caseIndex++)
         {
             using var sb = new ScriptBuilder();
             var depth = 0;
@@ -540,6 +844,14 @@ public class UT_OpcodeOracleMatrix
             sb.Emit(OpCode.RET);
             yield return new MatrixCase($"DifferentialFuzz(seed={seed},case={caseIndex})", sb.ToArray());
         }
+    }
+
+    private static IEnumerable<MatrixCase> BuildDifferentialSeedCases()
+    {
+        yield return new MatrixCase("DifferentialFuzz(seeded-collection-array-mutation)", BuildArraySetItemCase().Script);
+        yield return new MatrixCase("DifferentialFuzz(seeded-collection-map-mutation)", BuildMapClearItemsCase().Script);
+        yield return new MatrixCase("DifferentialFuzz(seeded-stack-reordering)", BuildStackTuckReverseNCase().Script);
+        yield return new MatrixCase("DifferentialFuzz(seeded-control-flow)", NestedCallCase());
     }
 
     private static StackItemType RandomConvertibleType(Random rng)
@@ -752,6 +1064,12 @@ public class UT_OpcodeOracleMatrix
         public static OperandSpec IntegerZero { get; } = new("Integer0", sb => sb.EmitPush(BigInteger.Zero));
 
         public static OperandSpec IntegerOne { get; } = new("Integer1", sb => sb.EmitPush(BigInteger.One));
+
+        public static OperandSpec IntegerTwo { get; } = new("Integer2", sb => sb.EmitPush(new BigInteger(2)));
+
+        public static OperandSpec IntegerThree { get; } = new("Integer3", sb => sb.EmitPush(new BigInteger(3)));
+
+        public static OperandSpec IntegerFour { get; } = new("Integer4", sb => sb.EmitPush(new BigInteger(4)));
 
         public static OperandSpec IntegerFifteen { get; } = new("Integer15", sb => sb.EmitPush(new BigInteger(15)));
 

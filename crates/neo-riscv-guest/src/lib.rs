@@ -106,6 +106,36 @@ struct TryFrame {
     end_ip: usize,
 }
 
+#[derive(Debug)]
+enum PendingException {
+    Message(String),
+    ThrownValue(StackValue),
+}
+
+impl PendingException {
+    fn message(message: String) -> Self {
+        Self::Message(message)
+    }
+
+    fn thrown_value(value: StackValue) -> Self {
+        Self::ThrownValue(value)
+    }
+
+    fn into_catch_item(self) -> StackValue {
+        match self {
+            Self::Message(message) => StackValue::ByteString(message.into_bytes()),
+            Self::ThrownValue(value) => value,
+        }
+    }
+
+    fn into_fault_message(self) -> String {
+        match self {
+            Self::Message(message) => message,
+            Self::ThrownValue(value) => format!("THROW: {:?}", value),
+        }
+    }
+}
+
 /// Fixed-capacity stack for TryFrames — avoids heap allocation to prevent
 /// PolkaVM bump allocator corruption during host_call round-trips.
 const MAX_STACK_SIZE: usize = 2048;
@@ -522,7 +552,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
     let mut try_frames = TryStack::new();
     let mut call_stack = CallStack::new();
     let mut consumed_mutations: Vec<StackValue> = Vec::with_capacity(16);
-    let mut pending_error: Option<String> = None;
+    let mut pending_error: Option<PendingException> = None;
     let mut previous_opcode_was_callt = false;
 
     'main_loop: loop {
@@ -568,21 +598,26 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 let saved_catch_ip = frame.catch_ip;
                 let saved_finally_ip = frame.finally_ip;
                 // NeoVM: error goes to catch first, then finally
+                let pending = pending_error.take().ok_or_else(|| {
+                    "missing pending exception during exception unwind".to_string()
+                })?;
                 if saved_catch_ip != 0 {
-                    let msg = pending_error.take().unwrap();
-                    stack.push(StackValue::ByteString(msg.into_bytes()));
+                    stack.push(pending.into_catch_item());
                     ip = saved_catch_ip;
                 } else if saved_finally_ip != 0 {
                     frame.in_finally = true;
                     ip = saved_finally_ip;
                     // Keep pending_error for re-throw after ENDFINALLY
+                    pending_error = Some(pending);
                 } else {
-                    pending_error = None;
                     continue;
                 }
                 continue;
             } else {
-                return Err(pending_error.take().unwrap());
+                return Err(pending_error
+                    .take()
+                    .ok_or_else(|| "missing pending exception without try frame".to_string())?
+                    .into_fault_message());
             }
         }
 
@@ -875,7 +910,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     if try_frames.is_empty() {
                         return Err(e);
                     }
-                    pending_error = Some(e);
+                    pending_error = Some(PendingException::message(e));
                     continue;
                 }
                 ip += 5;
@@ -901,7 +936,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     if try_frames.is_empty() {
                         return Err(e);
                     }
-                    pending_error = Some(e);
+                    pending_error = Some(PendingException::message(e));
                     continue;
                 }
                 previous_opcode_was_callt = true;
@@ -1709,7 +1744,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     if try_frames.is_empty() {
                         return Err(error);
                     }
-                    pending_error = Some(error);
+                    pending_error = Some(PendingException::message(error));
                     continue;
                 }
             }
@@ -1954,7 +1989,6 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             &mut alt_stack,
                             None,
                         );
-                        stack.push(updated);
                         stack.push(popped);
                     }
                     StackValue::Struct(id, mut items) => {
@@ -1972,7 +2006,6 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             &mut alt_stack,
                             None,
                         );
-                        stack.push(updated);
                         stack.push(popped);
                     }
                     StackValue::Map(id, mut entries) => {
@@ -1990,7 +2023,6 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             &mut alt_stack,
                             None,
                         );
-                        stack.push(updated);
                         stack.push(key);
                         stack.push(value);
                     }
@@ -2009,7 +2041,6 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             &mut alt_stack,
                             None,
                         );
-                        stack.push(updated);
                         stack.push(StackValue::Integer(byte as i64));
                     }
                     _ => return Err("POPITEM expects a compound value".to_string()),
@@ -2107,7 +2138,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         },
                     });
                 }
-                pending_error = Some(err_msg);
+                pending_error = Some(PendingException::thrown_value(msg));
                 continue;
             }
             THROWIFNOT => {
@@ -2129,7 +2160,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             },
                         });
                     }
-                    pending_error = Some(err_msg);
+                    pending_error = Some(PendingException::message(err_msg));
                     continue;
                 }
             }
@@ -2310,8 +2341,8 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 // NeoVM StackItemType enum values
                 let result = match kind {
                     0x00 => return Err("unsupported ISTYPE kind 0x00".to_string()), // Any
-                    0x10 => matches!(item, StackValue::Pointer(_)), // Pointer
-                    0x20 => matches!(item, StackValue::Boolean(_)), // Boolean
+                    0x10 => matches!(item, StackValue::Pointer(_)),                 // Pointer
+                    0x20 => matches!(item, StackValue::Boolean(_)),                 // Boolean
                     0x21 => matches!(item, StackValue::Integer(_) | StackValue::BigInteger(_)), // Integer
                     0x28 => matches!(item, StackValue::ByteString(_)), // ByteString
                     0x30 => matches!(item, StackValue::Buffer(_, _)),  // Buffer
@@ -2794,7 +2825,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
             TRY => {
                 // NeoVM TRY: TRY catch_offset_i8, finally_offset_i8 (3 bytes total)
                 if ip + 3 > script.len() {
-                    pending_error = Some("truncated TRY operand".to_string());
+                    pending_error = Some(PendingException::message(
+                        "truncated TRY operand".to_string(),
+                    ));
                     continue;
                 }
                 let catch_offset = script[ip + 1] as i8;
@@ -2810,7 +2843,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     0
                 };
                 if catch_ip > script.len() || finally_ip > script.len() {
-                    pending_error = Some("TRY target out of bounds".to_string());
+                    pending_error = Some(PendingException::message(
+                        "TRY target out of bounds".to_string(),
+                    ));
                     continue;
                 }
                 try_frames.push(TryFrame {
@@ -2827,7 +2862,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
             ENDTRY => {
                 // ENDTRY offset_i8: end of try/catch block
                 if ip + 2 > script.len() {
-                    pending_error = Some("truncated ENDTRY operand".to_string());
+                    pending_error = Some(PendingException::message(
+                        "truncated ENDTRY operand".to_string(),
+                    ));
                     continue;
                 }
                 let offset = script[ip + 1] as i8;
@@ -2853,7 +2890,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
             TRY_L => {
                 // TRY_L: long-form TRY with i32 catch_offset, i32 finally_offset (9 bytes)
                 if ip + 9 > script.len() {
-                    pending_error = Some("truncated TRY_L operand".to_string());
+                    pending_error = Some(PendingException::message(
+                        "truncated TRY_L operand".to_string(),
+                    ));
                     continue;
                 }
                 let catch_offset = i32::from_le_bytes([
@@ -2879,7 +2918,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     0
                 };
                 if catch_ip > script.len() || finally_ip > script.len() {
-                    pending_error = Some("TRY_L target out of bounds".to_string());
+                    pending_error = Some(PendingException::message(
+                        "TRY_L target out of bounds".to_string(),
+                    ));
                     continue;
                 }
                 try_frames.push(TryFrame {
@@ -2896,7 +2937,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
             ENDTRY_L => {
                 // ENDTRY_L offset_i32: long-form ENDTRY (5 bytes)
                 if ip + 5 > script.len() {
-                    pending_error = Some("truncated ENDTRY_L operand".to_string());
+                    pending_error = Some(PendingException::message(
+                        "truncated ENDTRY_L operand".to_string(),
+                    ));
                     continue;
                 }
                 let offset = i32::from_le_bytes([

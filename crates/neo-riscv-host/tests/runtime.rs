@@ -6116,7 +6116,7 @@ fn storage_context_token_round_trips_across_syscalls_in_ffi_path() {
 fn popitem_removes_last_array_element() {
     // Script: PUSH3, PUSH2, PUSH1, PUSH3, PACK, POPITEM, RET
     // PACK pops 3 items: 1, 2, 3 (top to bottom) → Array([1, 2, 3])
-    // POPITEM pops last element → Array([1, 2]), element = 3
+    // POPITEM pops the collection and returns the removed item.
     let script = vec![
         0x13, // PUSH3
         0x12, // PUSH2
@@ -6130,25 +6130,14 @@ fn popitem_removes_last_array_element() {
     let result = execute_script(&script).expect("POPITEM on array should succeed");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack.len(), 2);
-    // The popped element is 3 (last in the array)
-    assert_eq!(result.stack[1], StackValue::Integer(3));
-    // The array now has [1, 2]
-    match &result.stack[0] {
-        StackValue::Array(items) => {
-            assert_eq!(items.len(), 2);
-            assert_eq!(items[0], StackValue::Integer(1));
-            assert_eq!(items[1], StackValue::Integer(2));
-        }
-        other => panic!("expected Array, got {other:?}"),
-    }
+    assert_eq!(result.stack, vec![StackValue::Integer(3)]);
 }
 
 #[test]
 fn popitem_removes_last_struct_element() {
     // Script: PUSH2, PUSH1, PUSH2, PACKSTRUCT, POPITEM, RET
     // PACKSTRUCT pops 2 items: 1, 2 → Struct([1, 2])
-    // POPITEM pops last element → Struct([1]), element = 2
+    // POPITEM pops the collection and returns the removed item.
     let script = vec![
         0x12, // PUSH2
         0x11, // PUSH1
@@ -6161,15 +6150,7 @@ fn popitem_removes_last_struct_element() {
     let result = execute_script(&script).expect("POPITEM on struct should succeed");
 
     assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack.len(), 2);
-    assert_eq!(result.stack[1], StackValue::Integer(2));
-    match &result.stack[0] {
-        StackValue::Struct(items) => {
-            assert_eq!(items.len(), 1);
-            assert_eq!(items[0], StackValue::Integer(1));
-        }
-        other => panic!("expected Struct, got {other:?}"),
-    }
+    assert_eq!(result.stack, vec![StackValue::Integer(2)]);
 }
 
 #[test]
@@ -8523,8 +8504,8 @@ fn test_try_catch_throw_simple() {
     for (i, item) in result.stack.iter().enumerate() {
         eprintln!("  stack[{i}]: {:?}", item);
     }
-    // After THROW: catch pushes error string, PUSH1 pushes 1, ENDTRY jumps to PUSH2
-    // Expected: [Integer(2), Integer(1), ByteString("THROW")]
+    // After THROW: catch receives the original thrown StackItem, PUSH1 pushes 1,
+    // and ENDTRY jumps to PUSH2.
     assert_eq!(result.stack.len(), 3);
 }
 

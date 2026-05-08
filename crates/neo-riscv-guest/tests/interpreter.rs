@@ -1152,8 +1152,8 @@ fn modmul_accepts_i128_operands_and_modulus_like_neovm() {
         0x40, // RET
     ]);
 
-    let wide_modulus = interpret(&wide_modulus_script)
-        .expect("MODMUL should accept a positive i128 modulus");
+    let wide_modulus =
+        interpret(&wide_modulus_script).expect("MODMUL should accept a positive i128 modulus");
     assert_eq!(wide_modulus.stack, vec![StackValue::Integer(0)]);
 
     let mut wide_operand_script = vec![
@@ -1167,8 +1167,8 @@ fn modmul_accepts_i128_operands_and_modulus_like_neovm() {
         0x40, // RET
     ]);
 
-    let wide_operand = interpret(&wide_operand_script)
-        .expect("MODMUL should accept positive i128 operands");
+    let wide_operand =
+        interpret(&wide_operand_script).expect("MODMUL should accept positive i128 operands");
     assert_eq!(wide_operand.stack, vec![StackValue::Integer(7)]);
 }
 
@@ -1757,8 +1757,8 @@ fn modpow_accepts_i128_operands_and_modulus_like_neovm() {
         0x40, // RET
     ]);
 
-    let wide_modulus = interpret(&wide_modulus_script)
-        .expect("MODPOW should accept a positive i128 modulus");
+    let wide_modulus =
+        interpret(&wide_modulus_script).expect("MODPOW should accept a positive i128 modulus");
     assert_eq!(wide_modulus.stack, vec![StackValue::Integer(1)]);
 
     let mut wide_base_script = vec![
@@ -1772,8 +1772,8 @@ fn modpow_accepts_i128_operands_and_modulus_like_neovm() {
         0x40, // RET
     ]);
 
-    let wide_base = interpret(&wide_base_script)
-        .expect("MODPOW should accept positive i128 operands");
+    let wide_base =
+        interpret(&wide_base_script).expect("MODPOW should accept positive i128 operands");
     assert_eq!(wide_base.stack, vec![StackValue::Integer(7)]);
 }
 
@@ -2000,8 +2000,8 @@ fn numeric_ops_fault_on_null_like_neovm() {
         ("DEC", 0x9d),
         ("NZ", 0xb1),
     ] {
-        let error =
-            interpret(&[0x0b, opcode]).expect_err(&format!("{name} on Null should fault like NeoVM"));
+        let error = interpret(&[0x0b, opcode])
+            .expect_err(&format!("{name} on Null should fault like NeoVM"));
         assert!(
             error.contains("expected integer-compatible value"),
             "{name} error should mention numeric incompatibility: {error}"
@@ -2944,9 +2944,8 @@ fn try_catch_catches_throw() {
     ];
     let result = interpret(script).expect("try-catch should not error");
     assert_eq!(result.state, VmState::Halt);
-    // Stack: the catch handler pushes the error message (ByteString) then PUSH2
-    // THROW pops the value and pushes an error string onto the stack when caught
-    // Then PUSH2 is executed in catch. We expect PUSH2's value on top.
+    // THROW catch receives the original thrown StackItem, then PUSH2 executes.
+    // We expect PUSH2's value on top.
     assert!(
         result.stack.contains(&StackValue::Integer(2)),
         "catch handler should have executed, stack: {:?}",
@@ -3133,8 +3132,7 @@ fn convert_buffer_larger_than_max_integer_size_faults() {
 fn popitem_removes_last_from_array() {
     // PACK pops items in stack order: top popped first → stored at index 0.
     // Stack [1,2,3] (3 on top), PUSH3, PACK → Array items popped: 3,2,1 → Array [3,2,1]
-    // POPITEM pops last element (index 2 = 1)
-    // Result stack: [Array[3,2], Integer(1)]
+    // POPITEM pops the collection and returns the removed item.
     let script: &[u8] = &[
         0x11, // PUSH1
         0x12, // PUSH2
@@ -3146,12 +3144,7 @@ fn popitem_removes_last_from_array() {
     ];
     let result = interpret(script).expect("POPITEM should succeed");
     assert_eq!(result.state, VmState::Halt);
-    // After POPITEM: stack has [Array[3,2], Integer(1)]
-    assert!(
-        result.stack.contains(&StackValue::Integer(1)),
-        "popped item should be 1, stack: {:?}",
-        result.stack
-    );
+    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
 }
 
 #[test]

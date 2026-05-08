@@ -47,6 +47,36 @@ struct TryFrame {
     end_pc: i32,
 }
 
+#[derive(Debug, Clone)]
+enum PendingException {
+    Message(String),
+    ThrownValue(StackValue),
+}
+
+impl PendingException {
+    fn message(message: String) -> Self {
+        Self::Message(message)
+    }
+
+    fn thrown_value(value: StackValue) -> Self {
+        Self::ThrownValue(value)
+    }
+
+    fn into_catch_item(self) -> StackValue {
+        match self {
+            Self::Message(message) => StackValue::ByteString(message.into_bytes()),
+            Self::ThrownValue(value) => value,
+        }
+    }
+
+    fn fault_message(&self) -> String {
+        match self {
+            Self::Message(message) => message.clone(),
+            Self::ThrownValue(value) => format!("exception: {:?}", value),
+        }
+    }
+}
+
 /// Signature of a syscall bridge function.
 ///
 /// When set, `Context::syscall(hash)` delegates to this function, which is
@@ -87,8 +117,8 @@ pub struct Context {
     pub state: VmState,
     /// Exception handling try-block stack.
     try_stack: Vec<TryFrame>,
-    /// Pending exception message (set by throw/abort/assert when try frames exist).
-    pending_error: Option<String>,
+    /// Pending exception payload (set by throw/abort/assert when try frames exist).
+    pending_error: Option<PendingException>,
     /// Call stack tracking return offsets for CALL/RET.
     /// Separate from the eval stack to avoid conflicts when entry-point
     /// methods (called via dispatch, not NeoVM CALL) have no return address.
@@ -447,14 +477,14 @@ impl Context {
     /// If try frames exist, stores as pending error for `check_exception()` to handle.
     pub fn throw_ex(&mut self) {
         let val = self.pop();
-        let msg = match &val {
-            StackValue::ByteString(bytes) => String::from_utf8_lossy(bytes).to_string(),
-            StackValue::Integer(v) => format!("exception: {v}"),
-            _ => format!("exception: {:?}", val),
-        };
         if self.try_stack.iter().any(|f| !f.caught) {
-            self.pending_error = Some(msg);
+            self.pending_error = Some(PendingException::thrown_value(val));
         } else {
+            let msg = match &val {
+                StackValue::ByteString(bytes) => String::from_utf8_lossy(bytes).to_string(),
+                StackValue::Integer(v) => format!("exception: {v}"),
+                _ => format!("exception: {:?}", val),
+            };
             self.fault(&msg);
         }
     }
@@ -463,7 +493,7 @@ impl Context {
     /// If try frames exist, stores as pending error.
     pub fn abort(&mut self) {
         if self.try_stack.iter().any(|f| !f.caught) {
-            self.pending_error = Some("ABORT".to_string());
+            self.pending_error = Some(PendingException::message("ABORT".to_string()));
         } else {
             self.fault("ABORT");
         }
@@ -480,7 +510,7 @@ impl Context {
             _ => format!("ABORTMSG: {:?}", val),
         };
         if self.try_stack.iter().any(|f| !f.caught) {
-            self.pending_error = Some(msg);
+            self.pending_error = Some(PendingException::message(msg));
         } else {
             self.fault(&msg);
         }
@@ -500,7 +530,9 @@ impl Context {
         };
         if !is_true {
             if self.try_stack.iter().any(|f| !f.caught) {
-                self.pending_error = Some("ASSERT: assertion failed".to_string());
+                self.pending_error = Some(PendingException::message(
+                    "ASSERT: assertion failed".to_string(),
+                ));
             } else {
                 self.fault("ASSERT: assertion failed");
             }
@@ -528,7 +560,7 @@ impl Context {
                 _ => format!("ASSERTMSG: {:?}", msg_val),
             };
             if self.try_stack.iter().any(|f| !f.caught) {
-                self.pending_error = Some(msg);
+                self.pending_error = Some(PendingException::message(msg));
             } else {
                 self.fault(&msg);
             }
@@ -599,8 +631,7 @@ impl Context {
         let catch_pc = frame.catch_pc;
         let finally_pc = frame.finally_pc;
         if catch_pc != 0 {
-            // Push the error message onto the stack for the catch block
-            self.stack.push(StackValue::ByteString(error.into_bytes()));
+            self.stack.push(error.into_catch_item());
             Some(catch_pc)
         } else if finally_pc != 0 {
             // No catch — go to finally, keep pending_error for re-throw
@@ -609,7 +640,7 @@ impl Context {
             Some(finally_pc)
         } else {
             // No catch or finally — fault
-            self.fault(&error);
+            self.fault(&error.fault_message());
             None
         }
     }

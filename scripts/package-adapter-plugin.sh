@@ -73,7 +73,15 @@ fi
 
 echo "[package] copying files…"
 cp -f "${ADAPTER_DLL}" "${OUT_DIR}/Neo.Riscv.Adapter.dll"
-cp -f "${HOST_LIB}" "${OUT_DIR}/$(basename "${HOST_LIB}")"
+HOST_LIB_OUT="${OUT_DIR}/$(basename "${HOST_LIB}")"
+cp -f "${HOST_LIB}" "${HOST_LIB_OUT}"
+
+if [[ "$(uname -s)" == "Darwin" && "$(basename "${HOST_LIB_OUT}")" == *.dylib ]]; then
+  if command -v codesign >/dev/null 2>&1; then
+    echo "[package] ad-hoc signing native host library…"
+    codesign --force --sign - "${HOST_LIB_OUT}" >/dev/null
+  fi
+fi
 
 echo "[package] done."
 echo "[package] install by copying '${ROOT_DIR}/dist/Plugins' next to your neo-cli binaries (same folder level as 'config.json')."

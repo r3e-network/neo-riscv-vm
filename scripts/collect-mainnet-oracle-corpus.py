@@ -53,6 +53,17 @@ def iter_block_transactions(block: dict[str, Any]) -> Iterable[str]:
             yield tx
 
 
+def collect_contract_hashes(execution: dict[str, Any]) -> list[str]:
+    hashes = sorted(
+        {
+            str(notification.get("contract"))
+            for notification in execution.get("notifications") or []
+            if notification.get("contract") is not None
+        }
+    )
+    return hashes
+
+
 def collect_range(
     reference_rpc: str,
     start: int,
@@ -60,20 +71,39 @@ def collect_range(
     *,
     timeout: float = 30.0,
     sleep_seconds: float = 0.0,
+    include_raw_transactions: bool = False,
+    include_contracts: bool = False,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    contract_cache: dict[str, Any] = {}
     for height in range(start, end + 1):
         block = rpc_call(reference_rpc, "getblock", [height, 1], timeout=timeout)
         if not isinstance(block, dict):
             continue
         for tx_hash in iter_block_transactions(block):
+            raw_transaction = None
+            if include_raw_transactions:
+                raw_transaction = rpc_call(reference_rpc, "getrawtransaction", [tx_hash, 1], timeout=timeout)
             app_log = rpc_call(reference_rpc, "getapplicationlog", [tx_hash], timeout=timeout)
-            for execution in (app_log or {}).get("executions") or []:
+            for execution_index, execution in enumerate((app_log or {}).get("executions") or []):
                 notifications = execution.get("notifications") or []
+                contract_hashes = collect_contract_hashes(execution)
+                contracts = []
+                if include_contracts:
+                    for contract_hash in contract_hashes:
+                        if contract_hash not in contract_cache:
+                            contract_cache[contract_hash] = rpc_call(
+                                reference_rpc,
+                                "getcontractstate",
+                                [contract_hash],
+                                timeout=timeout,
+                            )
+                        contracts.append(contract_cache[contract_hash])
                 records.append(
                     {
                         "block": height,
                         "tx": tx_hash,
+                        "execution_index": execution_index,
                         "trigger": execution.get("trigger"),
                         "vmstate": execution.get("vmstate"),
                         "exception": execution.get("exception"),
@@ -86,6 +116,9 @@ def collect_range(
                         ),
                         "notification_count": len(notifications),
                         "stack": execution.get("stack"),
+                        "contract_hashes": contract_hashes,
+                        "contracts": contracts,
+                        "raw_transaction": raw_transaction,
                         "bucket": bucket_execution(execution),
                     }
                 )
@@ -109,6 +142,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--sleep", type=float, default=0.0, help="sleep between tx applicationlog requests")
     parser.add_argument("--output", default="tests/corpus/mainnet-oracle/applicationlogs.jsonl")
+    parser.add_argument("--include-raw-transactions", action="store_true")
+    parser.add_argument("--include-contracts", action="store_true", help="include getcontractstate payloads for notified contracts")
     return parser.parse_args()
 
 
@@ -123,6 +158,8 @@ def main() -> int:
         args.end,
         timeout=args.timeout,
         sleep_seconds=args.sleep,
+        include_raw_transactions=args.include_raw_transactions,
+        include_contracts=args.include_contracts,
     )
     write_jsonl(records, Path(args.output))
     buckets = sorted({record["bucket"] for record in records})

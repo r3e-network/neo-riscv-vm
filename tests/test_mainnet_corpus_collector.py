@@ -57,6 +57,50 @@ class MainnetCorpusCollectorTests(unittest.TestCase):
         self.assertEqual("vmstate=HALT;exception=none;events=Transfer", records[0]["bucket"])
         self.assertEqual("vmstate=FAULT;exception=ASSERT failed;events=none", records[1]["bucket"])
 
+    def test_collects_raw_transaction_and_contract_nef_payloads(self):
+        module = load_module()
+        block = {"tx": [{"hash": "0xaaa"}]}
+        app_log = {
+            "executions": [
+                {
+                    "trigger": "Application",
+                    "vmstate": "HALT",
+                    "exception": None,
+                    "notifications": [{"contract": "0xcontract", "eventname": "Transfer"}],
+                }
+            ]
+        }
+        raw_tx = {"hash": "0xaaa", "script": "DEADBEEF", "signers": [{"account": "0xsigner"}]}
+        contract_state = {
+            "hash": "0xcontract",
+            "nef": {"checksum": 1234, "script": "AAECAw=="},
+            "manifest": {"name": "Token"},
+        }
+
+        def fake_rpc(_url, method, params, **_kwargs):
+            if method == "getblock":
+                return block
+            if method == "getapplicationlog":
+                return app_log
+            if method == "getrawtransaction":
+                return raw_tx
+            if method == "getcontractstate":
+                return contract_state
+            raise AssertionError(method)
+
+        with mock.patch.object(module, "rpc_call", side_effect=fake_rpc):
+            records = module.collect_range(
+                "http://seed1.neo.org:10332",
+                10,
+                10,
+                include_raw_transactions=True,
+                include_contracts=True,
+            )
+
+        self.assertEqual(raw_tx, records[0]["raw_transaction"])
+        self.assertEqual([contract_state], records[0]["contracts"])
+        self.assertEqual(["0xcontract"], records[0]["contract_hashes"])
+
     def test_writes_corpus_jsonl(self):
         module = load_module()
         out_file = Path(self._testMethodName) / "corpus.jsonl"

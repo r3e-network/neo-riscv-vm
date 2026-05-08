@@ -137,24 +137,6 @@ pub(crate) fn pop_shift_count(stack: &mut Vec<StackValue>) -> Result<i64, String
     }
 }
 
-pub(crate) fn pop_numeric_value(stack: &mut Vec<StackValue>) -> Result<i64, String> {
-    match stack.pop() {
-        Some(StackValue::Integer(value)) => Ok(value),
-        Some(StackValue::Boolean(value)) => Ok(if value { 1 } else { 0 }),
-        Some(StackValue::ByteString(value)) => decode_signed_le_bytes(&value),
-        Some(StackValue::BigInteger(value)) => decode_signed_le_bytes(&value),
-        Some(StackValue::Null) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Pointer(_)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Array(..)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Struct(..)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Map(..)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Buffer(_, _)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Interop(_)) => Err("expected integer-compatible value".to_string()),
-        Some(StackValue::Iterator(_)) => Err("expected integer-compatible value".to_string()),
-        None => Err("stack underflow".to_string()),
-    }
-}
-
 pub(crate) fn pop_numeric_bigint(stack: &mut Vec<StackValue>) -> Result<BigInt, String> {
     match stack.pop() {
         Some(StackValue::Integer(value)) => Ok(BigInt::from(value)),
@@ -1313,7 +1295,7 @@ pub(crate) fn pop_boolean(stack: &mut Vec<StackValue>) -> Result<bool, String> {
         Some(StackValue::Integer(value)) => Ok(value != 0),
         Some(StackValue::BigInteger(value)) => Ok(value.iter().any(|byte| *byte != 0)),
         Some(StackValue::ByteString(value)) => Ok(value.iter().any(|byte| *byte != 0)),
-        Some(StackValue::Buffer(_, value)) => Ok(value.iter().any(|byte| *byte != 0)),
+        Some(StackValue::Buffer(_, _)) => Ok(true),
         Some(StackValue::Null) => Ok(false),
         Some(_) => Ok(true),
         None => Err("stack underflow".to_string()),
@@ -1338,81 +1320,50 @@ pub(crate) fn item_to_boolean_strict(item: &StackValue) -> Result<bool, String> 
             }
             Ok(value.iter().any(|byte| *byte != 0))
         }
-        StackValue::Buffer(_, value) => {
-            if value.len() > MAX_INTEGER_SIZE {
-                return Err("integer size exceeds maximum".to_string());
-            }
-            Ok(value.iter().any(|byte| *byte != 0))
-        }
+        StackValue::Buffer(_, _) => Ok(true),
         StackValue::Null => Ok(false),
         _ => Ok(true),
     }
 }
 
-pub(crate) fn mod_pow(base: i64, exponent: i64, modulus: i64) -> Result<i64, String> {
-    if modulus == 0 {
+pub(crate) fn mod_pow_bigint(
+    base: BigInt,
+    exponent: BigInt,
+    modulus: BigInt,
+) -> Result<BigInt, String> {
+    if modulus.is_zero() {
         return Err("division by zero for MODPOW".to_string());
     }
 
-    if exponent == -1 {
-        return mod_inverse(base, modulus);
+    if exponent == BigInt::from(-1) {
+        if base <= BigInt::zero() {
+            return Err("value has no modular inverse".to_string());
+        }
+        if modulus <= BigInt::from(1) {
+            return Err("invalid modulus for modular inverse".to_string());
+        }
+        return base
+            .modinv(&modulus)
+            .ok_or_else(|| "value is not invertible for MODPOW".to_string());
     }
 
-    if exponent < 0 {
+    if exponent < BigInt::zero() {
         return Err("negative exponent for MODPOW".to_string());
     }
 
-    let modulus = i128::from(modulus);
-    let mut result: i128 = 1 % modulus;
-    let mut power = i128::from(base);
-    let mut exponent = exponent as u64;
-
-    while exponent > 0 {
-        if exponent & 1 == 1 {
-            result = (result * power) % modulus;
+    let mut result = BigInt::from(1) % &modulus;
+    let mut power = base % &modulus;
+    let mut exponent = exponent;
+    while exponent > BigInt::zero() {
+        if (&exponent % 2u8) != BigInt::zero() {
+            result = (result * &power) % &modulus;
         }
-        exponent >>= 1;
-        if exponent > 0 {
-            power = (power * power) % modulus;
+        exponent >>= 1usize;
+        if exponent > BigInt::zero() {
+            power = (&power * &power) % &modulus;
         }
     }
-
-    i64::try_from(result).map_err(|_| "integer overflow for MODPOW".to_string())
-}
-
-pub(crate) fn mod_inverse(value: i64, modulus: i64) -> Result<i64, String> {
-    if value <= 0 {
-        return Err("value has no modular inverse".to_string());
-    }
-    if modulus <= 1 {
-        return Err("invalid modulus for modular inverse".to_string());
-    }
-
-    let mut t: i128 = 0;
-    let mut new_t: i128 = 1;
-    let mut r: i128 = i128::from(modulus);
-    let mut new_r: i128 = i128::from(value);
-
-    while new_r != 0 {
-        let quotient = r / new_r;
-        (t, new_t) = (new_t, t - quotient * new_t);
-        (r, new_r) = (new_r, r - quotient * new_r);
-    }
-
-    if r != 1 && r != -1 {
-        return Err("value is not invertible for MODPOW".to_string());
-    }
-
-    let modulus = i128::from(modulus);
-    let mut inverse = t % modulus;
-    if inverse == 0 {
-        return Ok(0);
-    }
-    if (modulus > 0 && inverse < 0) || (modulus < 0 && inverse > 0) {
-        inverse += modulus;
-    }
-
-    i64::try_from(inverse).map_err(|_| "integer overflow for MODPOW".to_string())
+    Ok(result)
 }
 
 pub(crate) fn pop_bytes(stack: &mut Vec<StackValue>) -> Result<Vec<u8>, String> {

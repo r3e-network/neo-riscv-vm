@@ -36,6 +36,48 @@ ensure_release_host() {
   fi
 }
 
+local_rpc_available() {
+  local rpc_url="${1}"
+  python3 - "${rpc_url}" <<'PY'
+import json
+import sys
+import urllib.request
+
+url = sys.argv[1]
+payload = json.dumps({"jsonrpc":"2.0","method":"getblockcount","params":[],"id":1}).encode()
+request = urllib.request.Request(url, data=payload, headers={"Content-Type":"application/json"}, method="POST")
+try:
+    with urllib.request.urlopen(request, timeout=2) as response:
+        body = json.loads(response.read().decode())
+except Exception:
+    sys.exit(1)
+sys.exit(0 if body.get("error") is None else 1)
+PY
+}
+
+replay_mainnet_oracle_corpus_if_available() {
+  local corpus="${ROOT_DIR}/mainnet-validation/oracle-corpus/applicationlogs.jsonl"
+  local local_rpc="${LOCAL_RPC:-http://127.0.0.1:10332}"
+
+  if [[ ! -f "${corpus}" ]]; then
+    echo "[oracle-corpus] skipped replay; corpus not found at ${corpus}"
+    return
+  fi
+
+  if ! local_rpc_available "${local_rpc}"; then
+    echo "[oracle-corpus] skipped replay; local RPC unavailable at ${local_rpc}"
+    return
+  fi
+
+  python3 "${ROOT_DIR}/scripts/replay-mainnet-oracle-corpus.py" \
+    --corpus "${corpus}" \
+    --local-rpc "${local_rpc}" \
+    --timeout "${LOCAL_RPC_TIMEOUT:-5}" \
+    --max-records "${MAINNET_CORPUS_REPLAY_MAX:-512}" \
+    --output "${ROOT_DIR}/mainnet-validation/oracle-corpus/replay-mismatches.jsonl" \
+    --fail-on-mismatch
+}
+
 refresh_release_host() {
   run_guest_regen
   run_cargo_stable build -p neo-riscv-host --release
@@ -62,6 +104,7 @@ run_pre_mainnet() {
   python3 -m unittest \
     tests.test_fault_oracle_corpus \
     tests.test_mainnet_corpus_collector \
+    tests.test_mainnet_corpus_replay \
     tests.test_stateroot_segments
 
   refresh_release_host
@@ -76,6 +119,8 @@ run_pre_mainnet() {
       --output-dir "${ROOT_DIR}/mainnet-validation/oracle-corpus/faults" \
       --fail-on-reference-halt
   fi
+
+  replay_mainnet_oracle_corpus_if_available
 }
 
 run_nightly() {
@@ -88,7 +133,11 @@ run_nightly() {
   python3 "${ROOT_DIR}/scripts/collect-mainnet-oracle-corpus.py" \
     --start "${MAINNET_CORPUS_START:-0}" \
     --end "${MAINNET_CORPUS_END:-2000}" \
-    --output "${ROOT_DIR}/mainnet-validation/oracle-corpus/applicationlogs.jsonl"
+    --output "${ROOT_DIR}/mainnet-validation/oracle-corpus/applicationlogs.jsonl" \
+    --include-raw-transactions \
+    --include-contracts
+
+  replay_mainnet_oracle_corpus_if_available
 }
 
 run_long_running() {

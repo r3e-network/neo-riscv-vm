@@ -1178,14 +1178,9 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 let value = pop_item(&mut stack)?;
                 match value {
                     StackValue::Integer(v) => stack.push(StackValue::Integer(!v)),
-                    StackValue::BigInteger(v) => {
-                        let inverted: Vec<u8> = v.iter().map(|b| !b).collect();
-                        stack.push(StackValue::BigInteger(trim_le_bytes(inverted)));
-                    }
-                    StackValue::ByteString(v) => {
-                        // NeoVM: ByteString is implicitly convertible to Integer for bitwise ops
-                        let inverted: Vec<u8> = v.iter().map(|b| !b).collect();
-                        stack.push(StackValue::BigInteger(trim_le_bytes(inverted)));
+                    StackValue::BigInteger(v) | StackValue::ByteString(v) => {
+                        let n = decode_signed_le_bytes_bigint(&v)?;
+                        stack.push(numeric_result_bigint(!n, "integer overflow for INVERT")?);
                     }
                     StackValue::Boolean(v) => {
                         stack.push(StackValue::Integer(if v { -2 } else { -1 }))
@@ -1321,25 +1316,28 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 )?);
             }
             MODMUL => {
-                let modulus = pop_numeric_value(&mut stack)?;
-                if modulus == 0 {
+                let modulus = pop_numeric_bigint(&mut stack)?;
+                if modulus.is_zero() {
                     return Err("division by zero for MODMUL".to_string());
                 }
-                let right = pop_numeric_value(&mut stack)?;
-                let left = pop_numeric_value(&mut stack)?;
-                let result = ((left as i128) * (right as i128)) % (modulus as i128);
-                stack.push(StackValue::Integer(
-                    i64::try_from(result).map_err(|_| "integer overflow for MODMUL".to_string())?,
-                ));
+                let right = pop_numeric_bigint(&mut stack)?;
+                let left = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    (left * right) % modulus,
+                    "integer overflow for MODMUL",
+                )?);
             }
             MODPOW => {
-                let modulus = pop_numeric_value(&mut stack)?;
-                if modulus == 0 {
+                let modulus = pop_numeric_bigint(&mut stack)?;
+                if modulus.is_zero() {
                     return Err("division by zero for MODPOW".to_string());
                 }
-                let exponent = pop_numeric_value(&mut stack)?;
-                let base = pop_numeric_value(&mut stack)?;
-                stack.push(StackValue::Integer(mod_pow(base, exponent, modulus)?));
+                let exponent = pop_numeric_bigint(&mut stack)?;
+                let base = pop_numeric_bigint(&mut stack)?;
+                stack.push(numeric_result_bigint(
+                    mod_pow_bigint(base, exponent, modulus)?,
+                    "integer overflow for MODPOW",
+                )?);
             }
             SHL => {
                 let shift = pop_shift_count(&mut stack)?;

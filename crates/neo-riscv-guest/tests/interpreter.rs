@@ -894,6 +894,33 @@ fn concatenates_negative_integer_as_bytestring() {
 }
 
 #[test]
+fn invert_empty_bytestring_matches_neovm_integer_semantics() {
+    // PUSHDATA1 "" ; INVERT ; RET
+    let result = interpret(&[0x0c, 0x00, 0x90, 0x40])
+        .expect("INVERT should treat an empty ByteString as integer zero");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert_eq!(result.stack, vec![StackValue::Integer(-1)]);
+}
+
+#[test]
+fn empty_buffer_is_truthy_for_boolean_opcodes() {
+    // PUSHDATA1 "" ; CONVERT Buffer ; NOT ; RET
+    let not_result = interpret(&[0x0c, 0x00, 0xdb, 0x30, 0xaa, 0x40])
+        .expect("NOT should treat Buffer as a truthy reference item");
+
+    assert_eq!(not_result.state, VmState::Halt);
+    assert_eq!(not_result.stack, vec![StackValue::Boolean(false)]);
+
+    // PUSH1 ; PUSHDATA1 "" ; CONVERT Buffer ; BOOLAND ; RET
+    let booland_result = interpret(&[0x11, 0x0c, 0x00, 0xdb, 0x30, 0xab, 0x40])
+        .expect("BOOLAND should treat Buffer as a truthy reference item");
+
+    assert_eq!(booland_result.state, VmState::Halt);
+    assert_eq!(booland_result.stack, vec![StackValue::Boolean(true)]);
+}
+
+#[test]
 fn executes_pushint128_positive_preserves_sign_bit() {
     // PUSHINT128 with value 128: 0x80 followed by 15 zero bytes
     let mut script = vec![0x04, 0x80];
@@ -1108,6 +1135,41 @@ fn executes_modmul() {
         .expect("guest interpreter should support MODMUL");
 
     assert_eq!(result.stack, vec![StackValue::Integer(1)]);
+}
+
+#[test]
+fn modmul_accepts_i128_operands_and_modulus_like_neovm() {
+    let max_i128 = [0xff; 15].into_iter().chain([0x7f]).collect::<Vec<_>>();
+
+    let mut wide_modulus_script = vec![
+        0x10, // PUSH0
+        0x10, // PUSH0
+        0x04, // PUSHINT128
+    ];
+    wide_modulus_script.extend_from_slice(&max_i128);
+    wide_modulus_script.extend_from_slice(&[
+        0xa5, // MODMUL
+        0x40, // RET
+    ]);
+
+    let wide_modulus = interpret(&wide_modulus_script)
+        .expect("MODMUL should accept a positive i128 modulus");
+    assert_eq!(wide_modulus.stack, vec![StackValue::Integer(0)]);
+
+    let mut wide_operand_script = vec![
+        0x04, // PUSHINT128
+    ];
+    wide_operand_script.extend_from_slice(&max_i128);
+    wide_operand_script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x1f, // PUSH15
+        0xa5, // MODMUL
+        0x40, // RET
+    ]);
+
+    let wide_operand = interpret(&wide_operand_script)
+        .expect("MODMUL should accept positive i128 operands");
+    assert_eq!(wide_operand.stack, vec![StackValue::Integer(7)]);
 }
 
 #[test]
@@ -1629,6 +1691,90 @@ fn modpow_zero_exponent_is_reduced_by_modulus_like_neovm() {
         result.stack,
         vec![StackValue::Integer(0), StackValue::Integer(0)]
     );
+}
+
+#[test]
+fn modpow_zero_exponent_with_negative_modulus_returns_positive_one_like_neovm() {
+    let min_i128 = [0x00; 15].into_iter().chain([0x80]).collect::<Vec<_>>();
+
+    let mut script = vec![
+        0x10, // base 0
+        0x10, // exponent 0
+        0x0c, 0x01, 0x80, // ByteString -128
+        0xa6, // MODPOW
+        0x10, // base 0
+        0x10, // exponent 0
+        0x04, // PUSHINT128 min
+    ];
+    script.extend_from_slice(&min_i128);
+    script.extend_from_slice(&[
+        0xa6, // MODPOW
+        0x40, // RET
+    ]);
+
+    let result = interpret(&script)
+        .expect("MODPOW exponent zero should produce NeoVM's positive one for negative modulus");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(1), StackValue::Integer(1)]
+    );
+}
+
+#[test]
+fn modpow_preserves_signed_remainder_for_negative_base_like_neovm() {
+    let result = interpret(&[
+        0x0f, // base -1
+        0x11, // exponent 1
+        0x1f, // modulus 15
+        0xa6, // MODPOW
+        0x0f, // base -1
+        0x1f, // exponent 15
+        0x1f, // modulus 15
+        0xa6, // MODPOW
+        0x40, // RET
+    ])
+    .expect("MODPOW should preserve NeoVM signed remainder semantics");
+
+    assert_eq!(
+        result.stack,
+        vec![StackValue::Integer(-1), StackValue::Integer(-1)]
+    );
+}
+
+#[test]
+fn modpow_accepts_i128_operands_and_modulus_like_neovm() {
+    let max_i128 = [0xff; 15].into_iter().chain([0x7f]).collect::<Vec<_>>();
+
+    let mut wide_modulus_script = vec![
+        0x10, // PUSH0
+        0x10, // PUSH0
+        0x04, // PUSHINT128
+    ];
+    wide_modulus_script.extend_from_slice(&max_i128);
+    wide_modulus_script.extend_from_slice(&[
+        0xa6, // MODPOW
+        0x40, // RET
+    ]);
+
+    let wide_modulus = interpret(&wide_modulus_script)
+        .expect("MODPOW should accept a positive i128 modulus");
+    assert_eq!(wide_modulus.stack, vec![StackValue::Integer(1)]);
+
+    let mut wide_base_script = vec![
+        0x04, // PUSHINT128
+    ];
+    wide_base_script.extend_from_slice(&max_i128);
+    wide_base_script.extend_from_slice(&[
+        0x11, // PUSH1
+        0x1f, // PUSH15
+        0xa6, // MODPOW
+        0x40, // RET
+    ]);
+
+    let wide_base = interpret(&wide_base_script)
+        .expect("MODPOW should accept positive i128 operands");
+    assert_eq!(wide_base.stack, vec![StackValue::Integer(7)]);
 }
 
 #[test]

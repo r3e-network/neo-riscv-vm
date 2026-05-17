@@ -17,6 +17,9 @@ import urllib.request
 from pathlib import Path
 
 
+_NO_PROXY_OPENER = None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compare getstateroot results from local and reference RPCs."
@@ -38,6 +41,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def urlopen_without_system_proxy(request: urllib.request.Request, *, timeout: float):
+    global _NO_PROXY_OPENER
+    if _NO_PROXY_OPENER is None:
+        _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return _NO_PROXY_OPENER.open(request, timeout=timeout)
+
+
 def rpc(
     url: str,
     payload: object,
@@ -56,7 +66,7 @@ def rpc(
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urlopen_without_system_proxy(request, timeout=timeout) as response:
                 return json.loads(response.read())
         except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
             last_error = exc
@@ -115,6 +125,51 @@ def state_root_batch(start: int, end: int) -> list[dict[str, object]]:
     ]
 
 
+def state_roots_with_batch_fallback(
+    args: argparse.Namespace,
+    url: str,
+    payload: list[dict[str, object]],
+    *,
+    depth: int = 0,
+) -> dict[int, str]:
+    request_payload: object = payload[0] if len(payload) == 1 else payload
+    try:
+        return roots_by_height(
+            rpc(
+                url,
+                request_payload,
+                timeout=args.timeout,
+                retries=args.retries,
+                retry_sleep=args.retry_sleep,
+            )
+        )
+    except RuntimeError as exc:
+        if len(payload) == 1:
+            raise
+
+        if depth == 0:
+            first = payload[0].get("id")
+            last = payload[-1].get("id")
+            print(
+                f"WARN stateroot batch failed url={url} "
+                f"range={first}..{last} size={len(payload)}; "
+                f"falling back to single requests: {exc}",
+                flush=True,
+            )
+
+        roots: dict[int, str] = {}
+        for request in payload:
+            roots.update(
+                state_roots_with_batch_fallback(
+                    args,
+                    url,
+                    [request],
+                    depth=depth + 1,
+                )
+            )
+        return roots
+
+
 def open_log(path: str | None):
     if path is None:
         return None
@@ -132,6 +187,10 @@ def write_checkpoint(path: str | None, height: int) -> None:
         return
     checkpoint_path = Path(path)
     checkpoint_path.write_text(f"{height}\n", encoding="utf-8")
+
+
+def is_unknown_state_root(root: str) -> bool:
+    return root.startswith("ERROR:") and "Unknown state root" in root
 
 
 def resume_start_from_checkpoint(start: int, path: str | None) -> int:
@@ -167,30 +226,22 @@ def compare_range(
     end: int,
     *,
     log_handle,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     checked = 0
     next_report = start + args.report_interval
 
     for lo in range(start, end + 1, args.batch_size):
         hi = min(lo + args.batch_size - 1, end)
         payload = state_root_batch(lo, hi)
-        local_roots = roots_by_height(
-            rpc(
-                args.local_rpc,
-                payload,
-                timeout=args.timeout,
-                retries=args.retries,
-                retry_sleep=args.retry_sleep,
-            )
+        local_roots = state_roots_with_batch_fallback(
+            args,
+            args.local_rpc,
+            payload,
         )
-        reference_roots = roots_by_height(
-            rpc(
-                args.reference_rpc,
-                payload,
-                timeout=args.timeout,
-                retries=args.retries,
-                retry_sleep=args.retry_sleep,
-            )
+        reference_roots = state_roots_with_batch_fallback(
+            args,
+            args.reference_rpc,
+            payload,
         )
 
         for height in range(lo, hi + 1):
@@ -201,21 +252,46 @@ def compare_range(
                 and isinstance(local_root, str)
                 and local_root.startswith("0x")
             )
-            status = "OK" if ok else "MISMATCH"
             if log_handle is not None:
-                log_handle.write(
-                    f"{height}\t{local_root}\t{reference_root}\t{status}\n"
-                )
-            if not ok:
+                status = "OK" if ok else "MISMATCH"
+                if ok:
+                    log_handle.write(
+                        f"{height}\t{local_root}\t{reference_root}\t{status}\n"
+                    )
+            if ok:
+                checked += 1
+                continue
+
+            if (
+                args.follow
+                and isinstance(local_root, str)
+                and isinstance(reference_root, str)
+                and reference_root.startswith("0x")
+                and is_unknown_state_root(local_root)
+            ):
                 if log_handle is not None:
                     log_handle.flush()
+                if height > lo:
+                    write_checkpoint(args.checkpoint_file, height - 1)
                 print(
-                    f"MISMATCH height={height} "
-                    f"local={local_root} reference={reference_root}",
+                    f"WAIT local state root not available height={height}; "
+                    f"checkpoint={height - 1 if height > lo else start - 1}; "
+                    f"retrying in follow mode",
                     flush=True,
                 )
-                return checked, height
-            checked += 1
+                return checked, -1, height
+
+            if log_handle is not None:
+                log_handle.write(
+                    f"{height}\t{local_root}\t{reference_root}\tMISMATCH\n"
+                )
+                log_handle.flush()
+            print(
+                f"MISMATCH height={height} "
+                f"local={local_root} reference={reference_root}",
+                flush=True,
+            )
+            return checked, height, -1
 
         if log_handle is not None:
             log_handle.flush()
@@ -225,7 +301,7 @@ def compare_range(
             while next_report <= hi:
                 next_report += args.report_interval
 
-    return checked, -1
+    return checked, -1, -1
 
 
 def main() -> int:
@@ -257,10 +333,16 @@ def main() -> int:
                     time.sleep(args.poll_interval)
                     continue
 
-                checked, mismatch_height = compare_range(args, start, end, log_handle=log_handle)
+                checked, mismatch_height, pending_height = compare_range(args, start, end, log_handle=log_handle)
                 total_checked += checked
                 if mismatch_height >= 0:
                     return 2
+                if pending_height >= 0:
+                    start = pending_height
+                    if not args.follow:
+                        return 2
+                    time.sleep(args.poll_interval)
+                    continue
 
                 print(
                     f"PASS compared every state root {start}..{end}; "

@@ -23,9 +23,11 @@ use neo_riscv_guest::SyscallProvider;
 
 // Keep enough heap headroom for 1MB MaxItemSize allocations alongside
 // interpreter state and callback decoding buffers. Mainnet NeoVM compatibility
-// needs this above 16 MiB for large historical stack-heavy calls such as
-// GhostMarket.NFT.fixRoyalties at block 470449.
-const ARENA_SIZE: usize = 32 * 1024 * 1024;
+// needs this above 64 MiB for large historical stack-heavy calls such as
+// GhostMarket.NFT.fixRoyalties at block 470449 and GhostMarket:_initialize at
+// block 2368696, plus allocation-heavy Contract.Call execution at block
+// 2655903.
+const ARENA_SIZE: usize = 128 * 1024 * 1024;
 const SCRATCH_BUF_SIZE: usize = 2 * 1024 * 1024;
 const PANIC_BUF_SIZE: usize = 256;
 const TRACE_HEAD_SIZE: usize = 32;
@@ -675,6 +677,22 @@ mod tests {
         assert!(
             ARENA_SIZE >= 32 * 1024 * 1024,
             "mainnet block 470449 GhostMarket.NFT.fixRoyalties exhausted a 16 MiB guest arena"
+        );
+    }
+
+    #[test]
+    fn mainnet_2368696_requires_heap_headroom_above_32_mib() {
+        assert!(
+            ARENA_SIZE >= 64 * 1024 * 1024,
+            "mainnet block 2368696 GhostMarket:_initialize exhausted a 32 MiB guest arena"
+        );
+    }
+
+    #[test]
+    fn mainnet_2655903_requires_heap_headroom_above_64_mib() {
+        assert!(
+            ARENA_SIZE >= 128 * 1024 * 1024,
+            "mainnet block 2655903 exhausted a 64 MiB guest arena during Contract.Call execution"
         );
     }
 }

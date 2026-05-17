@@ -175,6 +175,11 @@ namespace Neo.SmartContract.RiscV
             }
             else
             {
+                if (request.Engine is RiscvApplicationEngine riscvEngine)
+                    riscvEngine.DiscardNestedContextFromBridge(nestedContext);
+                else
+                    PopNestedContextIfCurrent(request.Engine, nestedContext);
+
                 scope.PendingNestedFault = nestedResult;
                 throw nestedResult.FaultException ?? new InvalidOperationException("Runtime.LoadScript failed.");
             }

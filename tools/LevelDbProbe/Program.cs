@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Neo;
+using Neo.Cryptography.MPTTrie;
 using Neo.Cryptography.ECC;
 using Neo.Extensions;
 using Neo.Network.P2P.Payloads;
@@ -25,12 +26,18 @@ if (args.Length < 1)
 return args[0] switch
 {
     "state-roots" when args.Length == 4 => DumpStateRoots(args[1], uint.Parse(args[2]), uint.Parse(args[3])),
+    "ledger-height" when args.Length == 2 => DumpLedgerHeight(args[1]),
     "raw" when args.Length == 3 => DumpRaw(args[1], args[2]),
+    "set-local-root-index" when args.Length == 3 => SetLocalRootIndex(args[1], uint.Parse(args[2])),
     "contract-script" when args.Length == 3 => DumpContractScript(args[1], args[2]),
     "disasm-contract" when args.Length == 5 => DumpContractDisasm(args[1], args[2], int.Parse(args[3]), int.Parse(args[4])),
     "storage-prefix" when args.Length is 4 or 5 => DumpStoragePrefix(args[1], args[2], args[3], args.Length == 5 ? int.Parse(args[4]) : 10),
     "replay-tx" when args.Length is 5 or 6 => await ReplayTransaction(args[1], uint.Parse(args[2]), args[3], args[4], args.Length == 6 ? args[5] : "http://seed1.neo.org:10332"),
     "replay-tx-neovm" when args.Length is 4 or 5 => await ReplayTransactionNeoVm(args[1], uint.Parse(args[2]), args[3], args.Length == 5 ? args[4] : "http://seed1.neo.org:10332"),
+    "replay-block" when args.Length is 4 or 5 => await ReplayBlock(args[1], uint.Parse(args[2]), args[3], args.Length == 5 ? args[4] : "http://seed1.neo.org:10332"),
+    "replay-block-neovm" when args.Length is 3 or 4 => await ReplayBlockNeoVm(args[1], uint.Parse(args[2]), args.Length == 4 ? args[3] : "http://seed1.neo.org:10332"),
+    "mpt-replay-block" when args.Length is 5 or 6 => await MptReplayBlock(args[1], args[2], uint.Parse(args[3]), args[4], args.Length == 6 ? args[5] : "http://seed1.neo.org:10332"),
+    "mpt-replay-block-neovm" when args.Length is 4 or 5 => await MptReplayBlockNeoVm(args[1], args[2], uint.Parse(args[3]), args.Length == 5 ? args[4] : "http://seed1.neo.org:10332"),
     _ => Usage()
 };
 
@@ -38,12 +45,18 @@ static int Usage()
 {
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- state-roots <leveldb-path> <start> <end>");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- ledger-height <leveldb-path>");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- raw <leveldb-path> <hex-key>");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- set-local-root-index <mpt-path> <index>");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- contract-script <leveldb-path> <contract-hash>");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- disasm-contract <leveldb-path> <contract-hash> <start-ip> <end-ip>");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- storage-prefix <leveldb-path> <contract-hash> <prefix-hex> [sample-limit]");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- replay-tx <leveldb-path> <block-index> <tx-hash> <host-lib> [rpc-url]");
     Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- replay-tx-neovm <leveldb-path> <block-index> <tx-hash> [rpc-url]");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- replay-block <leveldb-path> <block-index> <host-lib> [rpc-url]");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- replay-block-neovm <leveldb-path> <block-index> [rpc-url]");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- mpt-replay-block <leveldb-path> <mpt-path> <block-index> <host-lib> [rpc-url]");
+    Console.Error.WriteLine("  dotnet run --project tools/LevelDbProbe -- mpt-replay-block-neovm <leveldb-path> <mpt-path> <block-index> [rpc-url]");
     return 2;
 }
 
@@ -85,6 +98,14 @@ static int DumpStateRoots(string path, uint start, uint end)
     return 0;
 }
 
+static int DumpLedgerHeight(string path)
+{
+    using IStore store = new LevelDBStore().GetStore(path);
+    using var snapshot = new StoreCache(store, readOnly: false);
+    Console.WriteLine($"LedgerCurrentIndex={NativeContract.Ledger.CurrentIndex(snapshot)}");
+    return 0;
+}
+
 static int DumpRaw(string path, string hexKey)
 {
     using IStore store = new LevelDBStore().GetStore(path);
@@ -94,10 +115,24 @@ static int DumpRaw(string path, string hexKey)
     return 0;
 }
 
+static int SetLocalRootIndex(string path, uint index)
+{
+    using IStore store = new LevelDBStore().GetStore(path);
+    if (ReadStateRoot(store, index) is null)
+    {
+        Console.Error.WriteLine($"state root {index} is missing; refusing to update current local root index");
+        return 1;
+    }
+
+    store.Put([0x02], BitConverter.GetBytes(index));
+    Console.WriteLine($"CurrentLocalRootIndex={index}");
+    return 0;
+}
+
 static int DumpContractScript(string path, string contractHash)
 {
     using IStore store = new LevelDBStore().GetStore(path);
-    using var snapshot = new StoreCache(store);
+    using var snapshot = new StoreCache(store, readOnly: false);
     var hash = UInt160.Parse(contractHash);
     var contract = NativeContract.ContractManagement.GetContract(snapshot, hash);
     if (contract is null)
@@ -124,7 +159,7 @@ static int DumpContractScript(string path, string contractHash)
 static int DumpContractDisasm(string path, string contractHash, int startIp, int endIp)
 {
     using IStore store = new LevelDBStore().GetStore(path);
-    using var snapshot = new StoreCache(store);
+    using var snapshot = new StoreCache(store, readOnly: false);
     var hash = UInt160.Parse(contractHash);
     var contract = NativeContract.ContractManagement.GetContract(snapshot, hash);
     if (contract is null)
@@ -152,7 +187,7 @@ static int DumpContractDisasm(string path, string contractHash, int startIp, int
 static int DumpStoragePrefix(string path, string contractHash, string prefixHex, int sampleLimit)
 {
     using IStore store = new LevelDBStore().GetStore(path);
-    using var snapshot = new StoreCache(store);
+    using var snapshot = new StoreCache(store, readOnly: false);
     var hash = UInt160.Parse(contractHash);
     var contract = NativeContract.ContractManagement.GetContract(snapshot, hash);
     if (contract is null)
@@ -196,7 +231,7 @@ static async Task<int> ReplayTransaction(string path, uint blockIndex, string tx
     }
 
     using IStore store = new LevelDBStore().GetStore(path);
-    using var snapshot = new StoreCache(store);
+    using var snapshot = new StoreCache(store, readOnly: false);
     using var bridge = new NativeRiscvVmBridge(hostLib);
     using var provider = new RiscvApplicationEngineProvider(bridge);
     return ReplayTransactionWithProvider(block, tx, snapshot, provider);
@@ -214,9 +249,180 @@ static async Task<int> ReplayTransactionNeoVm(string path, uint blockIndex, stri
     }
 
     using IStore store = new LevelDBStore().GetStore(path);
-    using var snapshot = new StoreCache(store);
+    using var snapshot = new StoreCache(store, readOnly: false);
     var provider = new NeoVMHostApplicationEngineProvider();
     return ReplayTransactionWithProvider(block, tx, snapshot, provider);
+}
+
+static async Task<int> ReplayBlock(string path, uint blockIndex, string hostLib, string rpcUrl)
+{
+    if (!File.Exists(hostLib))
+    {
+        Console.Error.WriteLine($"host library not found: {hostLib}");
+        return 1;
+    }
+
+    var block = await FetchBlock(rpcUrl, blockIndex);
+    using IStore store = new LevelDBStore().GetStore(path);
+    using var snapshot = new StoreCache(store, readOnly: false);
+    using var bridge = new NativeRiscvVmBridge(hostLib);
+    using var provider = new RiscvApplicationEngineProvider(bridge);
+    return ReplayBlockWithProvider(block, snapshot, provider);
+}
+
+static async Task<int> ReplayBlockNeoVm(string path, uint blockIndex, string rpcUrl)
+{
+    var block = await FetchBlock(rpcUrl, blockIndex);
+    using IStore store = new LevelDBStore().GetStore(path);
+    using var snapshot = new StoreCache(store, readOnly: false);
+    var provider = new NeoVMHostApplicationEngineProvider();
+    return ReplayBlockWithProvider(block, snapshot, provider);
+}
+
+static async Task<int> MptReplayBlock(string path, string mptPath, uint blockIndex, string hostLib, string rpcUrl)
+{
+    if (!File.Exists(hostLib))
+    {
+        Console.Error.WriteLine($"host library not found: {hostLib}");
+        return 1;
+    }
+
+    using var bridge = new NativeRiscvVmBridge(hostLib);
+    using var provider = new RiscvApplicationEngineProvider(bridge);
+    return await MptReplayBlockWithProvider(path, mptPath, blockIndex, provider, rpcUrl);
+}
+
+static async Task<int> MptReplayBlockNeoVm(string path, string mptPath, uint blockIndex, string rpcUrl)
+{
+    var provider = new NeoVMHostApplicationEngineProvider();
+    return await MptReplayBlockWithProvider(path, mptPath, blockIndex, provider, rpcUrl);
+}
+
+static async Task<int> MptReplayBlockWithProvider(
+    string path,
+    string mptPath,
+    uint blockIndex,
+    IApplicationEngineProvider provider,
+    string rpcUrl)
+{
+    var block = await FetchBlock(rpcUrl, blockIndex);
+    var levelDb = new LevelDBStore();
+    using IStore store = levelDb.GetStore(path);
+    using var snapshot = new StoreCache(store, readOnly: false);
+    var replayResult = ReplayBlockWithProvider(block, snapshot, provider, dumpChanges: false);
+    if (replayResult != 0)
+        return replayResult;
+
+    using IStore mptStore = levelDb.GetStore(mptPath);
+    using var mptSnapshot = mptStore.GetSnapshot();
+    var baseRoot = ReadStateRoot(mptStore, blockIndex - 1);
+    if (baseRoot is null)
+    {
+        Console.Error.WriteLine($"missing base state root for {blockIndex - 1}");
+        return 1;
+    }
+
+    var expectedRoot = ReadStateRoot(mptStore, blockIndex);
+    var trie = new Trie(mptSnapshot, baseRoot, fullState: true);
+    var changes = snapshot.GetChangeSet()
+        .Where(pair => pair.Value.State != TrackState.None && pair.Key.Id != NativeContract.Ledger.Id)
+        .OrderBy(pair => pair.Key.Id)
+        .ThenBy(pair => Convert.ToHexString(pair.Key.Key.Span))
+        .ToArray();
+
+    foreach (var (key, trackable) in changes)
+    {
+        switch (trackable.State)
+        {
+            case TrackState.Added:
+            case TrackState.Changed:
+                trie.Put(key.ToArray(), trackable.Item.ToArray());
+                break;
+            case TrackState.Deleted:
+                trie.Delete(key.ToArray());
+                break;
+        }
+    }
+
+    Console.WriteLine($"mpt_base_index={blockIndex - 1}");
+    Console.WriteLine($"mpt_base_root={baseRoot}");
+    Console.WriteLine($"mpt_block={blockIndex}");
+    Console.WriteLine($"mpt_expected_root={(expectedRoot is null ? "<missing>" : expectedRoot.ToString())}");
+    Console.WriteLine($"mpt_computed_root={trie.Root.Hash}");
+    Console.WriteLine($"mpt_changes={changes.Length}");
+    return 0;
+}
+
+static int ReplayBlockWithProvider(Block block, StoreCache snapshot, IApplicationEngineProvider provider, bool dumpChanges = true)
+{
+    ApplicationEngine.Provider = provider;
+
+    Console.WriteLine($"block={block.Index}");
+    Console.WriteLine($"tx_count={block.Transactions.Length}");
+
+    TransactionState[] transactionStates;
+    using (var engine = ApplicationEngine.Create(TriggerType.OnPersist, null, snapshot, block, MainnetSettings(), 0))
+    {
+        engine.LoadScript(CreateNativePersistScript(ApplicationEngine.System_Contract_NativeOnPersist));
+        var state = engine.Execute();
+        Console.WriteLine($"onpersist={state}");
+        if (state != VMState.HALT)
+        {
+            Console.WriteLine($"onpersist_fault={engine.FaultException?.GetType().FullName}: {engine.FaultException?.Message}");
+            return 3;
+        }
+
+        transactionStates = engine.GetState<TransactionState[]>()!;
+    }
+
+    var clonedSnapshot = snapshot.CloneCache();
+    foreach (var transactionState in transactionStates)
+    {
+        var tx = transactionState.Transaction!;
+        using var engine = ApplicationEngine.Create(TriggerType.Application, tx, clonedSnapshot, block, MainnetSettings(), tx.SystemFee);
+        engine.LoadScript(tx.Script);
+        transactionState.State = engine.Execute();
+        Console.WriteLine($"tx={tx.Hash}:state={transactionState.State}:gas={engine.FeeConsumed}:left={engine.GasLeft}:notifications={engine.Notifications.Count}");
+        if (transactionState.State == VMState.HALT)
+        {
+            clonedSnapshot.Commit();
+        }
+        else
+        {
+            Console.WriteLine($"tx_fault={tx.Hash}:{engine.FaultException?.GetType().FullName}: {engine.FaultException?.Message}");
+            clonedSnapshot = snapshot.CloneCache();
+        }
+    }
+
+    using (var engine = ApplicationEngine.Create(TriggerType.PostPersist, null, snapshot, block, MainnetSettings(), 0))
+    {
+        engine.LoadScript(CreateNativePersistScript(ApplicationEngine.System_Contract_NativePostPersist));
+        var state = engine.Execute();
+        Console.WriteLine($"postpersist={state}");
+        if (state != VMState.HALT)
+        {
+            Console.WriteLine($"postpersist_fault={engine.FaultException?.GetType().FullName}: {engine.FaultException?.Message}");
+            return 3;
+        }
+    }
+
+    if (dumpChanges)
+        DumpReplayChangeSet(snapshot);
+    return 0;
+}
+
+static UInt256? ReadStateRoot(IStore store, uint index)
+{
+    if (!store.TryGet(StateRootKey(index), out var value) || value.Length < 37)
+        return null;
+    return new UInt256(value.AsSpan(5, UInt256.Length));
+}
+
+static byte[] CreateNativePersistScript(InteropDescriptor descriptor)
+{
+    using var sb = new ScriptBuilder();
+    sb.EmitSysCall(descriptor);
+    return sb.ToArray();
 }
 
 static int ReplayTransactionWithProvider(Block block, Transaction tx, StoreCache snapshot, IApplicationEngineProvider provider)
@@ -245,6 +451,8 @@ static int ReplayTransactionWithProvider(Block block, Transaction tx, StoreCache
     foreach (var notification in engine.Notifications)
         Console.WriteLine($"notification={notification.ScriptHash}:{notification.EventName}:{DescribeStackItem(notification.State)}");
 
+    DumpReplayChangeSet(snapshot);
+
     if (engine.FaultException is not null)
     {
         Console.WriteLine($"fault={engine.FaultException.GetType().FullName}: {engine.FaultException.Message}");
@@ -253,6 +461,24 @@ static int ReplayTransactionWithProvider(Block block, Transaction tx, StoreCache
     }
 
     return state == VMState.HALT ? 0 : 3;
+}
+
+static void DumpReplayChangeSet(StoreCache snapshot)
+{
+    var changes = snapshot.GetChangeSet()
+        .OrderBy(pair => pair.Key.Id)
+        .ThenBy(pair => Convert.ToHexString(pair.Key.Key.Span))
+        .ToArray();
+
+    Console.WriteLine($"changes={changes.Length}");
+    foreach (var (key, trackable) in changes)
+    {
+        var value = trackable.State == TrackState.Deleted
+            ? null
+            : trackable.Item.Value.ToArray();
+        Console.WriteLine(
+            $"change={trackable.State}:id={key.Id}:key={Convert.ToHexString(key.Key.Span).ToLowerInvariant()}:valueLen={(value is null ? "<deleted>" : value.Length)}:value={(value is null ? "<deleted>" : DescribeReplayValue(value))}");
+    }
 }
 
 static async Task<Block> FetchBlock(string rpcUrl, uint index)
@@ -353,6 +579,14 @@ static string DescribeValue(ReadOnlyMemory<byte> value)
     {
         return Convert.ToHexString(value.Span).ToLowerInvariant();
     }
+}
+
+static string DescribeReplayValue(byte[] value, int maxBytes = 128)
+{
+    if (value.Length <= maxBytes)
+        return Convert.ToHexString(value).ToLowerInvariant();
+
+    return $"{Convert.ToHexString(value.AsSpan(0, maxBytes)).ToLowerInvariant()}...(+{value.Length - maxBytes} bytes)";
 }
 
 static string DescribeStackItem(Neo.VM.Types.StackItem item)

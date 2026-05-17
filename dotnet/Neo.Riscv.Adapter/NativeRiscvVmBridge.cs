@@ -973,6 +973,8 @@ namespace Neo.SmartContract.RiscV
                 phaseStart = Stopwatch.GetTimestamp();
             }
             Trace($"contract.call enter hash={contractHash} method={method} stackLen={inputStack.Length} args={argsArray.Count}");
+            DiagnosticTrace(request, "contract.call",
+                $"hash={contractHash} method={method} callFlags={callFlags} stackLen={inputStack.Length} args={argsArray.Count}");
 
             if (expectedHasReturnValue is null &&
                 TryInvokeTestingCustomMock(request, contractHash, method, argsArray, out var mockedResult))

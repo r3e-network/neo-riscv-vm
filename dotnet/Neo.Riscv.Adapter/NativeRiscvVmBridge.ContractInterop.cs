@@ -104,6 +104,8 @@ namespace Neo.SmartContract.RiscV
                 initializerInstructionPointer = initMethod.Offset;
                 scope.PendingInitializerContexts.Push(initContext);
             }
+            DiagnosticTrace(request, "contract.call.nested",
+                $"target={contract.Hash} type={contract.Type} method={descriptor.Name} returnType={descriptor.ReturnType} initIp={initializerInstructionPointer?.ToString() ?? "<none>"}");
 
             RiscvExecutionResult nestedResult;
             try
@@ -147,6 +149,11 @@ namespace Neo.SmartContract.RiscV
             }
             else
             {
+                if (request.Engine is RiscvApplicationEngine nestedEngine)
+                    nestedEngine.DiscardNestedContextFromBridge(nestedContext);
+                else
+                    PopNestedContextIfCurrent(request.Engine, nestedContext);
+
                 scope.PendingNestedFault = nestedResult;
                 throw nestedResult.FaultException ?? new InvalidOperationException("Contract.Call failed.");
             }

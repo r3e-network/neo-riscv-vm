@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="../../dotnet/Neo.Riscv.Adapter/Neo.Riscv.Adapter.csproj" />
     <ProjectReference Include="../../../neo-riscv-node/plugins/LevelDBStore/LevelDBStore.csproj" />
+    <ProjectReference Include="../../../neo-riscv-node/plugins/MPTTrie/MPTTrie.csproj" />
   </ItemGroup>
 
 </Project>

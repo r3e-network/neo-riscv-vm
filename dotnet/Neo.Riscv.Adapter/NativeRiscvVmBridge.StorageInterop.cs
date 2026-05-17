@@ -139,6 +139,8 @@ namespace Neo.SmartContract.RiscV
                 throw new InvalidOperationException("Storage.Put requires a storage context token plus byte-like key and value.");
             }
 
+            DiagnosticTrace(request, "storage.put",
+                $"contextId={context.Id} readOnly={context.IsReadOnly} keyLen={key.Length} key={DescribeBytes(key)} valueLen={value.Length} value={DescribeBytes(value)}");
             request.Engine.Put(context, key, value);
 
             var next = new StackItem[inputStack.Length - 3];
@@ -159,6 +161,8 @@ namespace Neo.SmartContract.RiscV
             if (!TryGetByteLikeBytes(inputStack[^1], out var value))
                 throw new InvalidOperationException("Storage.Local.Put requires a byte-like value.");
 
+            DiagnosticTrace(request, "storage.local.put",
+                $"keyLen={key.Length} key={DescribeBytes(key)} valueLen={value.Length} value={DescribeBytes(value)}");
             request.Engine.PutLocal(key, value);
 
             var next = new StackItem[inputStack.Length - 2];
@@ -189,6 +193,8 @@ namespace Neo.SmartContract.RiscV
                 throw new InvalidOperationException("Storage.Delete requires a storage context token and a byte-like key.");
             }
 
+            DiagnosticTrace(request, "storage.delete",
+                $"contextId={context.Id} readOnly={context.IsReadOnly} keyLen={key.Length} key={DescribeBytes(key)}");
             request.Engine.Delete(context, key);
 
             var next = new StackItem[inputStack.Length - 2];
@@ -207,6 +213,7 @@ namespace Neo.SmartContract.RiscV
             if (!TryGetByteLikeBytes(inputStack[^1], out var key))
                 throw new InvalidOperationException("Storage.Local.Delete requires a byte-like key.");
 
+            DiagnosticTrace(request, "storage.local.delete", $"keyLen={key.Length} key={DescribeBytes(key)}");
             request.Engine.DeleteLocal(key);
 
             var next = new StackItem[inputStack.Length - 1];

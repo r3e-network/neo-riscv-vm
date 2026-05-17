@@ -97,6 +97,80 @@ public class UT_RiscvApplicationEngineMethodDispatch
     }
 
     [TestMethod]
+    public void UnloadNestedContextFromBridgeRestoresCurrentContextToCaller()
+    {
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+        using var engine = new RiscvApplicationEngine(
+            TriggerType.Application,
+            null,
+            snapshot,
+            null,
+            AdapterTestProtocolSettings.Default,
+            ApplicationEngine.TestModeGas,
+            new CapturingBridge());
+        var contract = CreateNeoVmContractWithInitializer();
+        var method = contract.Manifest.Abi.GetMethod("main", 0);
+
+        Assert.IsNotNull(method);
+        var methodContext = engine.LoadContract(contract, method!, CallFlags.All);
+        var initContext = engine.CurrentContext;
+
+        Assert.IsNotNull(initContext);
+        Assert.AreNotSame(methodContext, initContext);
+
+        engine.UnloadNestedContextFromBridge(
+            initContext!,
+            new RiscvExecutionResult(VMState.HALT, [], null));
+
+        Assert.AreSame(methodContext, engine.CurrentContext);
+    }
+
+    [TestMethod]
+    public void DiscardNestedContextFromBridgeRestoresCallerAfterInitializerContext()
+    {
+        using var system = new NeoSystem(AdapterTestProtocolSettings.Default, new MemoryStoreProvider());
+        using var snapshot = system.GetSnapshotCache();
+        using var engine = new RiscvApplicationEngine(
+            TriggerType.Application,
+            null,
+            snapshot,
+            null,
+            AdapterTestProtocolSettings.Default,
+            ApplicationEngine.TestModeGas,
+            new CapturingBridge());
+        var callerScript = new byte[] { (byte)OpCode.RET };
+        var contract = CreateNeoVmContractWithInitializer();
+        var method = contract.Manifest.Abi.GetMethod("main", 0);
+
+        Assert.IsNotNull(method);
+        engine.LoadScript(callerScript);
+        var callerContext = engine.CurrentContext;
+        var methodContext = engine.LoadContract(contract, method!, CallFlags.All);
+        var initContext = engine.CurrentContext;
+        methodContext.GetState<ExecutionContextState>().CallingContext = callerContext;
+
+        Assert.IsNotNull(callerContext);
+        Assert.IsNotNull(initContext);
+        Assert.AreNotSame(methodContext, initContext);
+
+        var discardedKey = new StorageKey
+        {
+            Id = contract.Id,
+            Key = new byte[] { 0x7d },
+        };
+        var nestedSnapshot = methodContext.GetState<ExecutionContextState>().SnapshotCache;
+        Assert.IsNotNull(nestedSnapshot);
+        nestedSnapshot!.Add(discardedKey, new StorageItem(new byte[] { 0x01 }));
+
+        engine.DiscardNestedContextFromBridge(methodContext);
+
+        Assert.AreSame(callerContext, engine.CurrentContext);
+        Assert.AreEqual(1, engine.InvocationStack.Count);
+        Assert.IsNull(engine.SnapshotCache.TryGet(discardedKey));
+    }
+
+    [TestMethod]
     public void ExecutionFeeChargeReturnsFaultWhenGasIsExhausted()
     {
         var bridge = new CapturingBridge();
@@ -207,6 +281,63 @@ public class UT_RiscvApplicationEngineMethodDispatch
                             Offset = 0,
                             Safe = false,
                         }
+                    ],
+                    Events = [],
+                },
+                Permissions = [ContractPermission.DefaultPermission],
+                Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard(),
+            },
+        };
+    }
+
+    private static ContractState CreateNeoVmContractWithInitializer()
+    {
+        var script = new byte[]
+        {
+            (byte)OpCode.RET,
+            (byte)OpCode.RET,
+        };
+        var nef = new NefFile
+        {
+            Compiler = "test",
+            Source = string.Empty,
+            Tokens = [],
+            Script = script,
+        };
+        nef.CheckSum = NefFile.ComputeChecksum(nef);
+
+        return new ContractState
+        {
+            Id = 2,
+            UpdateCounter = 0,
+            Type = ContractType.NeoVM,
+            Hash = script.ToScriptHash(),
+            Nef = nef,
+            Manifest = new ContractManifest
+            {
+                Name = "NeoVmWithInitializer",
+                Groups = [],
+                SupportedStandards = [],
+                Abi = new ContractAbi
+                {
+                    Methods =
+                    [
+                        new ContractMethodDescriptor
+                        {
+                            Name = "main",
+                            Parameters = [],
+                            ReturnType = ContractParameterType.Void,
+                            Offset = 0,
+                            Safe = false,
+                        },
+                        new ContractMethodDescriptor
+                        {
+                            Name = ContractBasicMethod.Initialize,
+                            Parameters = [],
+                            ReturnType = ContractParameterType.Void,
+                            Offset = 1,
+                            Safe = false,
+                        },
                     ],
                     Events = [],
                 },

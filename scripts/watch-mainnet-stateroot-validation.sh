@@ -23,6 +23,7 @@ INTERVAL_SECONDS="${INTERVAL_SECONDS:-60}"
 ONCE=false
 
 FATAL_RE="${FATAL_RE:-integer exceeds i64 range|Unhandled exception|Fatal error|OutOfMemory|StackOverflow|panicked at|thread .* panicked|segmentation fault|Abort trap|core dumped}"
+EXPECTED_FAULT_RE="${EXPECTED_FAULT_RE:-\\[neo-riscv-fault\\]}"
 
 usage() {
   cat <<USAGE
@@ -128,7 +129,20 @@ report_fatal_failure() {
   local node="$2"
 
   echo "$(date '+%H:%M:%S') fatal pattern detected checkpoint=${checkpoint} node=${node:-unknown}"
-  rg -n "${FATAL_RE}" "${NODE_ERROR_LOG}" "${COMPARATOR_ERROR_LOG}" 2>/dev/null || true
+  fatal_matches || true
+}
+
+fatal_matches() {
+  (
+    if [[ -f "${NODE_ERROR_LOG}" ]]; then
+      rg -n "${FATAL_RE}" "${NODE_ERROR_LOG}" 2>/dev/null |
+        rg -v "${EXPECTED_FAULT_RE}" || true
+    fi
+
+    if [[ -f "${COMPARATOR_ERROR_LOG}" ]]; then
+      rg -n "${FATAL_RE}" "${COMPARATOR_ERROR_LOG}" 2>/dev/null || true
+    fi
+  )
 }
 
 check_once() {
@@ -143,7 +157,7 @@ check_once() {
     return 2
   fi
 
-  if rg -q "${FATAL_RE}" "${NODE_ERROR_LOG}" "${COMPARATOR_ERROR_LOG}" 2>/dev/null; then
+  if [[ -n "$(fatal_matches)" ]]; then
     report_fatal_failure "${checkpoint}" "${node}"
     return 3
   fi

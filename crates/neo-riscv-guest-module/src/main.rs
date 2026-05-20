@@ -27,8 +27,10 @@ use neo_riscv_guest::SyscallProvider;
 // GhostMarket.NFT.fixRoyalties at block 470449 and GhostMarket:_initialize at
 // block 2368696, plus allocation-heavy Contract.Call execution at block
 // 2655903.
-const ARENA_SIZE: usize = 128 * 1024 * 1024;
 const SCRATCH_BUF_SIZE: usize = 2 * 1024 * 1024;
+const ALLOC_ARENA_SIZE: usize = 128 * 1024 * 1024;
+const ARENA_SIZE: usize = ALLOC_ARENA_SIZE + SCRATCH_BUF_SIZE * 2;
+const ALLOC_PRETOUCH_SIZE: usize = 1024 * 1024;
 const PANIC_BUF_SIZE: usize = 256;
 const TRACE_HEAD_SIZE: usize = 32;
 
@@ -41,39 +43,8 @@ impl<const N: usize> RawBuffer<N> {
         Self(UnsafeCell::new([0; N]))
     }
 
-    const fn len(&self) -> usize {
-        N
-    }
-
     unsafe fn as_mut_ptr(&self) -> *mut u8 {
         self.0.get().cast::<u8>()
-    }
-
-    #[allow(clippy::mut_from_ref)]
-    unsafe fn as_mut_slice(&self, len: usize) -> &mut [u8] {
-        core::slice::from_raw_parts_mut(self.as_mut_ptr(), len)
-    }
-}
-
-struct StaticVec(UnsafeCell<Vec<u8>>);
-
-unsafe impl Sync for StaticVec {}
-
-impl StaticVec {
-    const fn new() -> Self {
-        Self(UnsafeCell::new(Vec::new()))
-    }
-
-    unsafe fn replace(&self, value: Vec<u8>) {
-        *self.0.get() = value;
-    }
-
-    unsafe fn as_ptr(&self) -> *const u8 {
-        (*self.0.get()).as_ptr()
-    }
-
-    unsafe fn len(&self) -> u32 {
-        (*self.0.get()).len() as u32
     }
 }
 
@@ -93,12 +64,6 @@ impl AlignedArena {
 }
 
 static ARENA: AlignedArena = AlignedArena::new();
-static REQ_BUF: RawBuffer<SCRATCH_BUF_SIZE> = RawBuffer::new();
-/// Fixed 1MB buffer for syscall responses from host to guest.
-/// Uses a static buffer instead of dynamic Vec to avoid talc allocator corruption
-/// under PolkaVM's RISC-V memory model. Guest copies the response into this buffer
-/// via host_call(), then decodes it back to Vec<StackValue>.
-static RES_BUF: RawBuffer<SCRATCH_BUF_SIZE> = RawBuffer::new();
 
 #[derive(Default)]
 struct BumpState {
@@ -109,28 +74,110 @@ struct BumpState {
     fail_align: usize,
 }
 
-struct ResettableBumpAllocator(UnsafeCell<BumpState>);
-
-unsafe impl Sync for ResettableBumpAllocator {}
-
-impl ResettableBumpAllocator {
+impl BumpState {
     const fn new() -> Self {
-        Self(UnsafeCell::new(BumpState {
+        Self {
             offset: 0,
             peak: 0,
             fail_count: 0,
             fail_size: 0,
             fail_align: 0,
-        }))
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = Self::new();
+    }
+}
+
+#[repr(C)]
+struct RuntimeState {
+    magic: u32,
+    bump: BumpState,
+    result_ptr: u32,
+    result_len: u32,
+    panic_len: u32,
+    trace_res_len: u32,
+    trace_syscall_stage: u32,
+    trace_syscall_api: u32,
+    trace_syscall_ip: u32,
+    trace_req_len: u32,
+    trace_stack_items: u32,
+    trace_res_head: [u8; TRACE_HEAD_SIZE],
+    panic_buf: [u8; PANIC_BUF_SIZE],
+}
+
+impl RuntimeState {
+    const fn new() -> Self {
+        Self {
+            magic: 0x4e52_5653,
+            bump: BumpState::new(),
+            result_ptr: 0,
+            result_len: 0,
+            panic_len: 0,
+            trace_res_len: 0,
+            trace_syscall_stage: 0,
+            trace_syscall_api: 0,
+            trace_syscall_ip: 0,
+            trace_req_len: 0,
+            trace_stack_items: 0,
+            trace_res_head: [0; TRACE_HEAD_SIZE],
+            panic_buf: [0; PANIC_BUF_SIZE],
+        }
+    }
+}
+
+struct RuntimeStateCell(UnsafeCell<RuntimeState>);
+
+unsafe impl Sync for RuntimeStateCell {}
+
+impl RuntimeStateCell {
+    const fn new() -> Self {
+        Self(UnsafeCell::new(RuntimeState::new()))
+    }
+}
+
+const ALLOC_BASE_OFFSET: usize = 0;
+const REQ_BUF_OFFSET: usize = ALLOC_ARENA_SIZE;
+const RES_BUF_OFFSET: usize = REQ_BUF_OFFSET + SCRATCH_BUF_SIZE;
+
+const _: () = assert!(ALLOC_BASE_OFFSET + ALLOC_ARENA_SIZE <= ARENA_SIZE);
+const _: () = assert!(ALLOC_PRETOUCH_SIZE <= ALLOC_ARENA_SIZE);
+const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
+
+#[cfg_attr(target_arch = "riscv32", link_section = ".data.neo_riscv_state")]
+static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
+
+unsafe fn runtime_state() -> &'static mut RuntimeState {
+    &mut *RUNTIME_STATE.0.get()
+}
+
+unsafe fn arena_ptr(offset: usize) -> *mut u8 {
+    ARENA.as_mut_ptr().add(offset)
+}
+
+unsafe fn arena_slice(offset: usize, len: usize) -> &'static mut [u8] {
+    core::slice::from_raw_parts_mut(arena_ptr(offset), len)
+}
+
+unsafe fn pretouch_alloc_arena() {
+    if ALLOC_PRETOUCH_SIZE > 0 {
+        core::ptr::write_volatile(arena_ptr(ALLOC_BASE_OFFSET + ALLOC_PRETOUCH_SIZE - 1), 0);
+    }
+}
+
+struct ResettableBumpAllocator;
+
+unsafe impl Sync for ResettableBumpAllocator {}
+
+impl ResettableBumpAllocator {
+    const fn new() -> Self {
+        Self
     }
 
     unsafe fn reset(&self) {
-        let state = &mut *self.0.get();
-        state.offset = 0;
-        state.peak = 0;
-        state.fail_count = 0;
-        state.fail_size = 0;
-        state.fail_align = 0;
+        let state = &mut runtime_state().bump;
+        state.clear();
     }
 
     unsafe fn alloc_from_arena(&self, layout: Layout) -> *mut u8 {
@@ -138,8 +185,8 @@ impl ResettableBumpAllocator {
             return NonNull::<u8>::dangling().as_ptr();
         }
 
-        let state = &mut *self.0.get();
-        let base = ARENA.as_mut_ptr() as usize;
+        let state = &mut runtime_state().bump;
+        let base = arena_ptr(ALLOC_BASE_OFFSET) as usize;
         let align_mask = layout.align() - 1;
         // Use checked arithmetic to prevent 32-bit integer overflow when
         // base + offset + align_mask wraps around on riscv32.
@@ -162,7 +209,7 @@ impl ResettableBumpAllocator {
             state.fail_align = layout.align();
             return core::ptr::null_mut();
         };
-        if end > base + ARENA_SIZE {
+        if end > base + ALLOC_ARENA_SIZE {
             state.fail_count = state.fail_count.saturating_add(1);
             state.fail_size = layout.size();
             state.fail_align = layout.align();
@@ -175,23 +222,23 @@ impl ResettableBumpAllocator {
     }
 
     unsafe fn peak_bytes(&self) -> u32 {
-        (*self.0.get()).peak.min(u32::MAX as usize) as u32
+        runtime_state().bump.peak.min(u32::MAX as usize) as u32
     }
 
     unsafe fn fail_count(&self) -> u32 {
-        (*self.0.get()).fail_count
+        runtime_state().bump.fail_count
     }
 
     unsafe fn fail_size(&self) -> u32 {
-        (*self.0.get()).fail_size.min(u32::MAX as usize) as u32
+        runtime_state().bump.fail_size.min(u32::MAX as usize) as u32
     }
 
     unsafe fn fail_align(&self) -> u32 {
-        (*self.0.get()).fail_align.min(u32::MAX as usize) as u32
+        runtime_state().bump.fail_align.min(u32::MAX as usize) as u32
     }
 }
 
-#[global_allocator]
+#[cfg_attr(target_arch = "riscv32", global_allocator)]
 static ALLOCATOR: ResettableBumpAllocator = ResettableBumpAllocator::new();
 
 unsafe impl GlobalAlloc for ResettableBumpAllocator {
@@ -228,10 +275,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     }
 
     unsafe {
-        let buf = core::slice::from_raw_parts_mut(PANIC_BUF.as_mut_ptr(), PANIC_BUF.len());
+        let buf = &mut runtime_state().panic_buf[..];
         let mut w = BufWriter { buf, len: 0 };
         let _ = core::fmt::write(&mut w, format_args!("{info}"));
-        PANIC_LEN = w.len as u32;
+        runtime_state().panic_len = w.len as u32;
     }
     unsafe {
         core::arch::asm!("unimp");
@@ -290,22 +337,24 @@ impl SyscallProvider for PolkaVmSyscallProvider {
         stack: &mut Vec<StackValue>,
     ) -> Result<(), alloc::string::String> {
         unsafe {
-            TRACE_SYSCALL_STAGE = 1;
-            TRACE_SYSCALL_API = api;
-            TRACE_SYSCALL_IP = ip.min(u32::MAX as usize) as u32;
-            TRACE_STACK_ITEMS = stack.len().min(u32::MAX as usize) as u32;
-            TRACE_REQ_LEN = 0;
+            let state = runtime_state();
+            state.trace_syscall_stage = 1;
+            state.trace_syscall_api = api;
+            state.trace_syscall_ip = ip.min(u32::MAX as usize) as u32;
+            state.trace_stack_items = stack.len().min(u32::MAX as usize) as u32;
+            state.trace_req_len = 0;
         }
-        let req_bytes = unsafe { REQ_BUF.as_mut_slice(REQ_BUF.len()) };
+        let req_bytes = unsafe { arena_slice(REQ_BUF_OFFSET, SCRATCH_BUF_SIZE) };
         let req_bytes = fast_codec::encode_stack_to_slice(stack, req_bytes)
             .map_err(|e| alloc::format!("failed to serialize stack: {e}"))?;
         unsafe {
-            TRACE_SYSCALL_STAGE = 2;
-            TRACE_REQ_LEN = req_bytes.len().min(u32::MAX as usize) as u32;
+            let state = runtime_state();
+            state.trace_syscall_stage = 2;
+            state.trace_req_len = req_bytes.len().min(u32::MAX as usize) as u32;
         }
 
         unsafe {
-            TRACE_SYSCALL_STAGE = 3;
+            runtime_state().trace_syscall_stage = 3;
         }
         let success = unsafe {
             host_call(
@@ -313,12 +362,12 @@ impl SyscallProvider for PolkaVmSyscallProvider {
                 ip as u32,
                 req_bytes.as_ptr() as u32,
                 req_bytes.len() as u32,
-                RES_BUF.as_mut_ptr() as u32,
-                RES_BUF.len() as u32,
+                arena_ptr(RES_BUF_OFFSET) as u32,
+                SCRATCH_BUF_SIZE as u32,
             )
         };
         unsafe {
-            TRACE_SYSCALL_STAGE = 4;
+            runtime_state().trace_syscall_stage = 4;
         }
 
         if success == 0 {
@@ -327,22 +376,22 @@ impl SyscallProvider for PolkaVmSyscallProvider {
 
         let res_len = success as usize;
         unsafe {
-            TRACE_RES_LEN = res_len as u32;
+            runtime_state().trace_res_len = res_len as u32;
         }
         if res_len == 0 {
             *stack = Vec::new();
             return Ok(());
         }
-        if res_len > RES_BUF.len() {
+        if res_len > SCRATCH_BUF_SIZE {
             return Err(alloc::format!("host response too large: {res_len}"));
         }
         unsafe {
-            let res_bytes = RES_BUF.as_mut_slice(res_len);
+            let res_bytes = arena_slice(RES_BUF_OFFSET, res_len);
 
             let new_stack = callback_codec::decode_stack_result(res_bytes)
                 .map_err(|error| alloc::format!("failed to decode stack result: {error}"))??;
             // Write trace header directly from response bytes (avoid clone which doubles memory)
-            let trace_head = TRACE_RES_HEAD.as_mut_slice(TRACE_HEAD_SIZE);
+            let trace_head = &mut runtime_state().trace_res_head[..];
             let copy_len = core::cmp::min(res_len, TRACE_HEAD_SIZE);
             trace_head[..copy_len].copy_from_slice(&res_bytes[..copy_len]);
             if copy_len < TRACE_HEAD_SIZE {
@@ -350,7 +399,7 @@ impl SyscallProvider for PolkaVmSyscallProvider {
             }
             let retired = core::mem::replace(stack, new_stack);
             core::mem::forget(retired);
-            TRACE_SYSCALL_STAGE = 5;
+            runtime_state().trace_syscall_stage = 5;
         }
         Ok(())
     }
@@ -361,69 +410,58 @@ impl SyscallProvider for PolkaVmSyscallProvider {
     }
 }
 
-static RESULT_BYTES: StaticVec = StaticVec::new();
-static PANIC_BUF: RawBuffer<PANIC_BUF_SIZE> = RawBuffer::new();
-static mut PANIC_LEN: u32 = 0;
-static mut TRACE_RES_LEN: u32 = 0;
-static TRACE_RES_HEAD: RawBuffer<TRACE_HEAD_SIZE> = RawBuffer::new();
-static mut TRACE_SYSCALL_STAGE: u32 = 0;
-static mut TRACE_SYSCALL_API: u32 = 0;
-static mut TRACE_SYSCALL_IP: u32 = 0;
-static mut TRACE_REQ_LEN: u32 = 0;
-static mut TRACE_STACK_ITEMS: u32 = 0;
-
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_ptr() -> *const u8 {
-    unsafe { RESULT_BYTES.as_ptr() }
+    unsafe { runtime_state().result_ptr as *const u8 }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_len() -> u32 {
-    unsafe { RESULT_BYTES.len() }
+    unsafe { runtime_state().result_len }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_ptr() -> *const u8 {
-    unsafe { PANIC_BUF.as_mut_ptr() as *const u8 }
+    unsafe { runtime_state().panic_buf.as_ptr() }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_len() -> u32 {
-    unsafe { PANIC_LEN }
+    unsafe { runtime_state().panic_len }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_len() -> u32 {
-    unsafe { TRACE_RES_LEN }
+    unsafe { runtime_state().trace_res_len }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_head_ptr() -> *const u8 {
-    unsafe { TRACE_RES_HEAD.as_mut_ptr() as *const u8 }
+    unsafe { runtime_state().trace_res_head.as_ptr() }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_stage() -> u32 {
-    unsafe { TRACE_SYSCALL_STAGE }
+    unsafe { runtime_state().trace_syscall_stage }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_api() -> u32 {
-    unsafe { TRACE_SYSCALL_API }
+    unsafe { runtime_state().trace_syscall_api }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_ip() -> u32 {
-    unsafe { TRACE_SYSCALL_IP }
+    unsafe { runtime_state().trace_syscall_ip }
 }
 
 #[no_mangle]
@@ -453,13 +491,13 @@ pub extern "C" fn get_last_result_limit() -> u32 {
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_req_len() -> u32 {
-    unsafe { TRACE_REQ_LEN }
+    unsafe { runtime_state().trace_req_len }
 }
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_stack_items() -> u32 {
-    unsafe { TRACE_STACK_ITEMS }
+    unsafe { runtime_state().trace_stack_items }
 }
 
 #[no_mangle]
@@ -593,7 +631,14 @@ fn store_result(mut result: Result<ExecutionResult, alloc::string::String>, resu
                 Err(alloc::string::String::from("result serialization failed"));
             postcard::to_allocvec(&err).unwrap_or_default()
         });
-        RESULT_BYTES.replace(bytes);
+        let state = runtime_state();
+        state.result_ptr = if bytes.is_empty() {
+            0
+        } else {
+            bytes.as_ptr() as u32
+        };
+        state.result_len = bytes.len().min(u32::MAX as usize) as u32;
+        core::mem::forget(bytes);
     }
 }
 
@@ -608,15 +653,18 @@ fn execute_inner(
 ) -> Result<ExecutionResult, alloc::string::String> {
     unsafe {
         ALLOCATOR.reset();
-        RESULT_BYTES.replace(Vec::new());
-        PANIC_LEN = 0;
-        TRACE_SYSCALL_STAGE = 0;
-        TRACE_SYSCALL_API = 0;
-        TRACE_SYSCALL_IP = 0;
-        TRACE_REQ_LEN = 0;
-        TRACE_STACK_ITEMS = 0;
-        TRACE_RES_LEN = 0;
-        TRACE_RES_HEAD.as_mut_slice(TRACE_HEAD_SIZE).fill(0);
+        pretouch_alloc_arena();
+        let state = runtime_state();
+        state.result_ptr = 0;
+        state.result_len = 0;
+        state.panic_len = 0;
+        state.trace_syscall_stage = 0;
+        state.trace_syscall_api = 0;
+        state.trace_syscall_ip = 0;
+        state.trace_req_len = 0;
+        state.trace_stack_items = 0;
+        state.trace_res_len = 0;
+        state.trace_res_head.fill(0);
     }
     let script =
         unsafe { core::slice::from_raw_parts(script_ptr as *const u8, script_len as usize) };
@@ -670,12 +718,12 @@ fn execute_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::ARENA_SIZE;
+    use super::ALLOC_ARENA_SIZE;
 
     #[test]
     fn mainnet_470449_requires_heap_headroom_above_16_mib() {
         assert!(
-            ARENA_SIZE >= 32 * 1024 * 1024,
+            ALLOC_ARENA_SIZE >= 32 * 1024 * 1024,
             "mainnet block 470449 GhostMarket.NFT.fixRoyalties exhausted a 16 MiB guest arena"
         );
     }
@@ -683,7 +731,7 @@ mod tests {
     #[test]
     fn mainnet_2368696_requires_heap_headroom_above_32_mib() {
         assert!(
-            ARENA_SIZE >= 64 * 1024 * 1024,
+            ALLOC_ARENA_SIZE >= 64 * 1024 * 1024,
             "mainnet block 2368696 GhostMarket:_initialize exhausted a 32 MiB guest arena"
         );
     }
@@ -691,7 +739,7 @@ mod tests {
     #[test]
     fn mainnet_2655903_requires_heap_headroom_above_64_mib() {
         assert!(
-            ARENA_SIZE >= 128 * 1024 * 1024,
+            ALLOC_ARENA_SIZE >= 128 * 1024 * 1024,
             "mainnet block 2655903 exhausted a 64 MiB guest arena during Contract.Call execution"
         );
     }

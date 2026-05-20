@@ -4,6 +4,7 @@ use neo_riscv_host::{
     execute_script_with_host, execute_script_with_host_and_stack,
     execute_script_with_host_and_stack_and_ip,
     execute_script_with_host_and_stack_and_ip_and_initializer,
+    execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit,
     execute_script_with_host_and_stack_and_ip_with_result_limit, execute_script_with_trigger,
     neo_riscv_execute_script_with_host, neo_riscv_execute_script_with_host_and_initializer,
     neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
@@ -1765,7 +1766,7 @@ fn custom_host_callback_handles_large_dynamic_call_shape_with_prior_stack_item()
     let expected = vec![
         StackValue::Integer(1),
         StackValue::Array(vec![StackValue::ByteString(vec![0x42; 576])]),
-        StackValue::Integer(i64::from(0x0f_u8)),
+        StackValue::ByteString(vec![0x0f]),
         StackValue::ByteString(b"bls12381Deserialize".to_vec()),
         StackValue::ByteString(vec![0x55; 20]),
     ];
@@ -1804,7 +1805,7 @@ fn custom_host_callback_handles_large_dynamic_call_shape_with_prior_stack_item()
         observed,
         Some(vec![
             StackValue::Array(vec![StackValue::ByteString(vec![0x42; 576])]),
-            StackValue::Integer(i64::from(0x0f_u8)),
+            StackValue::ByteString(vec![0x0f]),
             StackValue::ByteString(b"bls12381Deserialize".to_vec()),
             StackValue::ByteString(vec![0x55; 20]),
         ])
@@ -1819,7 +1820,7 @@ fn large_dynamic_call_host_error_surfaces_without_trap() {
     script.push(0x40);
     let initial_stack = vec![
         StackValue::Array(vec![StackValue::ByteString(vec![0x42; 65_536])]),
-        StackValue::Integer(i64::from(0x0f_u8)),
+        StackValue::ByteString(vec![0x0f]),
         StackValue::ByteString(b"deploy".to_vec()),
         StackValue::ByteString(vec![0x55; 20]),
     ];
@@ -6382,6 +6383,177 @@ fn callt_string_result_can_setitem_into_live_array_after_cat_in_host_runtime() {
             StackValue::Null,
         ])]
     );
+}
+
+#[test]
+fn contract_call_bytes_result_can_be_normalized_and_setitem_into_map() {
+    let contract_call = neo_riscv_abi::interop_hash("System.Contract.Call");
+    let mut script = vec![
+        0x56, 0x06, // INITSSLOT 6
+        0x0c, 0x08, // PUSHDATA1 "deployed"
+    ];
+    script.extend_from_slice(b"deployed");
+    script.extend_from_slice(&[
+        0x60, // STSFLD0
+        0x0c, 0x0e, // PUSHDATA1 "AUTH_ADDRESSES"
+    ]);
+    script.extend_from_slice(b"AUTH_ADDRESSES");
+    script.extend_from_slice(&[
+        0x61, // STSFLD1
+        0x0c, 0x21, // PUSHDATA1 33-byte key
+    ]);
+    script.extend_from_slice(&[0x03; 33]);
+    script.extend_from_slice(&[
+        0xdb, 0x28, // CONVERT ByteString
+        0x62, // STSFLD2
+        0x0c, 0x22, // PUSHDATA1 address
+    ]);
+    script.extend_from_slice(b"Nc6LJ79RodHzaz5BghHGChMZYRa9GqJvES");
+    script.extend_from_slice(&[
+        0x11, // PUSH1
+        0xc0, // PACK
+        0x0c, 0x01, 0x0f, // PUSHDATA1 CallFlags.All
+        0x0c, 0x0c, // PUSHDATA1 "base58Decode"
+    ]);
+    script.extend_from_slice(b"base58Decode");
+    script.extend_from_slice(&[
+        0x0c, 0x14, // PUSHDATA1 StdLib hash
+    ]);
+    script.extend_from_slice(&[0x55; 20]);
+    script.extend_from_slice(&[
+        0x41, // SYSCALL System.Contract.Call
+    ]);
+    script.extend_from_slice(&contract_call.to_le_bytes());
+    script.extend_from_slice(&[
+        0x4a, // DUP
+        0xca, // SIZE
+        0x0c, 0x01, 0x14, // PUSHDATA1 0x14
+        0xdb, 0x21, // CONVERT Integer
+        0x2c, 0x08, // JMPGT to SUBSTR path
+        0x4a, // DUP
+        0xca, // SIZE
+        0x9d, // DEC
+        0x8e, // RIGHT
+        0x22, 0x08, // JMP to post-normalize
+        0x11, // PUSH1
+        0x0c, 0x01, 0x14, // PUSHDATA1 0x14
+        0xdb, 0x21, // CONVERT Integer
+        0x8c, // SUBSTR
+        0xdb, 0x28, // CONVERT ByteString
+        0x4a, // DUP
+        0xd9, 0x21, // ISTYPE Integer
+        0x26, 0x2e, // JMPIFNOT to size assertion
+        0x4a, // DUP
+        0x10, // PUSH0
+        0xb8, // GE
+        0x39, // ASSERT
+        0x4a, // DUP
+        0xca, // SIZE
+        0x00, 0x14, // PUSHINT8 20
+        0x4b, // OVER
+        0x4b, // OVER
+        0x2e, 0x1e, // JMPGE
+        0x0c, 0x14, // PUSHDATA1 20 zero bytes
+    ]);
+    script.extend_from_slice(&[0u8; 20]);
+    script.extend_from_slice(&[
+        0x53, // REVERSE3
+        0x9f, // SUB
+        0x8d, // LEFT
+        0x8b, // CAT
+        0x22, 0x04, // JMP
+        0x45, // DROP
+        0x45, // DROP
+        0xdb, 0x28, // CONVERT ByteString
+        0x4a, // DUP
+        0xca, // SIZE
+        0x00, 0x14, // PUSHINT8 20
+        0xb3, // NUMEQUAL
+        0x39, // ASSERT
+        0x63, // STSFLD3
+        0xc8, // NEWMAP
+        0x4a, // DUP
+        0x10, // PUSH0
+        0x0c, 0x14, // PUSHDATA1 20-byte value
+    ]);
+    script.extend_from_slice(&[0x22; 20]);
+    script.extend_from_slice(&[
+        0xd0, // SETITEM
+        0x4a, // DUP
+        0x11, // PUSH1
+        0x0c, 0x14, // PUSHDATA1 20-byte value
+    ]);
+    script.extend_from_slice(&[0x23; 20]);
+    script.extend_from_slice(&[
+        0xd0, // SETITEM
+        0x4a, // DUP
+        0x12, // PUSH2
+        0x0c, 0x14, // PUSHDATA1 20-byte value
+    ]);
+    script.extend_from_slice(&[0x24; 20]);
+    script.extend_from_slice(&[
+        0xd0, // SETITEM
+        0x4a, // DUP
+        0x13, // PUSH3
+        0x0c, 0x14, // PUSHDATA1 20-byte value
+    ]);
+    script.extend_from_slice(&[0x25; 20]);
+    script.extend_from_slice(&[
+        0xd0, // SETITEM
+        0x40, // RET
+    ]);
+
+    let expected_call_stack = vec![
+        StackValue::Array(vec![StackValue::ByteString(
+            b"Nc6LJ79RodHzaz5BghHGChMZYRa9GqJvES".to_vec(),
+        )]),
+        StackValue::ByteString(vec![0x0f]),
+        StackValue::ByteString(b"base58Decode".to_vec()),
+        StackValue::ByteString(vec![0x55; 20]),
+    ];
+    let decoded_address = [
+        0x35, 0xb1, 0x77, 0xcb, 0x21, 0x6f, 0x8d, 0x18, 0x72, 0xf9, 0x8e, 0xb3, 0x68,
+        0x24, 0xe9, 0x75, 0x72, 0x6d, 0x1f, 0xf0, 0xc2, 0x79, 0x66, 0xba, 0x07,
+    ];
+
+    script.push(0x40); // RET from initializer
+    let method_ip = script.len();
+    script.push(0x40); // target method returns void
+
+    let result = execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit(
+        &script,
+        vec![
+            StackValue::ByteString(vec![0xaa; 2_157]),
+            StackValue::ByteString(vec![0xbb; 3_155]),
+        ],
+        method_ip,
+        0,
+        0,
+        RuntimeContext {
+            trigger: 0x40,
+            network: 0,
+            address_version: 53,
+            timestamp: None,
+            gas_left: 100_000_000,
+            exec_fee_factor_pico: 0,
+        },
+        |api, _ip, _context, stack| {
+            if api == neo_riscv_guest::INITIALIZER_COMPLETE_MARKER {
+                return Ok(HostCallbackResult { stack: Vec::new() });
+            }
+            if api != contract_call {
+                return Err(format!("unexpected callback api 0x{api:08x}"));
+            }
+            assert_eq!(stack, expected_call_stack.as_slice());
+            Ok(HostCallbackResult {
+                stack: vec![StackValue::ByteString(decoded_address.to_vec())],
+            })
+        },
+    )
+    .expect("Contract.Call bytes result should survive map SETITEM normalization flow");
+
+    assert_eq!(result.state, VmState::Halt);
+    assert!(result.stack.is_empty());
 }
 
 #[test]

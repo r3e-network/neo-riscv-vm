@@ -1824,13 +1824,16 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     }
                     StackValue::Map(id, mut items) => {
                         validate_map_key(&key)?;
-                        if let Some((_, existing)) = items
-                            .iter_mut()
-                            .find(|(candidate, _)| primitive_key_equals(candidate, &key))
+                        if let Some(index) = items
+                            .iter()
+                            .position(|(candidate, _)| primitive_key_equals(candidate, &key))
                         {
-                            *existing = ids.clone_struct_for_storage(&value);
+                            items[index].1 = ids.clone_struct_for_storage(&value);
                         } else {
-                            items.push((key, ids.clone_struct_for_storage(&value)));
+                            let mut updated_items = Vec::with_capacity(items.len() + 1);
+                            updated_items.extend(items.into_iter());
+                            updated_items.push((key, ids.clone_struct_for_storage(&value)));
+                            items = updated_items;
                         }
                         let updated = StackValue::Map(id, items);
                         remember_consumed_mutation(&mut consumed_mutations, &updated);

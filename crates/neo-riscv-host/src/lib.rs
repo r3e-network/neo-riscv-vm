@@ -269,12 +269,13 @@ where
             // Read guest panic message if available
             let panic_msg = read_guest_panic(instance, &mut host);
             let result_diag = read_guest_result_diag(instance, &mut host);
+            let fault_ip = read_guest_last_interpreter_ip(instance, &mut host);
             {
                 let alloc_peak = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ()).unwrap_or(0);
                 let alloc_fails = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ()).unwrap_or(0);
                 let alloc_fail_size = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ()).unwrap_or(0);
                 format!(
-                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+                    "guest execute failed: {e:?}; last_opcode={:?}; last_guest_ip={fault_ip:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
                     host.last_opcode,
                     host.opcode_count,
                     host.syscall_count,
@@ -570,12 +571,13 @@ where
             let trace = read_guest_trace(instance, &mut host);
             let panic_msg = read_guest_panic(instance, &mut host);
             let result_diag = read_guest_result_diag(instance, &mut host);
+            let fault_ip = read_guest_last_interpreter_ip(instance, &mut host);
             {
                 let alloc_peak = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_peak", ()).unwrap_or(0);
                 let alloc_fails = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_count", ()).unwrap_or(0);
                 let alloc_fail_size = instance.call_typed_and_get_result::<u32, ()>(&mut host, "get_allocator_fail_size", ()).unwrap_or(0);
                 format!(
-                    "guest execute failed: {e:?}; last_opcode={:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
+                    "guest execute failed: {e:?}; last_opcode={:?}; last_guest_ip={fault_ip:?}; opcode_count={}; syscall_count={}; last_api={:?}; last_ip={:?}; last_stack_len={:?}; last_result_cap={:?}; last_host_call_stage={}; result_diag={result_diag:?}; trace={trace:?}; panic={panic_msg:?}; alloc_peak={alloc_peak}; alloc_fails={alloc_fails}; alloc_fail_size={alloc_fail_size}",
                     host.last_opcode,
                     host.opcode_count,
                     host.syscall_count,

@@ -253,11 +253,15 @@ pub(crate) fn propagate_update(
     alt_stack: &mut [StackValue],
     affected_stack_indices: Option<&[usize]>,
 ) {
+    let Some(updated_id) = compound_id(updated) else {
+        return;
+    };
+
     match affected_stack_indices {
         Some(indices) if !indices.is_empty() => {
             for &idx in indices {
                 if idx < stack.len() {
-                    replace_alias(&mut stack[idx], updated);
+                    replace_alias_by_id(&mut stack[idx], updated_id, updated);
                 }
             }
         }
@@ -266,21 +270,21 @@ pub(crate) fn propagate_update(
         }
         None => {
             for value in stack {
-                replace_alias(value, updated);
+                replace_alias_by_id(value, updated_id, updated);
             }
         }
     }
     for value in locals {
-        replace_alias(value, updated);
+        replace_alias_by_id(value, updated_id, updated);
     }
     for value in args {
-        replace_alias(value, updated);
+        replace_alias_by_id(value, updated_id, updated);
     }
     for value in static_fields {
-        replace_alias(value, updated);
+        replace_alias_by_id(value, updated_id, updated);
     }
     for value in alt_stack {
-        replace_alias(value, updated);
+        replace_alias_by_id(value, updated_id, updated);
     }
 }
 
@@ -291,9 +295,9 @@ pub(crate) fn propagate_aliases_from_sources(targets: &mut [StackValue], sources
 }
 
 fn propagate_alias_from_source(targets: &mut [StackValue], source: &StackValue) {
-    if compound_id(source).is_some() {
+    if let Some(source_id) = compound_id(source) {
         for target in targets.iter_mut() {
-            replace_alias(target, source);
+            replace_alias_by_id(target, source_id, source);
         }
     }
 
@@ -321,9 +325,8 @@ fn propagate_alias_from_source(targets: &mut [StackValue], source: &StackValue) 
     }
 }
 
-fn replace_alias(target: &mut StackValue, updated: &StackValue) {
-    let target_id = compound_id(target);
-    if target_id.is_some() && target_id == compound_id(updated) {
+fn replace_alias_by_id(target: &mut StackValue, updated_id: u64, updated: &StackValue) {
+    if compound_id(target) == Some(updated_id) {
         *target = updated.clone();
         return;
     }
@@ -331,13 +334,13 @@ fn replace_alias(target: &mut StackValue, updated: &StackValue) {
     match target {
         StackValue::Array(_, items) | StackValue::Struct(_, items) => {
             for item in items {
-                replace_alias(item, updated);
+                replace_alias_by_id(item, updated_id, updated);
             }
         }
         StackValue::Map(_, items) => {
             for (key, value) in items {
-                replace_alias(key, updated);
-                replace_alias(value, updated);
+                replace_alias_by_id(key, updated_id, updated);
+                replace_alias_by_id(value, updated_id, updated);
             }
         }
         StackValue::Buffer(_, _)

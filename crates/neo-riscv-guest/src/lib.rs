@@ -68,7 +68,15 @@ fn propagate_active_aliases_into_saved_frame(
     }
 }
 
-fn remember_consumed_mutation(consumed_mutations: &mut Vec<StackValue>, updated: &StackValue) {
+fn remember_consumed_mutation(
+    consumed_mutations: &mut Vec<StackValue>,
+    call_stack_depth: usize,
+    updated: &StackValue,
+) {
+    if call_stack_depth == 0 {
+        return;
+    }
+
     let Some(id) = compound_id(updated) else {
         return;
     };
@@ -1628,7 +1636,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Array(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1643,7 +1655,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Struct(id, mut items) => {
                         items.push(ids.clone_struct_for_storage(&value));
                         let updated = StackValue::Struct(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1772,7 +1788,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         };
                         bytes[index as usize] = byte;
                         let updated = StackValue::Buffer(id, bytes);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1791,7 +1811,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Array(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1810,7 +1834,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         }
                         items[index as usize] = ids.clone_struct_for_storage(&value);
                         let updated = StackValue::Struct(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1836,7 +1864,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             items = updated_items;
                         }
                         let updated = StackValue::Map(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1862,7 +1894,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Array(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1881,7 +1917,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                         }
                         items.remove(index as usize);
                         let updated = StackValue::Struct(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1901,7 +1941,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             .ok_or_else(|| "key not found for REMOVE".to_string())?;
                         items.remove(index);
                         let updated = StackValue::Map(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         let affected = find_affected_indices(id, &stack);
                         propagate_update(
                             &updated,
@@ -1921,7 +1965,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 match item {
                     StackValue::Array(id, _) => {
                         let updated = StackValue::Array(id, Vec::new());
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -1934,7 +1982,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     }
                     StackValue::Struct(id, _) => {
                         let updated = StackValue::Struct(id, Vec::new());
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -1947,7 +1999,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     }
                     StackValue::Map(id, _) => {
                         let updated = StackValue::Map(id, Vec::new());
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -1960,7 +2016,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     }
                     StackValue::Buffer(id, _) => {
                         let updated = StackValue::Buffer(id, Vec::new());
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -1982,7 +2042,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty array".to_string())?;
                         let updated = StackValue::Array(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -1999,7 +2063,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty struct".to_string())?;
                         let updated = StackValue::Struct(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2016,7 +2084,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty map".to_string())?;
                         let updated = StackValue::Map(id, entries);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2034,7 +2106,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                             .pop()
                             .ok_or_else(|| "POPITEM on empty buffer".to_string())?;
                         let updated = StackValue::Buffer(id, bytes);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2066,7 +2142,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Array(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Array(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2080,7 +2160,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Struct(id, mut items) => {
                         items.reverse();
                         let updated = StackValue::Struct(id, items);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2094,7 +2178,11 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                     StackValue::Buffer(id, mut bytes) => {
                         bytes.reverse();
                         let updated = StackValue::Buffer(id, bytes);
-                        remember_consumed_mutation(&mut consumed_mutations, &updated);
+                        remember_consumed_mutation(
+                            &mut consumed_mutations,
+                            call_stack.len(),
+                            &updated,
+                        );
                         propagate_update(
                             &updated,
                             &mut stack,
@@ -2303,7 +2391,7 @@ fn interpret_with_stack_and_syscalls_at_internal<H: SyscallProvider>(
                 }
                 dst_bytes[di..di + count].copy_from_slice(&src_bytes[si..si + count]);
                 let updated = StackValue::Buffer(dst_id, dst_bytes);
-                remember_consumed_mutation(&mut consumed_mutations, &updated);
+                remember_consumed_mutation(&mut consumed_mutations, call_stack.len(), &updated);
                 propagate_update(
                     &updated,
                     &mut stack,

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-label="Syscall 与原生合约数据流">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e6edf5" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-slate" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#475467"/></marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#16a34a"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#2f80ed"/></marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#e5484d"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#7c3aed"/></marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="1100" fill="#f7f9fc"/>
+  <rect width="1800" height="1100" fill="url(#grid)" opacity="0.42"/>
+  <rect x="54" y="46" width="1692" height="1008" rx="28" fill="#ffffff" stroke="#d0d5dd" stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <rect x="54" y="46" width="1692" height="10" rx="5" fill="#7c3aed"/>
+  <circle cx="106" cy="98" r="22" fill="#7c3aed" opacity="0.16"/>
+  <circle cx="106" cy="98" r="8" fill="#7c3aed"/>
+  <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">Syscall 与原生合约数据流</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">RISC-V 代码请求 host 操作；现有 Neo C# 执行存储、运行时、合约调用和原生逻辑。</text>
+  
+    <g>
+    <rect x="120" y="185" width="260" height="58" rx="14" fill="#fff" stroke="#0097a7" stroke-width="1.5"/>
+    <text x="250" y="221" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">RISC-V Guest</text>
+  </g><path d="M 250 243 V 820" stroke="#0097a7" stroke-width="2" stroke-dasharray="8 10" opacity="0.55"/>
+<g>
+    <rect x="485" y="185" width="260" height="58" rx="14" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="615" y="221" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Rust Host</text>
+  </g><path d="M 615 243 V 820" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 10" opacity="0.55"/>
+<g>
+    <rect x="850" y="185" width="260" height="58" rx="14" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="980" y="221" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">C# Bridge</text>
+  </g><path d="M 980 243 V 820" stroke="#7c3aed" stroke-width="2" stroke-dasharray="8 10" opacity="0.55"/>
+<g>
+    <rect x="1215" y="185" width="260" height="58" rx="14" fill="#fff" stroke="#2f80ed" stroke-width="1.5"/>
+    <text x="1345" y="221" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Neo C# System</text>
+  </g><path d="M 1345 243 V 820" stroke="#2f80ed" stroke-width="2" stroke-dasharray="8 10" opacity="0.55"/>
+    <g>
+    <path d="M 250 320 L 615 320" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="332.5" y="286" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="432.5" y="308" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">1. host_call(api, ip,</text>
+<text x="432.5" y="326" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">stack)</text></g>
+  </g>
+    <g>
+    <path d="M 615 430 L 980 430" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="697.5" y="396" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="797.5" y="418" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">2. P/Invoke callback</text></g>
+  </g>
+    <g>
+    <path d="M 980 540 L 1345 540" fill="none" stroke="#7c3aed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
+    <g><rect x="1062.5" y="506" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1162.5" y="528" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">3. 分发 syscall / native</text></g>
+  </g>
+    <g>
+    <path d="M 1345 650 L 980 650" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="1062.5" y="616" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1162.5" y="638" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">4. StackItem 结果</text></g>
+  </g>
+    <g>
+    <path d="M 980 760 L 615 760" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="697.5" y="726" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="797.5" y="748" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">5. ABI bytes</text></g>
+  </g>
+    <g>
+    <path d="M 615 870 L 250 870" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="332.5" y="836" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="432.5" y="858" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">6. guest 继续执行</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1130" y="300" width="430" height="155" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
+    <rect x="1152" y="320" width="42" height="42" rx="14" fill="#ffffff" stroke="#2f80ed" stroke-width="1.5"/>
+    <g fill="none" stroke="#2f80ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="1173" cy="333.5744" rx="9.710400000000002" ry="3.7128000000000005"/>
+      <path d="M 1163.2896 333.5744 v 12.852000000000002 c 0 2.2848 4.284 3.7128000000000005 9.710400000000002 3.7128000000000005 c 5.4264 0 9.710400000000002 -1.4280000000000002 9.710400000000002 -3.7128000000000005 v -12.852000000000002"/>
+      <path d="M 1163.2896 339.85760000000005 c 0 2.2848 4.284 3.7128000000000005 9.710400000000002 3.7128000000000005 c 5.4264 0 9.710400000000002 -1.4280000000000002 9.710400000000002 -3.7128000000000005"/>
+    </g>
+    <text x="1218" y="342" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Neo 语义事实源</text>
+    <text x="1160" y="373" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Storage / Runtime / Contract.Call</text>
+<text x="1160" y="394" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">/ Crypto</text>
+
+<text x="1160" y="420" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Ledger、NEO、GAS、Policy、Oracle 等原生合约</text>
+  </g>
+    <g>
+    <rect x="170" y="935" width="1340" height="78" rx="16" fill="#fff0f1" stroke="#e5484d" stroke-width="1.8"/>
+    <path d="M 192 959 h 42" stroke="#e5484d" stroke-width="5" stroke-linecap="round"/>
+    <text x="194" y="993" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">架构原则</text>
+    <text x="194" y="1027" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">RISC-V 侧只负责转发和数据适配，不维护第二套 syscall 或原生合约实现。</text>
+  </g>
+  
+</svg>

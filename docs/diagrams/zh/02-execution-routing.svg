@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-label="执行路由">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e6edf5" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-slate" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#475467"/></marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#16a34a"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#2f80ed"/></marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#e5484d"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#7c3aed"/></marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="1100" fill="#f7f9fc"/>
+  <rect width="1800" height="1100" fill="url(#grid)" opacity="0.42"/>
+  <rect x="54" y="46" width="1692" height="1008" rx="28" fill="#ffffff" stroke="#d0d5dd" stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <rect x="54" y="46" width="1692" height="10" rx="5" fill="#16a34a"/>
+  <circle cx="106" cy="98" r="22" fill="#16a34a" opacity="0.16"/>
+  <circle cx="106" cy="98" r="8" fill="#16a34a"/>
+  <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">执行路由</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">同一个 Neo 调用入口把旧 NeoVM 字节码和原生 RISC-V 二进制路由到正确执行路径。</text>
+  
+    <g filter="url(#soft-shadow)">
+    <rect x="100" y="175" width="330" height="135" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="122" y="195" width="42" height="42" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="131.576" y="210.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <rect x="143.5712" y="210.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <path d="M 140.7152 214.8576 L 145.2848 214.8576"/>
+    </g>
+    <text x="188" y="217" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Neo 调用入口</text>
+    <text x="130" y="248" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">ApplicationEngine.Run()</text>
+  </g>
+    <g>
+    <path d="M 430 242 L 560 242" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="560" y="175" width="360" height="135" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
+    <rect x="582" y="195" width="42" height="42" rx="14" fill="#ffffff" stroke="#2f80ed" stroke-width="1.5"/>
+    <g fill="none" stroke="#2f80ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 595.0032 212.5728 h 5.712000000000001 v -2.8560000000000003 a 2.5704000000000002 2.5704000000000002 0 0 1 5.1408000000000005 0 v 2.8560000000000003 h 5.712000000000001 v 5.712000000000001 h 2.8560000000000003 a 2.5704000000000002 2.5704000000000002 0 0 1 0 5.1408000000000005 h -2.8560000000000003 v 5.712000000000001 h -5.712000000000001 v 2.8560000000000003 a 2.5704000000000002 2.5704000000000002 0 0 1 -5.1408000000000005 0 v -2.8560000000000003 h -5.712000000000001 z"/>
+    </g>
+    <text x="648" y="217" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">RiscvApplicationEngine</text>
+    <text x="590" y="248" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">收集上下文、初始栈、gas</text>
+  </g>
+    <g>
+    <path d="M 920 242 L 1060 242" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+    <g filter="url(#soft-shadow)">
+    <polygon points="1190,160 1320,242.5 1190,325 1060,242.5" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
+    <text x="1190" y="236.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">合约类型？</text>
+    <text x="1190" y="270.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Type / PVM\0 magic</text>
+  </g>
+    <g>
+    <rect x="155" y="420" width="675" height="285" rx="22" fill="#fff" stroke="#0097a7" stroke-width="2" stroke-dasharray="10 9"/>
+    <rect x="175" y="402" width="235" height="38" rx="12" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
+    <text x="195" y="427" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="850" fill="#0097a7">兼容路径：旧 NeoVM 合约</text>
+  </g>
+    <g>
+    <rect x="970" y="420" width="675" height="285" rx="22" fill="#fff" stroke="#7c3aed" stroke-width="2" stroke-dasharray="10 9"/>
+    <rect x="990" y="402" width="222" height="38" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="1010" y="427" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="850" fill="#7c3aed">原生路径：RISC-V 合约</text>
+  </g>
+    <g>
+    <path d="M 1120 325 C 880 325, 735 420, 495 420" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="707.5" y="338.5" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="807.5" y="360.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">NeoVM = 0</text></g>
+  </g>
+    <g>
+    <path d="M 1260 325 L 1305 420" fill="none" stroke="#7c3aed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
+    <g><rect x="1182.5" y="338.5" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1282.5" y="360.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">RiscV = 1</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="210" y="475" width="285" height="135" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
+    <rect x="232" y="495" width="42" height="42" rx="14" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
+    <g fill="none" stroke="#0097a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="242.1472" y="506.2896" width="21.7056" height="17.7072" rx="2.2848"/>
+      <path d="M 242.1472 510.85920000000004 h 21.7056 M 247.288 516 l -2.2848 2.2848 l 2.2848 2.2848 M 252.4288 520.5696 l 2.2848 -9.1392 M 256.9984 516 l 2.2848 2.2848 l -2.2848 2.2848"/>
+    </g>
+    <text x="298" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">guest.polkavm</text>
+    <text x="240" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">加载缓存 interpreter</text>
+  </g>
+    <g>
+    <path d="M 495 542 L 585 542" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="585" y="475" width="210" height="135" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
+    <rect x="607" y="495" width="42" height="42" rx="14" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
+    <g fill="none" stroke="#0097a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="617.1472" y="506.2896" width="21.7056" height="17.7072" rx="2.2848"/>
+      <path d="M 617.1472 510.85920000000004 h 21.7056 M 622.288 516 l -2.2848 2.2848 l 2.2848 2.2848 M 627.4288 520.5696 l 2.2848 -9.1392 M 631.9984000000001 516 l 2.2848 2.2848 l -2.2848 2.2848"/>
+    </g>
+    <text x="673" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">解释 NEF</text>
+    <text x="615" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">NeoVM bytecode</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1030" y="475" width="285" height="135" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="1052" y="495" width="42" height="42" rx="14" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <g fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 1073 504.576 L 1082.7104 508.5744 v 7.996800000000001 c 0 6.8544 -3.9984000000000006 10.281600000000001 -9.710400000000002 13.1376 c -5.712000000000001 -2.8560000000000003 -9.710400000000002 -6.283200000000001 -9.710400000000002 -13.1376 v -7.996800000000001 z"/>
+      <path d="M 1069.0016 516.5712 l 2.8560000000000003 2.8560000000000003 l 6.283200000000001 -7.425600000000001"/>
+    </g>
+    <text x="1118" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">加载 PVM</text>
+    <text x="1060" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">NEF 内 PolkaVM binary</text>
+  </g>
+    <g>
+    <path d="M 1315 542 L 1405 542" fill="none" stroke="#7c3aed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
+    
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1405" y="475" width="205" height="135" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="1427" y="495" width="42" height="42" rx="14" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <g fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="1448" cy="516" r="5.712000000000001"/>
+      <path d="M 1448 504.00480000000005 v 4.5696 M 1448 523.4256 v 4.5696 M 1436.0048 516 h 4.5696 M 1455.4256 516 h 4.5696 M 1439.432 507.432 l 3.4272 3.4272 M 1453.1408000000001 521.1408 l 3.4272 3.4272 M 1456.568 507.432 l -3.4272 3.4272 M 1442.8592 521.1408 l -3.4272 3.4272"/>
+    </g>
+    <text x="1493" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">直接执行</text>
+    <text x="1435" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">无 interpreter 层</text>
+  </g>
+    <g>
+    <path d="M 690 610 C 810 610, 750 805, 870 805" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+    <g>
+    <path d="M 1320 610 C 1160 610, 1155 805, 995 805" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="690" y="805" width="420" height="130" rx="18" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
+    <rect x="712" y="825" width="42" height="42" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+    <g fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="733" cy="846" r="5.712000000000001"/>
+      <path d="M 733 834.0048 v 4.5696 M 733 853.4256 v 4.5696 M 721.0048 846 h 4.5696 M 740.4256 846 h 4.5696 M 724.432 837.432 l 3.4272 3.4272 M 738.1408 851.1408 l 3.4272 3.4272 M 741.568 837.432 l -3.4272 3.4272 M 727.8592 851.1408 l -3.4272 3.4272"/>
+    </g>
+    <text x="778" y="847" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">共享 Host Bridge</text>
+    <text x="720" y="878" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">host_call +</text>
+<text x="720" y="899" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">host_on_instruction + ABI</text>
+  </g>
+    <g>
+    <path d="M 1110 870 L 1280 870" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="1095" y="836" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1195" y="858" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">结果</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1280" y="805" width="330" height="130" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="1302" y="825" width="42" height="42" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1311.576" y="840.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <rect x="1323.5712" y="840.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <path d="M 1320.7152 844.8576 L 1325.2848000000001 844.8576"/>
+    </g>
+    <text x="1368" y="847" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">返回 C#</text>
+    <text x="1310" y="878" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">HALT/FAULT、栈、gas、异常</text>
+  </g>
+  
+</svg>

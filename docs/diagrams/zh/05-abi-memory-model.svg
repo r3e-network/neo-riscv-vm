@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-label="ABI 与内存模型">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e6edf5" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-slate" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#475467"/></marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#16a34a"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#2f80ed"/></marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#e5484d"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#7c3aed"/></marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="1100" fill="#f7f9fc"/>
+  <rect width="1800" height="1100" fill="url(#grid)" opacity="0.42"/>
+  <rect x="54" y="46" width="1692" height="1008" rx="28" fill="#ffffff" stroke="#d0d5dd" stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <rect x="54" y="46" width="1692" height="10" rx="5" fill="#f59e0b"/>
+  <circle cx="106" cy="98" r="22" fill="#f59e0b" opacity="0.16"/>
+  <circle cx="106" cy="98" r="8" fill="#f59e0b"/>
+  <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">ABI 与内存模型</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">FFI 调用信封变成 guest 可读 aux data；执行结果再封送为 Neo 兼容结果栈。</text>
+  
+    <g filter="url(#soft-shadow)">
+    <rect x="105" y="170" width="380" height="280" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
+    <rect x="127" y="190" width="54" height="54" rx="14" fill="#ffffff" stroke="#2f80ed" stroke-width="1.5"/>
+    <g fill="none" stroke="#2f80ed" stroke-width="2.0400000000000005" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 143.71839999999997 212.59359999999998 h 7.344000000000001 v -3.6720000000000006 a 3.3048000000000006 3.3048000000000006 0 0 1 6.609600000000001 0 v 3.6720000000000006 h 7.344000000000001 v 7.344000000000001 h 3.6720000000000006 a 3.3048000000000006 3.3048000000000006 0 0 1 0 6.609600000000001 h -3.6720000000000006 v 7.344000000000001 h -7.344000000000001 v 3.6720000000000006 a 3.3048000000000006 3.3048000000000006 0 0 1 -6.609600000000001 0 v -3.6720000000000006 h -7.344000000000001 z"/>
+    </g>
+    <text x="205" y="222" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#101828">FFI 调用信封</text>
+    <text x="135" y="258" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">script_ptr / len</text>
+
+<text x="135" y="287" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">initial_ip / trigger / network</text>
+
+<text x="135" y="316" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">gas_left / timestamp</text>
+
+<text x="135" y="345" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">initial_stack / callbacks</text>
+  </g>
+    <g>
+    <path d="M 485 310 L 650 310" fill="none" stroke="#2f80ed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="467.5" y="276" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="298" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#2f80ed">序列化</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+      <rect x="650" y="160" width="500" height="760" rx="24" fill="#fff" stroke="#0097a7" stroke-width="2.4"/>
+      <g fill="none" stroke="#0097a7" stroke-width="3.3333333333333335" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="699.6" y="204.4" width="40.800000000000004" height="43.199999999999996" rx="3.5999999999999996"/>
+      <path d="M 699.6 211 h 40.800000000000004"/><path d="M 699.6 219.4 h 40.800000000000004"/><path d="M 699.6 227.8 h 40.800000000000004"/><path d="M 699.6 236.2 h 40.800000000000004"/>
+      <path d="M 708 198.4 v 6 M 720 198.4 v 6 M 732 198.4 v 6 M 708 247.6 v 6 M 720 247.6 v 6 M 732 247.6 v 6"/>
+    </g>
+      <text x="770" y="236" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="28" font-weight="850" fill="#101828">Guest Memory Map</text>
+      <g>
+    <rect x="725" y="290" width="350" height="80" fill="#f2f4f7" stroke="#475467" stroke-width="1.4"/>
+    <text x="745" y="322" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="850" fill="#101828">Reserved / Entry</text>
+    <text x="745" y="348" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">入口点与 trampoline</text>
+  </g>
+      <g>
+    <rect x="725" y="370" width="350" height="100" fill="#edf5ff" stroke="#2f80ed" stroke-width="1.4"/>
+    <text x="745" y="402" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="850" fill="#101828">Code</text>
+    <text x="745" y="428" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">guest.polkavm 或 PVM binary，只读</text>
+  </g>
+      <g>
+    <rect x="725" y="470" width="350" height="170" fill="#eafaf0" stroke="#16a34a" stroke-width="1.4"/>
+    <text x="745" y="502" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="850" fill="#101828">Heap</text>
+    <text x="745" y="528" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">256MB bump allocator；StackValue</text>
+<text x="745" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">/ Array / Map / Struct</text>
+  </g>
+      <g>
+    <rect x="725" y="640" width="350" height="110" fill="#fff7df" stroke="#f59e0b" stroke-width="1.4"/>
+    <text x="745" y="672" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="850" fill="#101828">Aux Data</text>
+    <text x="745" y="698" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">script、初始栈与上下文元数据</text>
+  </g>
+      <g>
+    <rect x="725" y="750" width="350" height="105" fill="#f3ecff" stroke="#7c3aed" stroke-width="1.4"/>
+    <text x="745" y="782" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="850" fill="#101828">Execution Stack</text>
+    <text x="745" y="808" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">向下增长；栈与 item size 有限制</text>
+  </g>
+    </g>
+    <g>
+    <path d="M 1150 310 L 1320 310" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="1135" y="276" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1235" y="298" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">编码/解码</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1320" y="170" width="370" height="280" rx="18" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
+    <rect x="1342" y="190" width="54" height="54" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+    <g fill="none" stroke="#f59e0b" stroke-width="2.0400000000000005" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1355.0464000000002" y="204.5152" width="27.907200000000003" height="22.766400000000004" rx="2.9376000000000007"/>
+      <path d="M 1355.0464000000002 210.3904 h 27.907200000000003 M 1361.6560000000002 217 l -2.9376000000000007 2.9376000000000007 l 2.9376000000000007 2.9376000000000007 M 1368.2656000000002 222.8752 l 2.9376000000000007 -11.750400000000003 M 1374.1408000000001 217 l 2.9376000000000007 2.9376000000000007 l -2.9376000000000007 2.9376000000000007"/>
+    </g>
+    <text x="1420" y="222" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#101828">StackValue ABI</text>
+    <text x="1350" y="258" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Integer / BigInteger</text>
+
+<text x="1350" y="287" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">ByteString / Boolean / Null</text>
+
+<text x="1350" y="316" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Array / Struct / Map</text>
+
+<text x="1350" y="345" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Interop / Iterator / Pointer</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="105" y="625" width="380" height="250" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="127" y="645" width="54" height="54" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2.0400000000000005" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="139.31199999999998" y="665.3904" width="13.953600000000002" height="10.281600000000003" rx="5.140800000000001"/>
+      <rect x="154.7344" y="665.3904" width="13.953600000000002" height="10.281600000000003" rx="5.140800000000001"/>
+      <path d="M 151.0624 670.5312 L 156.93759999999997 670.5312"/>
+    </g>
+    <text x="205" y="677" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#101828">执行结果</text>
+    <text x="135" y="713" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">state：HALT / FAULT / BREAK</text>
+
+<text x="135" y="742" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">结果栈、gas、异常信息</text>
+
+<text x="135" y="771" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">由 FFI free callback 释放</text>
+  </g>
+    <g>
+    <path d="M 650 760 L 485 750" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="467.5" y="721" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="743" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">封送回 C#</text></g>
+  </g>
+    <g>
+    <rect x="1320" y="625" width="370" height="190" rx="16" fill="#fff0f1" stroke="#e5484d" stroke-width="1.8"/>
+    <path d="M 1342 649 h 42" stroke="#e5484d" stroke-width="5" stroke-linecap="round"/>
+    <text x="1344" y="683" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">安全边界</text>
+    <text x="1344" y="717" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">guest 不能直接访问链状态；所有外部行为必须通过</text>
+<text x="1344" y="738" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">host_call 和 C# dispatcher。</text>
+  </g>
+  
+</svg>

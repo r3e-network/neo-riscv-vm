@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-label="Mainnet State Root Validation">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e6edf5" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-slate" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#475467"/></marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#16a34a"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#2f80ed"/></marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#e5484d"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#7c3aed"/></marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="1100" fill="#f7f9fc"/>
+  <rect width="1800" height="1100" fill="url(#grid)" opacity="0.42"/>
+  <rect x="54" y="46" width="1692" height="1008" rx="28" fill="#ffffff" stroke="#d0d5dd" stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <rect x="54" y="46" width="1692" height="10" rx="5" fill="#e5484d"/>
+  <circle cx="106" cy="98" r="22" fill="#e5484d" opacity="0.16"/>
+  <circle cx="106" cy="98" r="8" fill="#e5484d"/>
+  <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">Mainnet State Root Validation</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">Continuous validation watches node height, checkpoints, state roots, logs, and automatic recovery</text>
+<text x="142" y="157" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">actions.</text>
+  
+    <g filter="url(#soft-shadow)">
+    <rect x="110" y="170" width="390" height="155" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="132" y="190" width="42" height="42" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="141.576" y="205.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <rect x="153.5712" y="205.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <path d="M 150.7152 209.8576 L 155.2848 209.8576"/>
+    </g>
+    <text x="198" y="212" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Node Sync</text>
+    <text x="140" y="243" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">neo-cli mainnet node syncs</text>
+<text x="140" y="264" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">blocks / state; RPC exposes</text>
+<text x="140" y="285" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">blockcount</text>
+  </g>
+    <g>
+    <path d="M 500 248 L 705 248" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="502.5" y="214" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="602.5" y="236" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">height</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="705" y="170" width="390" height="155" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
+    <rect x="727" y="190" width="42" height="42" rx="14" fill="#ffffff" stroke="#2f80ed" stroke-width="1.5"/>
+    <g fill="none" stroke="#2f80ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="748" cy="211" r="5.712000000000001"/>
+      <path d="M 748 199.0048 v 4.5696 M 748 218.4256 v 4.5696 M 736.0048 211 h 4.5696 M 755.4256 211 h 4.5696 M 739.432 202.432 l 3.4272 3.4272 M 753.1408 216.1408 l 3.4272 3.4272 M 756.568 202.432 l -3.4272 3.4272 M 742.8592 216.1408 l -3.4272 3.4272"/>
+    </g>
+    <text x="793" y="212" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">StateRoot Comparator</text>
+    <text x="735" y="243" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Compares expected and actual</text>
+<text x="735" y="264" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">state roots by range</text>
+  </g>
+    <g>
+    <path d="M 1095 248 L 1300 248" fill="none" stroke="#2f80ed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="1097.5" y="214" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1197.5" y="236" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#2f80ed">status</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1300" y="170" width="390" height="155" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="1322" y="190" width="42" height="42" rx="14" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <g fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1332.1472" y="201.8608" width="21.7056" height="14.851200000000002" rx="1.7136"/>
+      <path d="M 1337.288 220.1392 h 11.424000000000001 M 1343 216.712 v 3.4272 M 1335.5744 212.7136 l 4.5696 -4.5696 l 3.9984000000000006 2.8560000000000003 l 5.712000000000001 -6.283200000000001"/>
+    </g>
+    <text x="1388" y="212" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Watchdog</text>
+    <text x="1330" y="243" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Polls services, logs,</text>
+<text x="1330" y="264" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">checkpoint, and triggers</text>
+<text x="1330" y="285" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">recovery when needed</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="250" y="465" width="380" height="150" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
+    <rect x="272" y="485" width="42" height="42" rx="14" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
+    <g fill="none" stroke="#0097a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="293" cy="498.5744" rx="9.710400000000002" ry="3.7128000000000005"/>
+      <path d="M 283.2896 498.5744 v 12.852000000000002 c 0 2.2848 4.284 3.7128000000000005 9.710400000000002 3.7128000000000005 c 5.4264 0 9.710400000000002 -1.4280000000000002 9.710400000000002 -3.7128000000000005 v -12.852000000000002"/>
+      <path d="M 283.2896 504.85760000000005 c 0 2.2848 4.284 3.7128000000000005 9.710400000000002 3.7128000000000005 c 5.4264 0 9.710400000000002 -1.4280000000000002 9.710400000000002 -3.7128000000000005"/>
+    </g>
+    <text x="338" y="507" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">stateroot-continuous.tsv</text>
+    <text x="280" y="538" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">height / expected / actual / OK</text>
+<text x="280" y="559" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">or MISMATCH</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="710" y="465" width="380" height="150" rx="18" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
+    <rect x="732" y="485" width="42" height="42" rx="14" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+    <g fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="743.2896000000001" y="495.71840000000003" width="19.420800000000003" height="20.563200000000002" rx="1.7136"/>
+      <path d="M 743.2896000000001 498.86 h 19.420800000000003"/><path d="M 743.2896000000001 502.8584 h 19.420800000000003"/><path d="M 743.2896000000001 506.8568 h 19.420800000000003"/><path d="M 743.2896000000001 510.8552 h 19.420800000000003"/>
+      <path d="M 747.288 492.86240000000004 v 2.8560000000000003 M 753 492.86240000000004 v 2.8560000000000003 M 758.712 492.86240000000004 v 2.8560000000000003 M 747.288 516.2816 v 2.8560000000000003 M 753 516.2816 v 2.8560000000000003 M 758.712 516.2816 v 2.8560000000000003"/>
+    </g>
+    <text x="798" y="507" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">checkpoint</text>
+    <text x="740" y="538" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">records last passed block and</text>
+<text x="740" y="559" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">resumes after restart</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1170" y="465" width="380" height="150" rx="18" fill="#fff0f1" stroke="#e5484d" stroke-width="2"/>
+    <rect x="1192" y="485" width="42" height="42" rx="14" fill="#ffffff" stroke="#e5484d" stroke-width="1.5"/>
+    <g fill="none" stroke="#e5484d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1202.1472" y="496.2896" width="21.7056" height="17.7072" rx="2.2848"/>
+      <path d="M 1202.1472 500.85920000000004 h 21.7056 M 1207.288 506 l -2.2848 2.2848 l 2.2848 2.2848 M 1212.4288000000001 510.56960000000004 l 2.2848 -9.1392 M 1216.9984 506 l 2.2848 2.2848 l -2.2848 2.2848"/>
+    </g>
+    <text x="1258" y="507" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">stdout / stderr</text>
+    <text x="1200" y="538" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">filters Unknown state root,</text>
+<text x="1200" y="559" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">fatal errors, mismatch, and</text>
+<text x="1200" y="580" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">anomalies</text>
+  </g>
+    <g>
+    <path d="M 900 325 C 680 325, 660 465, 440 465" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="570" y="361" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="670" y="383" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">write TSV</text></g>
+  </g>
+    <g>
+    <path d="M 900 325 L 900 465" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="800" y="361" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="900" y="383" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">update</text></g>
+  </g>
+    <g>
+    <path d="M 1495 325 C 1435 325, 1420 465, 1360 465" fill="none" stroke="#e5484d" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-red)"/>
+    <g><rect x="1327.5" y="361" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1427.5" y="383" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#e5484d">inspect</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <polygon points="900,720 1035,795 900,870 765,795" fill="#fff7df" stroke="#e5484d" stroke-width="2"/>
+    <text x="900" y="789" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Anomaly?</text>
+    <text x="900" y="823" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">mismatch / fatal /</text>
+<text x="900" y="843" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">stopped</text>
+  </g>
+    <g>
+    <path d="M 440 615 C 580 615, 625 795, 765 795" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="502.5" y="671" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="602.5" y="693" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#475467">latest state</text></g>
+  </g>
+    <g>
+    <path d="M 900 615 L 900 720" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+    <g>
+    <path d="M 1360 615 C 1220 615, 1175 795, 1035 795" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="1097.5" y="671" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1197.5" y="693" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#475467">log signal</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="200" y="865" width="430" height="130" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="222" y="885" width="42" height="42" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="232.1472" y="896.8608" width="21.7056" height="14.851200000000002" rx="1.7136"/>
+      <path d="M 237.288 915.1392000000001 h 11.424000000000001 M 243 911.712 v 3.4272 M 235.5744 907.7136 l 4.5696 -4.5696 l 3.9984000000000006 2.8560000000000003 l 5.712000000000001 -6.283200000000001"/>
+    </g>
+    <text x="288" y="907" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Normal Path</text>
+    <text x="230" y="938" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">continue sync, per-block PASS,</text>
+<text x="230" y="959" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">checkpoint advances</text>
+<text x="230" y="980" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">monotonically</text>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1170" y="840" width="470" height="170" rx="18" fill="#fff0f1" stroke="#e5484d" stroke-width="2"/>
+    <rect x="1192" y="860" width="42" height="42" rx="14" fill="#ffffff" stroke="#e5484d" stroke-width="1.5"/>
+    <g fill="none" stroke="#e5484d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 1213 869.576 L 1222.7104 873.5744000000001 v 7.996800000000001 c 0 6.8544 -3.9984000000000006 10.281600000000001 -9.710400000000002 13.1376 c -5.712000000000001 -2.8560000000000003 -9.710400000000002 -6.283200000000001 -9.710400000000002 -13.1376 v -7.996800000000001 z"/>
+      <path d="M 1209.0016 881.5712 l 2.8560000000000003 2.8560000000000003 l 6.283200000000001 -7.425600000000001"/>
+    </g>
+    <text x="1258" y="882" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Automatic Recovery Path</text>
+    <text x="1200" y="913" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">archive bad DB and logs, analyze</text>
+<text x="1200" y="934" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">root cause, fix, deploy dylib,</text>
+<text x="1200" y="955" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">restart validation</text>
+  </g>
+    <g>
+    <path d="M 765 795 C 685 795, 710 925, 630 925" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="597.5" y="826" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="697.5" y="848" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">no</text></g>
+  </g>
+    <g>
+    <path d="M 1035 795 C 1115 795, 1090 925, 1170 925" fill="none" stroke="#e5484d" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-red)"/>
+    <g><rect x="1002.5" y="826" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1102.5" y="848" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#e5484d">yes</text></g>
+  </g>
+  
+</svg>

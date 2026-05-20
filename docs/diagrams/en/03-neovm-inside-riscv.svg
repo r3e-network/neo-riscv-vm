@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-label="NeoVM Inside RISC-V">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e6edf5" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-slate" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#475467"/></marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#16a34a"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#2f80ed"/></marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#e5484d"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#7c3aed"/></marker>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <rect width="1800" height="1100" fill="#f7f9fc"/>
+  <rect width="1800" height="1100" fill="url(#grid)" opacity="0.42"/>
+  <rect x="54" y="46" width="1692" height="1008" rx="28" fill="#ffffff" stroke="#d0d5dd" stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <rect x="54" y="46" width="1692" height="10" rx="5" fill="#0097a7"/>
+  <circle cx="106" cy="98" r="22" fill="#0097a7" opacity="0.16"/>
+  <circle cx="106" cy="98" r="8" fill="#0097a7"/>
+  <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">NeoVM Inside RISC-V</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">Existing NeoVM bytecode runs unchanged because guest.polkavm embeds a NeoVM interpreter inside PolkaVM.</text>
+  
+    <g filter="url(#soft-shadow)">
+    <rect x="105" y="185" width="310" height="170" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+    <rect x="127" y="205" width="54" height="54" rx="14" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <g fill="none" stroke="#16a34a" stroke-width="2.0400000000000005" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="140.04639999999998" y="219.5152" width="27.907200000000003" height="22.766400000000004" rx="2.9376000000000007"/>
+      <path d="M 140.04639999999998 225.3904 h 27.907200000000003 M 146.65599999999998 232 l -2.9376000000000007 2.9376000000000007 l 2.9376000000000007 2.9376000000000007 M 153.26559999999998 237.8752 l 2.9376000000000007 -11.750400000000003 M 159.14079999999998 232 l 2.9376000000000007 2.9376000000000007 l -2.9376000000000007 2.9376000000000007"/>
+    </g>
+    <text x="205" y="237" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#101828">NeoVM Bytecode</text>
+    <text x="135" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">PUSH / CALL / SYSCALL / RET</text>
+
+<text x="135" y="302" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Existing NEF stays</text>
+<text x="135" y="325" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">unchanged</text>
+  </g>
+    <g>
+    <path d="M 415 270 L 560 270" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
+    <g><rect x="387.5" y="236" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="487.5" y="258" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">script input</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+      <rect x="560" y="160" width="900" height="640" rx="28" fill="#e7fbfd" stroke="#0097a7" stroke-width="3"/>
+      <rect x="590" y="205" width="840" height="88" rx="20" fill="#fff" stroke="#0097a7" stroke-width="1.5"/>
+      <g fill="none" stroke="#0097a7" stroke-width="2.7777777777777777" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 645 227 L 662 234 v 14.000000000000002 c 0 12 -7.000000000000001 18 -17 23 c -10 -5 -17 -11 -17 -23 v -14.000000000000002 z"/>
+      <path d="M 638 248 l 5 5 l 11 -13"/>
+    </g>
+      <text x="690" y="242" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="27" font-weight="850" fill="#101828">PolkaVM Sandbox Boundary</text>
+      <text x="690" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">guest memory is isolated; host imports are the only exit</text>
+      <rect x="640" y="350" width="710" height="315" rx="24" fill="#fff" stroke="#d0d5dd" stroke-width="1.5"/>
+      <text x="675" y="400" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="28" font-weight="850" fill="#101828">guest.polkavm</text>
+      <g>
+    <rect x="690" y="450" width="160" height="70" rx="14" fill="#edf5ff" stroke="#2f80ed" stroke-width="1.5"/>
+    <text x="770" y="492" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Fetch</text>
+  </g>
+      <g>
+    <path d="M 850 485 L 930 485" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+      <g>
+    <rect x="930" y="450" width="170" height="70" rx="14" fill="#f3ecff" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="1015" y="492" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Decode</text>
+  </g>
+      <g>
+    <path d="M 1100 485 L 1180 485" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    
+  </g>
+      <g>
+    <rect x="1180" y="450" width="150" height="70" rx="14" fill="#eafaf0" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="1255" y="492" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Execute</text>
+  </g>
+      <g>
+    <path d="M 1260 520 C 1000 520, 1030 598, 770 598" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+    <g><rect x="915" y="525" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1015" y="547" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#475467">next opcode</text></g>
+  </g>
+      <g>
+    <rect x="690" y="585" width="220" height="58" rx="14" fill="#fff7df" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="800" y="621" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Evaluation Stack</text>
+  </g>
+      <g>
+    <rect x="940" y="585" width="170" height="58" rx="14" fill="#fff7df" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="1025" y="621" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Locals</text>
+  </g>
+      <g>
+    <rect x="1140" y="585" width="190" height="58" rx="14" fill="#fff7df" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="1235" y="621" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#101828">Call/Try Frames</text>
+  </g>
+    </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1510" y="270" width="210" height="165" rx="18" fill="#fff0f1" stroke="#e5484d" stroke-width="2"/>
+    <rect x="1532" y="290" width="42" height="42" rx="14" fill="#ffffff" stroke="#e5484d" stroke-width="1.5"/>
+    <g fill="none" stroke="#e5484d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="1553" cy="311" r="5.712000000000001"/>
+      <path d="M 1553 299.00480000000005 v 4.5696 M 1553 318.42560000000003 v 4.5696 M 1541.0048 311 h 4.5696 M 1560.4256 311 h 4.5696 M 1544.432 302.432 l 3.4272 3.4272 M 1558.1408000000001 316.1408 l 3.4272 3.4272 M 1561.568 302.432 l -3.4272 3.4272 M 1547.8592 316.1408 l -3.4272 3.4272"/>
+    </g>
+    <text x="1598" y="312" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Host Imports</text>
+    <text x="1540" y="343" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">host_call()</text>
+
+<text x="1540" y="369" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">host_on_instruction()</text>
+  </g>
+    <g>
+    <path d="M 1350 505 C 1430 505, 1430 352, 1510 352" fill="none" stroke="#e5484d" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-red)"/>
+    <g><rect x="1330" y="394.5" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1430" y="416.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#e5484d">syscall / gas</text></g>
+  </g>
+    <g filter="url(#soft-shadow)">
+    <rect x="1190" y="845" width="500" height="160" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
+    <rect x="1212" y="865" width="42" height="42" rx="14" fill="#ffffff" stroke="#2f80ed" stroke-width="1.5"/>
+    <g fill="none" stroke="#2f80ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1221.576" y="880.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <rect x="1233.5712" y="880.8592" width="10.8528" height="7.996800000000001" rx="3.9984000000000006"/>
+      <path d="M 1230.7152 884.8576 L 1235.2848000000001 884.8576"/>
+    </g>
+    <text x="1278" y="887" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Back to Neo C# System</text>
+    <text x="1220" y="918" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">storage, runtime, and native calls</text>
+<text x="1220" y="939" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">still execute in C#</text>
+  </g>
+    <g>
+    <path d="M 1615 435 C 1495 435, 1580 865, 1460 865" fill="none" stroke="#2f80ed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
+    <g><rect x="1437.5" y="616" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1537.5" y="638" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#2f80ed">request Neo semantics</text></g>
+  </g>
+    <g>
+    <rect x="105" y="780" width="420" height="170" rx="16" fill="#eafaf0" stroke="#16a34a" stroke-width="1.8"/>
+    <path d="M 127 804 h 42" stroke="#16a34a" stroke-width="5" stroke-linecap="round"/>
+    <text x="129" y="838" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">User mental model</text>
+    <text x="129" y="872" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Legacy contracts are not</text>
+<text x="129" y="893" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">rewritten to RISC-V; a NeoVM</text>
+<text x="129" y="914" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">interpreter runs inside the</text>
+<text x="129" y="935" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">RISC-V sandbox.</text>
+  </g>
+  
+</svg>

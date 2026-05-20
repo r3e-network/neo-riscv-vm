@@ -144,6 +144,7 @@ neo-riscv-devpack = { git = "https://github.com/r3e-network/neo-riscv-devpack" }
 ## Documentation
 
 - [Current Status](./docs/CURRENT_STATUS.md)
+- [Visual Diagrams / 图解](./docs/diagrams/README.md)
 - [Final Validation Report](./docs/FINAL_VALIDATION_REPORT.md)
 - [Testing Guide](./docs/TESTING.md)
 - [Architecture](./docs/ARCHITECTURE.md)

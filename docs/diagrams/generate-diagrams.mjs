@@ -292,12 +292,16 @@ function miniBox(x, y, w, h, label, accent, fill) {
 }
 
 function step(x, y, n, label, detail, accent = c.blue, fill = c.blueSoft) {
+  const titleSize = 22;
+  const titleLh = 27;
+  const titleMax = 16;
+  const bodyY = y + 88 + Math.max(0, wrap(label, titleMax).length - 1) * 18;
   return `<g filter="url(#soft-shadow)">
     <rect x="${x}" y="${y}" width="250" height="146" rx="18" fill="${fill}" stroke="${accent}" stroke-width="2"/>
     <circle cx="${x + 38}" cy="${y + 38}" r="20" fill="${accent}"/>
     ${text(n, x + 38, y + 46, { size: 20, weight: 850, fill: "#fff", anchor: "middle", max: 2 })}
-    ${text(label, x + 70, y + 43, { size: 23, weight: 850, fill: c.ink, max: 15 })}
-    ${text(detail, x + 28, y + 88, { size: 17, fill: c.text, max: 26, lh: 22 })}
+    ${text(label, x + 70, y + 43, { size: titleSize, weight: 850, fill: c.ink, max: titleMax, lh: titleLh })}
+    ${textBlock(detail, x + 28, bodyY, { size: 14, fill: c.text, max: 24, lh: 19 })}
   </g>`;
 }
 
@@ -326,8 +330,13 @@ function arrow(x1, y1, x2, y2, label = "", color = c.slate, marker = "slate", cu
   const d = curve ? `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}` : `M ${x1} ${y1} L ${x2} ${y2}`;
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2 - 12;
+  const labelW = label ? Math.min(260, Math.max(120, visualLen(label) * 8.8 + 42)) : 0;
+  const labelMax = label ? Math.max(14, Math.floor(labelW / 8.5)) : 0;
+  const labelLines = label ? wrap(label, labelMax).length : 0;
+  const labelH = label ? 22 + labelLines * 17 : 0;
+  const labelY = my - labelH + 10;
   const labelSvg = label
-    ? `<g><rect x="${mx - 100}" y="${my - 22}" width="200" height="30" rx="8" fill="${c.panel}" stroke="${c.line}" opacity="0.96"/>${text(label, mx, my, { size: 14, weight: 800, fill: color, anchor: "middle", max: 23 })}</g>`
+    ? `<g><rect x="${mx - labelW / 2}" y="${labelY}" width="${labelW}" height="${labelH}" rx="8" fill="${c.panel}" stroke="${c.line}" opacity="0.96"/>${text(label, mx, labelY + 23, { size: 14, weight: 800, fill: color, anchor: "middle", max: labelMax, lh: 17 })}</g>`
     : "";
   return `<g>
     <path d="${d}" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-${marker})"/>
@@ -336,10 +345,12 @@ function arrow(x1, y1, x2, y2, label = "", color = c.slate, marker = "slate", cu
 }
 
 function lane(x, y, w, h, title, accent) {
+  const labelW = Math.min(w - 60, Math.max(220, visualLen(title) * 10.5 + 48));
+  const labelH = wrap(title, Math.floor(labelW / 12)).length > 1 ? 54 : 38;
   return `<g>
     <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="#fff" stroke="${accent}" stroke-width="2" stroke-dasharray="10 9"/>
-    <rect x="${x + 20}" y="${y - 18}" width="${Math.min(360, title.length * 13 + 40)}" height="38" rx="12" fill="${c.panel}" stroke="${accent}" stroke-width="1.5"/>
-    ${text(title, x + 40, y + 7, { size: 18, weight: 850, fill: accent, max: 34 })}
+    <rect x="${x + 22}" y="${y - 24}" width="${labelW}" height="${labelH}" rx="12" fill="${c.panel}" stroke="${accent}" stroke-width="1.5"/>
+    ${text(title, x + 44, y + 1, { size: 16, weight: 850, fill: accent, max: Math.floor(labelW / 12), lh: 20 })}
   </g>`;
 }
 
@@ -372,8 +383,8 @@ function render2(lang) {
     ${box({ x: 560, y: 175, w: 360, h: 135, title: zh ? "RiscvApplicationEngine" : "RiscvApplicationEngine", body: [zh ? "收集上下文、初始栈、gas" : "Collects context, initial stack, gas"], iconName: "plugin", accent: c.blue, fill: c.blueSoft, max: 23, compact: true })}
     ${arrow(920, 242, 1060, 242, "", c.slate, "slate")}
     ${diamond(1060, 160, 260, 165, zh ? "合约类型？" : "Contract Type?", zh ? "Type / PVM\\0 magic" : "Type / PVM\\0 magic", c.amber)}
-    ${lane(155, 420, 675, 285, zh ? "兼容路径：旧 NeoVM 合约" : "Compatibility Path: Legacy NeoVM Contract", c.teal)}
-    ${lane(970, 420, 675, 285, zh ? "原生路径：RISC-V 合约" : "Native Path: RISC-V Contract", c.purple)}
+    ${lane(155, 420, 675, 285, zh ? "旧 NeoVM 兼容路径" : "Legacy NeoVM Path", c.teal)}
+    ${lane(970, 420, 675, 285, zh ? "原生 RISC-V 路径" : "Native RISC-V Path", c.purple)}
     ${arrow(1120, 325, 495, 420, zh ? "NeoVM = 0" : "NeoVM = 0", c.teal, "blue", -240)}
     ${arrow(1260, 325, 1305, 420, zh ? "RiscV = 1" : "RiscV = 1", c.purple, "purple")}
     ${box({ x: 210, y: 475, w: 285, h: 135, title: "guest.polkavm", body: [zh ? "加载缓存 interpreter" : "Load cached interpreter"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true })}
@@ -443,7 +454,7 @@ function render4(lang) {
     ${arrow(980, 760, 615, 760, zh ? "5. ABI bytes" : "5. ABI bytes", c.green, "green")}
     ${arrow(615, 870, 250, 870, zh ? "6. guest 继续执行" : "6. guest continues", c.green, "green")}
     ${box({ x: 1130, y: 300, w: 430, h: 155, title: zh ? "Neo 语义事实源" : "Neo Semantic Authority", body: ["Storage / Runtime / Contract.Call / Crypto", zh ? "Ledger、NEO、GAS、Policy、Oracle 等原生合约" : "Ledger, NEO, GAS, Policy, Oracle, and other native contracts"], iconName: "storage", accent: c.blue, fill: c.blueSoft, max: 27, compact: true })}
-    ${callout(170, 935, 1340, 78, zh ? "架构原则" : "Architecture Rule", zh ? "RISC-V 侧只负责转发和数据适配，不维护第二套 syscall 或原生合约实现。" : "The RISC-V side only forwards and adapts data; it does not maintain a second syscall or native-contract implementation.", c.red, c.redSoft)}
+    ${callout(170, 890, 1340, 145, zh ? "架构原则" : "Architecture Rule", zh ? "RISC-V 侧只负责转发和数据适配，不维护第二套 syscall 或原生合约实现。" : "The RISC-V side only forwards and adapts data; it does not maintain a second syscall or native-contract implementation.", c.red, c.redSoft)}
   `;
   return svg(t.title4, t.sub4, c.purple, body);
 }
@@ -485,17 +496,17 @@ function render6(lang) {
   const zh = lang === "zh";
   const t = sets[lang];
   const body = `
-    ${step(95, 185, "1", zh ? "构建" : "Build", zh ? "Rust RISC-V 合约或现有 NeoVM 合约产物" : "Rust RISC-V contract or existing NeoVM contract artifact", c.green, c.greenSoft)}
+    ${step(95, 185, "1", zh ? "构建" : "Build", zh ? "Rust RISC-V 或旧 NeoVM 产物" : "Rust RISC-V or legacy NeoVM artifact", c.green, c.greenSoft)}
     ${arrow(345, 258, 445, 258, "", c.slate, "slate")}
-    ${step(445, 185, "2", zh ? "打包" : "Package", zh ? "PVM binary / NeoVM bytecode + manifest => NEF" : "PVM binary / NeoVM bytecode + manifest => NEF", c.teal, c.tealSoft)}
+    ${step(445, 185, "2", zh ? "打包" : "Package", zh ? "PVM / NeoVM payload + manifest => NEF" : "PVM or NeoVM payload + manifest => NEF", c.teal, c.tealSoft)}
     ${arrow(695, 258, 795, 258, "", c.slate, "slate")}
-    ${step(795, 185, "3", zh ? "部署" : "Deploy", zh ? "ContractManagement.Deploy 写入链上合约状态" : "ContractManagement.Deploy writes contract state", c.blue, c.blueSoft)}
+    ${step(795, 185, "3", zh ? "部署" : "Deploy", zh ? "Deploy 写入链上合约状态" : "Deploy writes contract state", c.blue, c.blueSoft)}
     ${arrow(1045, 258, 1145, 258, "", c.slate, "slate")}
-    ${step(1145, 185, "4", zh ? "识别类型" : "Detect Type", zh ? "检查 PVM\\0 magic / manifest，设置 ContractState.Type" : "Check PVM\\0 magic / manifest; set ContractState.Type", c.purple, c.purpleSoft)}
+    ${step(1145, 185, "4", zh ? "识别类型" : "Detect Type", zh ? "PVM\\0 magic 设置 ContractState.Type" : "PVM\\0 magic sets ContractState.Type", c.purple, c.purpleSoft)}
     ${arrow(1395, 258, 1495, 258, "", c.slate, "slate")}
-    ${step(1495, 185, "5", zh ? "存储" : "Persist", zh ? "hash、NEF、manifest、Type 保存在链状态" : "hash, NEF, manifest, Type are stored in chain state", c.amber, c.amberSoft)}
+    ${step(1495, 185, "5", zh ? "存储" : "Persist", zh ? "hash、NEF、manifest、Type 入链" : "hash, NEF, manifest, Type stored", c.amber, c.amberSoft)}
     ${diamond(760, 515, 280, 165, zh ? "调用时路由" : "Route on Invoke", zh ? "NeoVM=0 / RiscV=1" : "NeoVM=0 / RiscV=1", c.amber)}
-    ${arrow(1630, 331, 900, 515, zh ? "后续调用读取 Type" : "future invocations read Type", c.amber, "slate", 300)}
+    ${arrow(1630, 331, 900, 515, zh ? "读取 Type" : "read Type", c.amber, "slate", 300)}
     ${box({ x: 210, y: 705, w: 430, h: 150, title: zh ? "NeoVM 兼容执行" : "NeoVM Compatibility Execution", body: [zh ? "加载 guest.polkavm，解释 NEF 中的 NeoVM script" : "Load guest.polkavm and interpret NeoVM script from NEF"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true, max: 25 })}
     ${box({ x: 1160, y: 705, w: 430, h: 150, title: zh ? "原生 RISC-V 执行" : "Native RISC-V Execution", body: [zh ? "直接加载 PVM binary，不经过 NeoVM interpreter" : "Load PVM binary directly without the NeoVM interpreter"], iconName: "shield", accent: c.purple, fill: c.purpleSoft, compact: true, max: 25 })}
     ${arrow(760, 600, 640, 740, zh ? "NeoVM" : "NeoVM", c.teal, "blue", -120)}

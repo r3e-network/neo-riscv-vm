@@ -58,22 +58,21 @@
   </g>
     <g>
     <rect x="155" y="420" width="675" height="285" rx="22" fill="#fff" stroke="#0097a7" stroke-width="2" stroke-dasharray="10 9"/>
-    <rect x="175" y="402" width="360" height="38" rx="12" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
-    <text x="195" y="427" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="850" fill="#0097a7">Compatibility Path: Legacy NeoVM</text>
-<text x="195" y="451" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="850" fill="#0097a7">Contract</text>
+    <rect x="177" y="396" width="220" height="38" rx="12" fill="#ffffff" stroke="#0097a7" stroke-width="1.5"/>
+    <text x="199" y="421" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="850" fill="#0097a7">Legacy NeoVM Path</text>
   </g>
     <g>
     <rect x="970" y="420" width="675" height="285" rx="22" fill="#fff" stroke="#7c3aed" stroke-width="2" stroke-dasharray="10 9"/>
-    <rect x="990" y="402" width="360" height="38" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
-    <text x="1010" y="427" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="850" fill="#7c3aed">Native Path: RISC-V Contract</text>
+    <rect x="992" y="396" width="220" height="38" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="1014" y="421" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="850" fill="#7c3aed">Native RISC-V Path</text>
   </g>
     <g>
     <path d="M 1120 325 C 880 325, 735 420, 495 420" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
-    <g><rect x="707.5" y="338.5" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="807.5" y="360.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">NeoVM = 0</text></g>
+    <g><rect x="747.5" y="331.5" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="807.5" y="354.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">NeoVM = 0</text></g>
   </g>
     <g>
     <path d="M 1260 325 L 1305 420" fill="none" stroke="#7c3aed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
-    <g><rect x="1182.5" y="338.5" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1282.5" y="360.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">RiscV = 1</text></g>
+    <g><rect x="1222.5" y="331.5" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1282.5" y="354.5" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">RiscV = 1</text></g>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="210" y="475" width="285" height="135" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
@@ -145,7 +144,7 @@
   </g>
     <g>
     <path d="M 1110 870 L 1280 870" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
-    <g><rect x="1095" y="836" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1195" y="858" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">result</text></g>
+    <g><rect x="1135" y="829" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1195" y="852" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">result</text></g>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="1280" y="805" width="330" height="130" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>

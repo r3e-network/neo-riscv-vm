@@ -26,10 +26,9 @@
     <rect x="95" y="185" width="250" height="146" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
     <circle cx="133" cy="223" r="20" fill="#16a34a"/>
     <text x="133" y="231" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="850" fill="#fff">1</text>
-    <text x="165" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Build</text>
-    <text x="123" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Rust RISC-V contract or</text>
-<text x="123" y="295" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">existing NeoVM contract</text>
-<text x="123" y="317" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">artifact</text>
+    <text x="165" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">Build</text>
+    <text x="123" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">Rust RISC-V or legacy</text>
+<text x="123" y="292" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">NeoVM artifact</text>
   </g>
     <g>
     <path d="M 345 258 L 445 258" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
@@ -39,9 +38,9 @@
     <rect x="445" y="185" width="250" height="146" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
     <circle cx="483" cy="223" r="20" fill="#0097a7"/>
     <text x="483" y="231" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="850" fill="#fff">2</text>
-    <text x="515" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Package</text>
-    <text x="473" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">PVM binary / NeoVM</text>
-<text x="473" y="295" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">bytecode + manifest =&gt; NEF</text>
+    <text x="515" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">Package</text>
+    <text x="473" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">PVM or NeoVM payload +</text>
+<text x="473" y="292" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">manifest =&gt; NEF</text>
   </g>
     <g>
     <path d="M 695 258 L 795 258" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
@@ -51,9 +50,9 @@
     <rect x="795" y="185" width="250" height="146" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>
     <circle cx="833" cy="223" r="20" fill="#2f80ed"/>
     <text x="833" y="231" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="850" fill="#fff">3</text>
-    <text x="865" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Deploy</text>
-    <text x="823" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">ContractManagement.Deploy</text>
-<text x="823" y="295" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">writes contract state</text>
+    <text x="865" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">Deploy</text>
+    <text x="823" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">Deploy writes contract</text>
+<text x="823" y="292" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">state</text>
   </g>
     <g>
     <path d="M 1045 258 L 1145 258" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
@@ -63,10 +62,9 @@
     <rect x="1145" y="185" width="250" height="146" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
     <circle cx="1183" cy="223" r="20" fill="#7c3aed"/>
     <text x="1183" y="231" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="850" fill="#fff">4</text>
-    <text x="1215" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Detect Type</text>
-    <text x="1173" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">Check PVM\0 magic /</text>
-<text x="1173" y="295" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">manifest; set</text>
-<text x="1173" y="317" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">ContractState.Type</text>
+    <text x="1215" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">Detect Type</text>
+    <text x="1173" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">PVM\0 magic sets</text>
+<text x="1173" y="292" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">ContractState.Type</text>
   </g>
     <g>
     <path d="M 1395 258 L 1495 258" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
@@ -76,9 +74,9 @@
     <rect x="1495" y="185" width="250" height="146" rx="18" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
     <circle cx="1533" cy="223" r="20" fill="#f59e0b"/>
     <text x="1533" y="231" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="850" fill="#fff">5</text>
-    <text x="1565" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="23" font-weight="850" fill="#101828">Persist</text>
-    <text x="1523" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">hash, NEF, manifest, Type</text>
-<text x="1523" y="295" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">are stored in chain state</text>
+    <text x="1565" y="228" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">Persist</text>
+    <text x="1523" y="273" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">hash, NEF, manifest,</text>
+<text x="1523" y="292" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="400" fill="#344054">Type stored</text>
   </g>
     <g filter="url(#soft-shadow)">
     <polygon points="900,515 1040,597.5 900,680 760,597.5" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
@@ -87,8 +85,7 @@
   </g>
     <g>
     <path d="M 1630 331 C 1930 331, 600 515, 900 515" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
-    <g><rect x="1165" y="389" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1265" y="411" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">future invocations read</text>
-<text x="1265" y="429" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">Type</text></g>
+    <g><rect x="1205" y="382" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1265" y="405" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">read Type</text></g>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="210" y="705" width="430" height="150" rx="18" fill="#e7fbfd" stroke="#0097a7" stroke-width="2"/>
@@ -115,11 +112,11 @@
   </g>
     <g>
     <path d="M 760 600 C 640 600, 760 740, 640 740" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
-    <g><rect x="600" y="636" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="700" y="658" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">NeoVM</text></g>
+    <g><rect x="640" y="629" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="700" y="652" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#0097a7">NeoVM</text></g>
   </g>
     <g>
     <path d="M 1040 600 C 1160 600, 1040 740, 1160 740" fill="none" stroke="#7c3aed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-purple)"/>
-    <g><rect x="1000" y="636" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1100" y="658" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">RISC-V</text></g>
+    <g><rect x="1040" y="629" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1100" y="652" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#7c3aed">RISC-V</text></g>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="685" y="865" width="430" height="120" rx="18" fill="#edf5ff" stroke="#2f80ed" stroke-width="2"/>

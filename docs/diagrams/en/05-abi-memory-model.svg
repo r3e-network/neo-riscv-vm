@@ -38,7 +38,7 @@
   </g>
     <g>
     <path d="M 485 310 L 650 310" fill="none" stroke="#2f80ed" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
-    <g><rect x="467.5" y="276" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="298" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#2f80ed">serialize</text></g>
+    <g><rect x="507.5" y="269" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="292" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#2f80ed">serialize</text></g>
   </g>
     <g filter="url(#soft-shadow)">
       <rect x="650" y="160" width="500" height="760" rx="24" fill="#fff" stroke="#0097a7" stroke-width="2.4"/>
@@ -81,7 +81,7 @@
     </g>
     <g>
     <path d="M 1150 310 L 1320 310" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
-    <g><rect x="1135" y="276" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1235" y="298" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">encode/decode</text></g>
+    <g><rect x="1172.816" y="269" width="124.368" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="1235" y="292" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#f59e0b">encode/decode</text></g>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="1320" y="170" width="370" height="280" rx="18" fill="#fff7df" stroke="#f59e0b" stroke-width="2"/>
@@ -117,7 +117,7 @@
   </g>
     <g>
     <path d="M 650 760 L 485 750" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-green)"/>
-    <g><rect x="467.5" y="721" width="200" height="30" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="743" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">marshal back</text></g>
+    <g><rect x="507.5" y="714" width="120" height="39" rx="8" fill="#ffffff" stroke="#d0d5dd" opacity="0.96"/><text x="567.5" y="737" text-anchor="middle" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#16a34a">marshal back</text></g>
   </g>
     <g>
     <rect x="1320" y="625" width="370" height="190" rx="16" fill="#fff0f1" stroke="#e5484d" stroke-width="1.8"/>

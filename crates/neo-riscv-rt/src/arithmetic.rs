@@ -1,7 +1,7 @@
 //! Arithmetic and bitwise operations for the NeoVM `Context`.
 
 use crate::Context;
-use neo_riscv_abi::semantics::arithmetic as vm_arithmetic;
+use neo_riscv_abi::semantics::runtime::arithmetic as vm_arithmetic;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -10,77 +10,57 @@ impl Context {
 
     /// Pops two integers and pushes a / b (truncated toward zero).
     pub fn div(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::div_i64(a, b));
+        vm_arithmetic::div(self);
     }
 
     /// Pops two integers and pushes a % b.
     pub fn modulo(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::modulo_i64(a, b));
+        vm_arithmetic::modulo(self);
     }
 
     /// Pops one integer and pushes its negation.
     pub fn negate(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::negate_i64(a));
+        vm_arithmetic::negate(self);
     }
 
     /// Pops one integer and pushes its absolute value.
     pub fn abs_val(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::abs_i64(a));
+        vm_arithmetic::abs(self);
     }
 
     /// Pops one integer and pushes its sign (-1, 0, or 1).
     pub fn sign(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::sign_i64(a));
+        vm_arithmetic::sign(self);
     }
 
     /// Pops two integers and pushes the larger one.
     pub fn max(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::max_i64(a, b));
+        vm_arithmetic::max(self);
     }
 
     /// Pops two integers and pushes the smaller one.
     pub fn min(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::min_i64(a, b));
+        vm_arithmetic::min(self);
     }
 
     /// Pops exponent then base and pushes base^exponent.
     pub fn pow(&mut self) {
-        let exp = self.pop_integer();
-        let base = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::pow_i64(base, exp));
+        vm_arithmetic::pow(self);
     }
 
     /// Pops one integer and pushes its integer square root.
     pub fn sqrt(&mut self) {
-        let a = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::sqrt_i64(a));
+        vm_arithmetic::sqrt(self);
     }
 
     /// Pops modulus, then b, then a, and pushes (a * b) % modulus.
     pub fn modmul(&mut self) {
-        let modulus = self.pop_integer();
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::modmul_i64(a, b, modulus));
+        vm_arithmetic::modmul(self);
     }
 
     /// Pops modulus, then exponent, then base, and pushes base^exponent % modulus.
     pub fn modpow(&mut self) {
-        let modulus = self.pop_integer();
-        let exp = self.pop_integer();
-        let base = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::modpow_i64(base, exp, modulus));
+        vm_arithmetic::modpow(self);
     }
 
     // ---------------------------------------------------------------
@@ -89,16 +69,12 @@ impl Context {
 
     /// Pops shift amount then value and pushes value << shift.
     pub fn shl(&mut self) {
-        let shift = self.pop_integer();
-        let value = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::shl_i64(value, shift));
+        vm_arithmetic::shl(self);
     }
 
     /// Pops shift amount then value and pushes value >> shift (arithmetic).
     pub fn shr(&mut self) {
-        let shift = self.pop_integer();
-        let value = self.pop_integer();
-        self.push_arithmetic_result(vm_arithmetic::shr_i64(value, shift));
+        vm_arithmetic::shr(self);
     }
 
     // ---------------------------------------------------------------
@@ -107,29 +83,22 @@ impl Context {
 
     /// Pops two integers and pushes their bitwise AND.
     pub fn bitwise_and(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::bitwise_and_i64(a, b));
+        vm_arithmetic::bitwise_and(self);
     }
 
     /// Pops two integers and pushes their bitwise OR.
     pub fn bitwise_or(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::bitwise_or_i64(a, b));
+        vm_arithmetic::bitwise_or(self);
     }
 
     /// Pops two integers and pushes their bitwise XOR.
     pub fn bitwise_xor(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::bitwise_xor_i64(a, b));
+        vm_arithmetic::bitwise_xor(self);
     }
 
     /// Pops one integer and pushes its bitwise NOT.
     pub fn bitwise_not(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::bitwise_not_i64(a));
+        vm_arithmetic::bitwise_not(self);
     }
 
     // ---------------------------------------------------------------
@@ -153,29 +122,17 @@ impl Context {
 
     /// Pops one integer and pushes value + 1 (NeoVM INC)
     pub fn inc(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::inc_i64(a));
+        vm_arithmetic::inc(self);
     }
 
     /// Pops one integer and pushes value - 1 (NeoVM DEC)
     pub fn dec(&mut self) {
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::dec_i64(a));
+        vm_arithmetic::dec(self);
     }
 
     /// Pops b, a, x and pushes (a <= x < b) (NeoVM WITHIN)
     pub fn within(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        let x = self.pop_integer();
-        self.push_bool(vm_arithmetic::within_i64(x, a, b));
-    }
-
-    fn push_arithmetic_result(&mut self, result: Result<i64, &'static str>) {
-        match result {
-            Ok(value) => self.push_int(value),
-            Err(message) => self.fault(message),
-        }
+        vm_arithmetic::within(self);
     }
 }
 

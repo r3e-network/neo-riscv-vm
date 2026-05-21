@@ -2,10 +2,8 @@
 //!
 //! Implements array, struct, map, and buffer creation and manipulation.
 
-use crate::stack_value::StackValue;
 use crate::Context;
-use alloc::vec::Vec;
-use neo_riscv_abi::semantics::collections as vm_collections;
+use neo_riscv_abi::semantics::runtime::collections as vm_collections;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -14,41 +12,37 @@ impl Context {
 
     /// Pushes an empty array onto the stack.
     pub fn new_array_0(&mut self) {
-        self.push(StackValue::Array(Vec::new()));
+        vm_collections::new_array_0(self);
     }
 
     /// Pops a count and pushes an array of that many `Null` values.
     pub fn new_array(&mut self) {
-        let count = self.pop_integer();
-        self.push_collection_result(vm_collections::new_array(count));
+        vm_collections::new_array(self);
     }
 
     /// Pops a count and pushes a typed array (for now, all items are default for type).
     pub fn new_array_t(&mut self, type_byte: u8) {
-        let count = self.pop_integer();
-        self.push_collection_result(vm_collections::new_array_t(count, type_byte));
+        vm_collections::new_array_t(self, type_byte);
     }
 
     /// Pushes an empty struct onto the stack.
     pub fn new_struct_0(&mut self) {
-        self.push(StackValue::Struct(Vec::new()));
+        vm_collections::new_struct_0(self);
     }
 
     /// Pops a count and pushes a struct of that many `Null` values.
     pub fn new_struct(&mut self) {
-        let count = self.pop_integer();
-        self.push_collection_result(vm_collections::new_struct(count));
+        vm_collections::new_struct(self);
     }
 
     /// Pushes an empty map onto the stack.
     pub fn new_map(&mut self) {
-        self.push(StackValue::Map(Vec::new()));
+        vm_collections::new_map(self);
     }
 
     /// Pops a size and pushes a zero-filled buffer of that size.
     pub fn new_buffer(&mut self) {
-        let size = self.pop_integer();
-        self.push_collection_result(vm_collections::new_buffer(size));
+        vm_collections::new_buffer(self);
     }
 
     // ---------------------------------------------------------------
@@ -57,150 +51,67 @@ impl Context {
 
     /// Pops a value then an array/struct/map and appends the value.
     pub fn append(&mut self) {
-        let value = self.pop();
-        let result = match self.stack.last_mut() {
-            Some(collection) => vm_collections::append(collection, value),
-            None => Err("APPEND: top-1 is not an array or struct".into()),
-        };
-        if let Err(message) = result {
-            self.fault(&message);
-        }
+        vm_collections::append(self);
     }
 
     /// Pops value, key, then collection and sets collection[key] = value.
     pub fn set_item(&mut self) {
-        let value = self.pop();
-        let key = self.pop();
-        let result = match self.stack.last_mut() {
-            Some(collection) => vm_collections::set_item(collection, key, value),
-            None => Err("SETITEM: not a collection".into()),
-        };
-        if let Err(message) = result {
-            self.fault(&message);
-        }
+        vm_collections::set_item(self);
     }
 
     /// Pops key then collection and pushes collection[key].
     pub fn pick_item(&mut self) {
-        let key = self.pop();
-        let collection = self.pop();
-        match vm_collections::pick_item(&collection, &key) {
-            Ok(value) => self.push(value),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::pick_item(self);
     }
 
     /// Pops key then collection and removes the entry.
     pub fn remove(&mut self) {
-        let key = self.pop();
-        let result = match self.stack.last_mut() {
-            Some(collection) => vm_collections::remove(collection, &key),
-            None => Err("REMOVE: not a collection".into()),
-        };
-        if let Err(message) = result {
-            self.fault(&message);
-        }
+        vm_collections::remove(self);
     }
 
     /// Pops a collection/string/buffer and pushes its size.
     pub fn size(&mut self) {
-        let val = self.pop();
-        match vm_collections::size(&val) {
-            Ok(size) => self.push_int(size),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::size(self);
     }
 
     /// Pops key then collection and pushes `true` if the key exists.
     pub fn has_key(&mut self) {
-        let key = self.pop();
-        let collection = self.pop();
-        match vm_collections::has_key(&collection, &key) {
-            Ok(found) => self.push_bool(found),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::has_key(self);
     }
 
     /// Pops a map and pushes an array of its keys.
     pub fn keys(&mut self) {
-        let val = self.pop();
-        match vm_collections::keys(val) {
-            Ok(value) => self.push(value),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::keys(self);
     }
 
     /// Pops a map and pushes an array of its values.
     pub fn values(&mut self) {
-        let val = self.pop();
-        match vm_collections::values(val) {
-            Ok(value) => self.push(value),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::values(self);
     }
 
     /// Pops count, then that many items, and pushes them as an array.
     pub fn pack(&mut self) {
-        let count = self.pop_integer();
-        if count < 0 {
-            self.fault("PACK: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let count = count as usize;
-        let mut items = Vec::with_capacity(count);
-        for _ in 0..count {
-            items.push(self.pop());
-        }
-        items.reverse();
-        self.push(vm_collections::pack(items));
+        vm_collections::pack(self);
     }
 
     /// Pops an array and pushes all its items then the count.
     pub fn unpack(&mut self) {
-        let val = self.pop();
-        match vm_collections::unpack(val) {
-            Ok(values) => {
-                for value in values {
-                    self.push(value);
-                }
-            }
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::unpack(self);
     }
 
     /// Pops a collection and pushes it with items in reverse order.
     pub fn reverse_items(&mut self) {
-        let result = match self.stack.last_mut() {
-            Some(collection) => vm_collections::reverse_items(collection),
-            None => Err("REVERSEITEMS: not an array or struct".into()),
-        };
-        if let Err(message) = result {
-            self.fault(&message);
-        }
+        vm_collections::reverse_items(self);
     }
 
     /// Removes all items from the collection at the top of the stack.
     pub fn clear_items(&mut self) {
-        let result = match self.stack.last_mut() {
-            Some(collection) => vm_collections::clear_items(collection),
-            None => Err("CLEARITEMS: not a collection".into()),
-        };
-        if let Err(message) = result {
-            self.fault(&message);
-        }
+        vm_collections::clear_items(self);
     }
 
     /// Pops the last item from the array at the top of the stack and pushes it.
     pub fn pop_item(&mut self) {
-        match vm_collections::pop_item(self.pop()) {
-            Ok(values) => {
-                for value in values {
-                    self.push(value);
-                }
-            }
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::pop_item(self);
     }
 
     // ---------------------------------------------------------------
@@ -219,45 +130,12 @@ impl Context {
 
     /// Pops count, then that many key-value pairs, and pushes a Map (NeoVM PACKSTRUCT)
     pub fn pack_struct(&mut self) {
-        let count = self.pop_integer();
-        if count < 0 {
-            self.fault("PACKSTRUCT: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let n = count as usize;
-        let mut items = Vec::with_capacity(n);
-        for _ in 0..n {
-            items.push(self.pop());
-        }
-        items.reverse();
-        self.push(vm_collections::pack_struct(items));
+        vm_collections::pack_struct(self);
     }
 
     /// Pops count, then that many key-value pairs, and pushes a Map (NeoVM PACKMAP)
     pub fn pack_map(&mut self) {
-        let count = self.pop_integer();
-        if count < 0 {
-            self.fault("PACKMAP: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let n = count as usize;
-        let mut pairs = Vec::with_capacity(n);
-        for _ in 0..n {
-            let value = self.pop();
-            let key = self.pop();
-            pairs.push((key, value));
-        }
-        pairs.reverse();
-        self.push(vm_collections::pack_map(pairs));
-    }
-
-    fn push_collection_result(&mut self, result: Result<StackValue, String>) {
-        match result {
-            Ok(value) => self.push(value),
-            Err(message) => self.fault(&message),
-        }
+        vm_collections::pack_map(self);
     }
 }
 

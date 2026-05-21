@@ -12,11 +12,11 @@ fn conversion_uses_shared_stack_item_type_helpers() {
     let source =
         fs::read_to_string(rt_src_path("conversion.rs")).expect("conversion source is readable");
 
-    assert!(source.contains("semantics::conversion"));
-    assert!(source.contains("default_value_for_type_tag"));
+    assert!(source.contains("semantics::runtime::conversion"));
     assert!(!source.contains("const NEO_TAG_"));
     assert!(!source.contains("fn normalize_type_tag"));
     assert!(!source.contains("fn convert_to_integer"));
+    assert!(!source.contains("default_value_for_type_tag"));
 }
 
 #[test]
@@ -24,9 +24,10 @@ fn collections_use_shared_collection_semantics() {
     let source =
         fs::read_to_string(rt_src_path("collections.rs")).expect("collections source is readable");
 
-    assert!(source.contains("semantics::collections"));
+    assert!(source.contains("semantics::runtime::collections"));
     assert!(!source.contains("fn default_for_type"));
     assert!(!source.contains("new_array_default_value_for_type_tag"));
+    assert!(!source.contains("Vec::with_capacity"));
 }
 
 #[test]
@@ -53,12 +54,14 @@ fn opcode_modules_use_shared_abi_semantics() {
     let collections =
         fs::read_to_string(rt_src_path("collections.rs")).expect("collections source is readable");
 
-    assert!(arithmetic.contains("semantics::arithmetic"));
+    assert!(arithmetic.contains("semantics::runtime::arithmetic"));
+    assert!(!arithmetic.contains("pop_integer"));
     assert!(!arithmetic.contains("fn mod_pow_i64"));
     assert!(!arithmetic.contains("fn isqrt"));
 
-    assert!(comparison.contains("semantics::comparison"));
-    assert!(conversion.contains("semantics::conversion"));
-    assert!(collections.contains("semantics::collections"));
+    assert!(comparison.contains("semantics::runtime::comparison"));
+    assert!(!comparison.contains("pop_integer"));
+    assert!(conversion.contains("semantics::runtime::conversion"));
+    assert!(collections.contains("semantics::runtime::collections"));
     assert!(!collections.contains("new_array_default_value_for_type_tag"));
 }

@@ -31,7 +31,7 @@ mod mem_intrinsics;
 pub use stack_value::StackValue;
 
 use neo_riscv_abi::{
-    semantics::{arithmetic as vm_arithmetic, comparison as vm_comparison},
+    semantics::runtime::{self as vm_runtime, RuntimeStack},
     ExecutionResult, VmState,
 };
 
@@ -444,30 +444,22 @@ impl Context {
 
     /// Pops two integers and pushes their sum.
     pub fn add(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::add_i64(a, b));
+        vm_runtime::arithmetic::add(self);
     }
 
     /// Pops two integers and pushes their difference (a - b).
     pub fn sub(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::sub_i64(a, b));
+        vm_runtime::arithmetic::sub(self);
     }
 
     /// Pops two integers and pushes their product.
     pub fn mul(&mut self) {
-        let b = self.pop_integer();
-        let a = self.pop_integer();
-        self.push_int(vm_arithmetic::mul_i64(a, b));
+        vm_runtime::arithmetic::mul(self);
     }
 
     /// Pops two values and pushes whether they are equal.
     pub fn equal(&mut self) {
-        let b = self.pop();
-        let a = self.pop();
-        self.push_bool(vm_comparison::equal_values(&a, &b));
+        vm_runtime::comparison::equal(self);
     }
 
     // ---------------------------------------------------------------
@@ -705,6 +697,24 @@ impl Context {
                     value
                 )
             })
+    }
+}
+
+impl RuntimeStack for Context {
+    fn pop_value(&mut self) -> StackValue {
+        self.pop()
+    }
+
+    fn push_value(&mut self, value: StackValue) {
+        self.push(value);
+    }
+
+    fn top_value_mut(&mut self) -> Option<&mut StackValue> {
+        self.stack.last_mut()
+    }
+
+    fn fault(&mut self, message: &str) {
+        Context::fault(self, message);
     }
 }
 

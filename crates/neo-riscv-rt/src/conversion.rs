@@ -1,35 +1,29 @@
 //! Type conversion and introspection operations for the NeoVM `Context`.
 
-use crate::stack_value::{default_value_for_type_tag, StackValue};
 use crate::Context;
-use neo_riscv_abi::semantics::conversion as vm_conversion;
+use neo_riscv_abi::semantics::runtime::conversion as vm_conversion;
 
 impl Context {
     /// Pops a value and pushes `true` if its type tag matches `type_byte`.
     pub fn is_type(&mut self, type_byte: u8) {
-        let val = self.pop();
-        self.push_bool(vm_conversion::is_type(&val, type_byte));
+        vm_conversion::is_type(self, type_byte);
     }
 
     /// Converts the top stack value to the NeoVM type indicated by `target_type`.
     ///
     /// This replaces the existing `convert` stub with a more complete implementation.
     pub fn convert_to(&mut self, target_type: u8) {
-        let val = self.pop();
-        match vm_conversion::convert_value(val, target_type) {
-            Ok(value) => self.push(value),
-            Err(message) => self.fault(&message),
-        }
+        vm_conversion::convert_to(self, target_type);
     }
 
     /// Pushes a `BigInteger` onto the stack from raw little-endian two's complement bytes.
     pub fn push_bigint(&mut self, bytes: &[u8]) {
-        self.push(StackValue::BigInteger(bytes.to_vec()));
+        vm_conversion::push_bigint(self, bytes);
     }
 
     /// Pushes the default value for the given NeoVM type tag.
     pub fn push_default(&mut self, type_byte: u8) {
-        self.push(default_value_for_type_tag(type_byte));
+        vm_conversion::push_default(self, type_byte);
     }
 }
 

@@ -17,7 +17,7 @@ pub use neo_vm_rs::{
     byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, default_value_for_type_tag,
     encode_integer, interop_hash, new_array_default_value_for_type_tag,
     normalize_stack_item_type_tag, slice_byte_sequence, syscall_arg_count, BackendKind,
-    ExecutionResult, StackValue, VmState, COMPACT_TAG_ARRAY as TAG_ARRAY,
+    ExecutionResult, StackValue, VmContext, VmState, COMPACT_TAG_ARRAY as TAG_ARRAY,
     COMPACT_TAG_BIG_INTEGER as TAG_BIG_INTEGER, COMPACT_TAG_BOOLEAN as TAG_BOOLEAN,
     COMPACT_TAG_BUFFER as TAG_BUFFER, COMPACT_TAG_BYTESTRING as TAG_BYTESTRING,
     COMPACT_TAG_INTEGER as TAG_INTEGER, COMPACT_TAG_INTEROP as TAG_INTEROP,

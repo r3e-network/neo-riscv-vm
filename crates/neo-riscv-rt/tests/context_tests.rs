@@ -1,3 +1,4 @@
+use neo_riscv_abi::semantics::runtime;
 use neo_riscv_abi::VmState;
 use neo_riscv_rt::{Context, StackValue};
 
@@ -54,7 +55,7 @@ fn add_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(3);
     ctx.push_int(4);
-    ctx.add();
+    runtime::arithmetic::add(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
@@ -67,7 +68,7 @@ fn sub_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(10);
     ctx.push_int(3);
-    ctx.sub();
+    runtime::arithmetic::sub(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
@@ -80,7 +81,7 @@ fn mul_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(3);
     ctx.push_int(4);
-    ctx.mul();
+    runtime::arithmetic::mul(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(12));
 }
 
@@ -93,7 +94,7 @@ fn equal_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(5);
     ctx.push_int(5);
-    ctx.equal();
+    runtime::comparison::equal(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Boolean(true));
 }
 
@@ -102,7 +103,7 @@ fn not_equal_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(5);
     ctx.push_int(6);
-    ctx.equal();
+    runtime::comparison::equal(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Boolean(false));
 }
 
@@ -139,12 +140,12 @@ fn dup_and_swap() {
     ctx.push_int(2);
 
     // dup should duplicate the top value (2)
-    ctx.dup();
+    runtime::stack::dup(&mut ctx);
     assert_eq!(ctx.stack.len(), 3);
     assert_eq!(ctx.pop(), StackValue::Integer(2)); // duplicated top
 
     // stack is now [1, 2]; swap should put 1 on top
-    ctx.swap();
+    runtime::stack::swap(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(1));
     assert_eq!(ctx.pop(), StackValue::Integer(2));
 }
@@ -182,6 +183,7 @@ fn push_bool_true_and_false() {
 #[test]
 fn static_fields_store_load() {
     let mut ctx = empty_ctx();
+    ctx.init_sslot(1);
     ctx.push_int(42);
     ctx.store_static(0);
 

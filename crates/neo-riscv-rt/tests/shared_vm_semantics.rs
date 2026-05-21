@@ -18,6 +18,8 @@ fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
         "comparison.rs",
         "conversion.rs",
         "collections.rs",
+        "opcode_adapters.rs",
+        "strings.rs",
     ] {
         assert!(
             !rt_src_path(retired_module).exists(),
@@ -25,13 +27,30 @@ fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
         );
     }
 
-    let source = read_rt_src("opcode_adapters.rs");
+    let source = read_rt_src("lib.rs");
 
-    assert!(source.contains("semantics::runtime::{"));
-    assert!(source.contains("arithmetic as vm_arithmetic"));
-    assert!(source.contains("comparison as vm_comparison"));
-    assert!(source.contains("conversion as vm_conversion"));
-    assert!(source.contains("collections as vm_collections"));
+    assert!(source.contains("VmContext"));
+    assert!(!source.contains("pub stack:"));
+    assert!(!source.contains("pub locals:"));
+    assert!(!source.contains("pub args:"));
+    assert!(!source.contains("pub static_fields:"));
+
+    for retired_method in [
+        "pub fn add(",
+        "pub fn sub(",
+        "pub fn mul(",
+        "pub fn equal(",
+        "pub fn cat(",
+        "pub fn substr(",
+        "pub fn left(",
+        "pub fn right(",
+        "pub fn memcpy(",
+    ] {
+        assert!(
+            !source.contains(retired_method),
+            "{retired_method} should be provided by neo-vm-rs runtime APIs"
+        );
+    }
 
     assert!(!source.contains("pop_integer"));
     assert!(!source.contains("fn mod_pow_i64"));
@@ -46,13 +65,13 @@ fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
 }
 
 #[test]
-fn strings_use_shared_byte_sequence_helpers() {
-    let source = read_rt_src("strings.rs");
+fn riscv_runtime_does_not_define_private_byte_opcode_helpers() {
+    let source = read_rt_src("lib.rs");
 
-    assert!(source.contains("concat_byte_sequences"));
-    assert!(source.contains("slice_byte_sequence"));
-    assert!(source.contains("byte_sequence_len"));
-    assert!(source.contains("byte_sequence_bytes"));
+    assert!(!source.contains("concat_byte_sequences"));
+    assert!(!source.contains("slice_byte_sequence"));
+    assert!(!source.contains("byte_sequence_len"));
+    assert!(!source.contains("byte_sequence_bytes"));
     assert!(!source.contains("StackValue::ByteString(mut"));
     assert!(!source.contains("index + count"));
     assert!(!source.contains("di + count"));

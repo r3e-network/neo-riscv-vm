@@ -5,25 +5,8 @@ extern crate libfuzzer_sys;
 
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
-use neo_riscv_abi::{StackValue, VmState};
-
-struct NoOpSyscall;
-
-impl neo_riscv_guest::SyscallProvider for NoOpSyscall {
-    fn syscall(
-        &mut self,
-        _api: u32,
-        _ip: usize,
-        _stack: &mut Vec<neo_riscv_abi::StackValue>,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-}
-
-fn run_with_stack(script: &[u8], stack: Vec<StackValue>) -> Option<neo_riscv_abi::ExecutionResult> {
-    let mut host = NoOpSyscall;
-    neo_riscv_guest::interpret_with_stack_and_syscalls(script, stack, &mut host).ok()
-}
+use neo_riscv_abi::VmState;
+use neo_riscv_fuzz::{run_with_stack, SimpleRng};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 8 {
@@ -101,17 +84,4 @@ fn build_exception_script(seed: u64, context: &[u8]) -> Vec<u8> {
     script.push(0x40);
 
     script
-}
-
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
-    }
 }

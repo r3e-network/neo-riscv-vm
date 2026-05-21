@@ -4,6 +4,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use neo_riscv_abi::StackValue;
+use neo_riscv_fuzz::SimpleRng;
 
 pub fn generate_integer(seed: u64) -> i64 {
     let mut rng = SimpleRng::new(seed);
@@ -67,19 +68,6 @@ pub fn generate_stack_value(depth: u64, seed: u64) -> StackValue {
             StackValue::Map(items)
         }
         _ => StackValue::Integer(generate_integer(rng.next())),
-    }
-}
-
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
     }
 }
 

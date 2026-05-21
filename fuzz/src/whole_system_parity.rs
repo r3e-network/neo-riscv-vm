@@ -6,6 +6,7 @@ extern crate libfuzzer_sys;
 use std::collections::BTreeMap;
 
 use neo_riscv_abi::{interop_hash, ExecutionResult, StackValue};
+use neo_riscv_fuzz::SimpleRng;
 use neo_riscv_guest::{interpret_with_stack_and_syscalls, SyscallProvider};
 use neo_riscv_host::{execute_script_with_host_and_stack, HostCallbackResult, RuntimeContext};
 
@@ -381,22 +382,6 @@ fn seeded_bytes_from_rng(rng: &mut SimpleRng, len: usize) -> Vec<u8> {
     (0..len)
         .map(|_| ((rng.next() >> 24) & 0xff) as u8)
         .collect()
-}
-
-struct SimpleRng(u64);
-
-impl SimpleRng {
-    fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    fn next(&mut self) -> u64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
-        self.0
-    }
 }
 
 #[cfg(test)]

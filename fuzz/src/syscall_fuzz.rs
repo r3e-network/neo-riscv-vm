@@ -6,6 +6,7 @@ extern crate libfuzzer_sys;
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
 use neo_riscv_abi::StackValue;
+use neo_riscv_fuzz::{check_stack_values, SimpleRng};
 
 struct FuzzingSyscall {
     seed: u64,
@@ -87,9 +88,7 @@ fuzz_target!(|data: &[u8]| {
     let result = run_with_fuzzing_syscall(&script, seed);
 
     if let Some(result) = result {
-        for val in &result.stack {
-            check_result_value(val);
-        }
+        check_stack_values(&result.stack);
     }
 });
 
@@ -116,49 +115,6 @@ fn build_syscall_script(api: u32, seed: u64, context: &[u8]) -> Vec<u8> {
     script.push(0x40);
 
     script
-}
-
-fn check_result_value(value: &StackValue) {
-    match value {
-        StackValue::Integer(_)
-        | StackValue::Boolean(_)
-        | StackValue::Null
-        | StackValue::Pointer(_)
-        | StackValue::Interop(_)
-        | StackValue::Iterator(_) => {}
-        StackValue::BigInteger(bytes) => {
-            assert!(bytes.len() <= 32, "BigInteger exceeds max size");
-        }
-        StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => {
-            assert!(bytes.len() <= 1024 * 1024, "ByteString/Buffer exceeds max size");
-        }
-        StackValue::Array(items) | StackValue::Struct(items) => {
-            assert!(items.len() <= 1000, "Array/Struct too large");
-            for item in items {
-                check_result_value(item);
-            }
-        }
-        StackValue::Map(items) => {
-            assert!(items.len() <= 1000, "Map too large");
-            for (k, v) in items {
-                check_result_value(k);
-                check_result_value(v);
-            }
-        }
-    }
-}
-
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
-    }
 }
 
 #[cfg(test)]

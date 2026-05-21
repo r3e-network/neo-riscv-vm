@@ -1,15 +1,4 @@
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    pub fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
-    }
-}
+use neo_riscv_fuzz::SimpleRng;
 
 pub fn is_valid_opcode(op: u8) -> bool {
     PUSH_RANGE.contains(&op)

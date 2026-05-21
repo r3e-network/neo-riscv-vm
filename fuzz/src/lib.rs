@@ -12,8 +12,12 @@ use neo_riscv_guest::{interpret_with_stack_and_syscalls, SyscallProvider};
 mod stack_ops_builder;
 
 pub fn run_script(script: &[u8]) -> Option<ExecutionResult> {
+    run_with_stack(script, Vec::new())
+}
+
+pub fn run_with_stack(script: &[u8], stack: Vec<StackValue>) -> Option<ExecutionResult> {
     let mut host = NoOpSyscall;
-    interpret_with_stack_and_syscalls(script, Vec::new(), &mut host).ok()
+    interpret_with_stack_and_syscalls(script, stack, &mut host).ok()
 }
 
 pub fn assert_invariants(result: &ExecutionResult) {
@@ -50,7 +54,7 @@ impl SyscallProvider for NoOpSyscall {
     }
 }
 
-fn check_stack_values(stack: &[StackValue]) {
+pub fn check_stack_values(stack: &[StackValue]) {
     for value in stack {
         check_single_value(value);
     }
@@ -89,6 +93,22 @@ fn check_single_value(value: &StackValue) {
                 check_single_value(value);
             }
         }
+    }
+}
+
+pub struct SimpleRng(u64);
+
+impl SimpleRng {
+    pub fn new(seed: u64) -> Self {
+        Self(seed)
+    }
+
+    pub fn next(&mut self) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
+        self.0
     }
 }
 

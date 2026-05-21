@@ -6,9 +6,7 @@ use crate::stack_value::{
 };
 use crate::Context;
 use alloc::format;
-use alloc::vec;
 use alloc::vec::Vec;
-use neo_riscv_abi::encode_integer;
 
 const NEO_TAG_BOOLEAN: u8 = 0x20;
 const NEO_TAG_INTEGER: u8 = 0x21;
@@ -114,38 +112,21 @@ impl Context {
     }
 
     fn convert_to_bytestring(&mut self, val: &StackValue) -> Option<StackValue> {
-        match val {
-            StackValue::ByteString(_) => Some(val.clone()),
-            StackValue::Buffer(b) => Some(StackValue::ByteString(b.clone())),
-            StackValue::Integer(v) => {
-                let bytes = encode_integer(*v);
-                Some(StackValue::ByteString(bytes))
-            }
-            StackValue::Boolean(b) => {
-                Some(StackValue::ByteString(if *b { vec![1] } else { vec![0] }))
-            }
-            StackValue::BigInteger(b) => Some(StackValue::ByteString(b.clone())),
-            StackValue::Null => Some(StackValue::ByteString(Vec::new())),
-            _ => {
-                self.fault("CONVERT: cannot convert to ByteString");
-                None
-            }
+        if let Some(value) = val.convert_to_byte_string_value() {
+            return Some(value);
         }
+
+        self.fault("CONVERT: cannot convert to ByteString");
+        None
     }
 
     fn convert_to_buffer(&mut self, val: &StackValue) -> Option<StackValue> {
-        match val {
-            StackValue::Buffer(_) => Some(val.clone()),
-            StackValue::ByteString(b) => Some(StackValue::Buffer(b.clone())),
-            StackValue::Integer(v) => {
-                let bytes = encode_integer(*v);
-                Some(StackValue::Buffer(bytes))
-            }
-            _ => {
-                self.fault("CONVERT: cannot convert to Buffer");
-                None
-            }
+        if let Some(value) = val.convert_to_buffer_value() {
+            return Some(value);
         }
+
+        self.fault("CONVERT: cannot convert to Buffer");
+        None
     }
 }
 
@@ -259,5 +240,29 @@ mod tests {
             }
             other => panic!("expected ByteString, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn convert_null_preserves_null() {
+        let mut c = ctx();
+        c.push(StackValue::Null);
+        c.convert_to(0x28); // NeoVM ByteString type tag
+        assert_eq!(c.pop(), StackValue::Null);
+
+        c.push(StackValue::Null);
+        c.convert_to(0x30); // NeoVM Buffer type tag
+        assert_eq!(c.pop(), StackValue::Null);
+    }
+
+    #[test]
+    fn convert_primitives_to_buffer_uses_shared_rules() {
+        let mut c = ctx();
+        c.push_bool(true);
+        c.convert_to(0x30); // NeoVM Buffer type tag
+        assert_eq!(c.pop(), StackValue::Buffer(vec![1]));
+
+        c.push(StackValue::BigInteger(vec![0xff, 0x00]));
+        c.convert_to(0x30);
+        assert_eq!(c.pop(), StackValue::Buffer(vec![0xff, 0x00]));
     }
 }

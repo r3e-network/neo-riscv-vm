@@ -27,7 +27,7 @@
 }
 
 \title{Neo N3 RISC-V VM Specification\\[0.5em]
-\large NeoVM Execution via PolkaVM Sandboxed Interpreter}
+\large NeoVM Execution via Shared neo-vm-rs Semantics and PolkaVM Sandbox}
 \author{Neo RISC-V VM Project}
 \date{Version 1.0.0 --- March 18, 2026}
 
@@ -71,7 +71,7 @@ where $\equiv$ denotes identical \texttt{(VmState, Vec<StackValue>)} output.
   \node[box, fill=orange!15] (host) at (0, 2.4) {neo-riscv-host (cdylib)\\PolkaVM Engine + Linker\\Syscall Bridge, FFI};
 
   % PolkaVM Guest
-  \node[box, fill=green!10] (guest) at (0, 0.6) {guest.polkavm (riscv32)\\neo-riscv-guest interpreter\\NeoVM opcode dispatch};
+  \node[box, fill=green!10] (guest) at (0, 0.6) {guest.polkavm (riscv32)\\neo-vm-rs facade\\shared NeoVM semantics};
 
   % ABI
   \node[box, fill=yellow!15, text width=3cm] (abi) at (5, 1.5) {neo-riscv-abi\\StackValue\\ExecutionResult};
@@ -100,7 +100,7 @@ where $\equiv$ denotes identical \texttt{(VmState, Vec<StackValue>)} output.
 \textbf{Crate} & \textbf{Target} & \textbf{LOC} & \textbf{Role} \\
 \midrule
 neo-riscv-abi & \texttt{no\_std} & 45 & Shared ABI types \\
-neo-riscv-guest & \texttt{no\_std} & 643 & NeoVM opcode interpreter \\
+neo-riscv-guest & \texttt{no\_std} & 643 & Facade over shared \texttt{neo-vm-rs} semantics \\
 neo-riscv-guest-module & \texttt{riscv32imac} & 127 & PolkaVM guest binary \\
 neo-riscv-host & \texttt{x86\_64-linux} & 801 & Host runtime + C FFI \\
 \midrule
@@ -281,7 +281,7 @@ $2^{12} = 4096$ & PUSHDATA4 \\
 
 \begin{theorem}[Guest Isolation]
 \label{thm:isolation}
-The NeoVM interpreter executes inside a PolkaVM RISC-V sandbox. The guest cannot access host memory, execute host system calls, or modify host state except through the defined \texttt{host\_call} protocol.
+The shared \texttt{neo-vm-rs} NeoVM execution path is exposed through the PolkaVM RISC-V sandbox boundary. The guest cannot access host memory, execute host system calls, or modify host state except through the defined \texttt{host\_call} protocol.
 \end{theorem}
 
 \begin{proof}
@@ -340,13 +340,13 @@ Each operation uses Rust's \texttt{checked\_add}/\texttt{checked\_sub} which ret
 
 \begin{theorem}[Behavioral Equivalence]
 \label{thm:equiv}
-For the implemented opcode subset, the RISC-V guest interpreter produces identical results to the C\# NeoVM reference implementation.
+For the implemented opcode subset, the RISC-V guest module delegates to the shared \texttt{neo-vm-rs} semantics and produces identical results to the C\# NeoVM reference implementation.
 \end{theorem}
 
 \begin{proof}
 We establish equivalence through three properties:
 
-\textbf{(P1) Opcode semantics identity:} Each opcode implementation in the Rust interpreter follows the NeoVM specification byte-for-byte:
+\textbf{(P1) Opcode semantics identity:} Each opcode implementation in the shared \texttt{neo-vm-rs} interpreter follows the NeoVM specification byte-for-byte:
 \begin{itemize}
 \item Push opcodes: identical LE encoding, identical byte widths
 \item Arithmetic: identical \texttt{checked\_*} overflow semantics

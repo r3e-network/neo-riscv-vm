@@ -96,8 +96,8 @@
     </g>
     <text x="298" y="747" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">NeoVM Compatibility</text>
 <text x="298" y="775" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Execution</text>
-    <text x="240" y="806" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Load guest.polkavm and interpret</text>
-<text x="240" y="827" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">NeoVM script from NEF</text>
+    <text x="240" y="806" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Load guest.polkavm and route NEF</text>
+<text x="240" y="827" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">execution to neo-vm-rs</text>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="1160" y="705" width="430" height="150" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
@@ -108,7 +108,7 @@
     </g>
     <text x="1248" y="747" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">Native RISC-V Execution</text>
     <text x="1190" y="778" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Load PVM binary directly without</text>
-<text x="1190" y="799" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">the NeoVM interpreter</text>
+<text x="1190" y="799" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">the NeoVM compatibility layer</text>
   </g>
     <g>
     <path d="M 760 600 C 640 600, 760 740, 640 740" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>

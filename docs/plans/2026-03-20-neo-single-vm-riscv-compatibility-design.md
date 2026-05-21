@@ -6,7 +6,7 @@
 
 **Architecture:** Neo core always executes through one outer RISC-V VM. Existing NeoVM contracts are not executed directly by C# or a second core VM; instead, Neo routes them into a protocol-owned legacy-VM contract image that runs on the outer RISC-V VM and interprets legacy Neo bytecode. New RISC-V contracts are carried in the same NEF envelope, selected by optional metadata, and use the same chain state, syscall, storage, notification, and fee-policy surfaces as legacy contracts.
 
-**Tech Stack:** `neo-project/neo` `master-n3`, Rust host runtime in `/home/neo/git/neo-riscv-vm`, PolkaVM interpreter backend, standard NEF + manifest artifacts, optional manifest extra metadata for new RISC-V contracts.
+**Tech Stack:** `neo-project/neo` `master-n3`, Rust host runtime in `/home/neo/git/neo-riscv-vm`, shared `neo-vm-rs` semantics behind a PolkaVM backend, standard NEF + manifest artifacts, optional manifest extra metadata for new RISC-V contracts.
 
 ## Design Summary
 
@@ -108,7 +108,7 @@ Properties:
 
 ### Runtime Behavior
 
-`Neo.LegacyVM` contains the Rust NeoVM interpreter compiled for PolkaVM. It receives:
+`Neo.LegacyVM` exposes the shared `neo-vm-rs` NeoVM execution path through a PolkaVM guest image. It receives:
 
 - target contract script bytes
 - initial evaluation stack
@@ -126,7 +126,7 @@ It then interprets the exact existing NeoVM bytecode semantics and reports:
 - executed Neo opcode stream for fee accounting
 - any requested host interop calls
 
-The key point is that the **same interpreter** used for standalone NeoVM compatibility testing should be the code embedded in `Neo.LegacyVM`. One legacy interpreter implementation, one parity target.
+The key point is that the **same shared semantics** used for standalone NeoVM compatibility testing should be the code exposed through `Neo.LegacyVM`. One legacy execution implementation, one parity target.
 
 ## Execution Flow
 
@@ -251,8 +251,8 @@ This is additive and does not affect legacy users.
 
 Backward compatibility is only credible if validated at three layers:
 
-1. **Standalone interpreter parity**
-   - copy and run the `neo-vm` corpus against the Rust legacy interpreter path
+1. **Standalone shared-VM parity**
+   - copy and run the `neo-vm` corpus against the shared `neo-vm-rs` compatibility path
 2. **Neo core parity**
    - existing `Neo.UnitTests` must stay green with only the outer RISC-V path active
 3. **Cross-kind integration**
@@ -305,7 +305,7 @@ Add `ContractVmKind` resolution with `legacy` as default and explicit manifest-e
 - Modify: Rust guest packaging
 - Modify: Neo core system-contract/bootstrap registry
 
-Package the Rust NeoVM interpreter as a protocol-owned RISC-V contract image and make legacy execution route through it internally.
+Package the shared `neo-vm-rs` facade as a protocol-owned RISC-V contract image and make legacy execution route through it internally.
 
 ### Task 3: Add native RISC-V contract packaging
 

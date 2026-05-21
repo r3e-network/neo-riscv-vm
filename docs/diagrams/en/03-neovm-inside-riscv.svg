@@ -19,7 +19,8 @@
   <circle cx="106" cy="98" r="22" fill="#0097a7" opacity="0.16"/>
   <circle cx="106" cy="98" r="8" fill="#0097a7"/>
   <text x="142" y="96" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="38" font-weight="850" fill="#101828">NeoVM Inside RISC-V</text>
-  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">Existing NeoVM bytecode runs unchanged because guest.polkavm embeds a NeoVM interpreter inside PolkaVM.</text>
+  <text x="142" y="132" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">Existing NeoVM bytecode runs unchanged through the shared neo-vm-rs interpreter behind the PolkaVM</text>
+<text x="142" y="157" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="400" fill="#667085">boundary.</text>
   
     <g filter="url(#soft-shadow)">
     <rect x="105" y="185" width="310" height="170" rx="18" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
@@ -124,9 +125,9 @@
     <path d="M 127 804 h 42" stroke="#16a34a" stroke-width="5" stroke-linecap="round"/>
     <text x="129" y="838" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="850" fill="#101828">User mental model</text>
     <text x="129" y="872" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">Legacy contracts are not</text>
-<text x="129" y="893" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">rewritten to RISC-V; a NeoVM</text>
-<text x="129" y="914" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">interpreter runs inside the</text>
-<text x="129" y="935" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">RISC-V sandbox.</text>
+<text x="129" y="893" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">rewritten to RISC-V; they reuse</text>
+<text x="129" y="914" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">neo-vm-rs semantics through the</text>
+<text x="129" y="935" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">PolkaVM boundary.</text>
   </g>
   
 </svg>

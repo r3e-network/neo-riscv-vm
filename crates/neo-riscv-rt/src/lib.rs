@@ -28,7 +28,7 @@ pub mod strings;
 #[cfg(not(feature = "std"))]
 mod mem_intrinsics;
 
-pub use stack_value::{RuntimeStackValueExt, StackValue};
+pub use stack_value::StackValue;
 
 use neo_riscv_abi::{ExecutionResult, VmState};
 
@@ -518,14 +518,7 @@ impl Context {
     /// If try frames exist, stores as pending error.
     pub fn assert_top(&mut self) {
         let val = self.pop();
-        let is_true = match &val {
-            StackValue::Boolean(b) => *b,
-            StackValue::Integer(v) => *v != 0,
-            _ => {
-                self.fault("ASSERT: non-boolean/integer on stack");
-                return;
-            }
-        };
+        let is_true = val.to_bool();
         if !is_true {
             if self.try_stack.iter().any(|f| !f.caught) {
                 self.pending_error = Some(PendingException::message(
@@ -542,14 +535,7 @@ impl Context {
     pub fn assert_msg(&mut self) {
         let msg_val = self.pop();
         let cond_val = self.pop();
-        let is_true = match &cond_val {
-            StackValue::Boolean(b) => *b,
-            StackValue::Integer(v) => *v != 0,
-            _ => {
-                self.fault("ASSERTMSG: non-boolean/integer condition");
-                return;
-            }
-        };
+        let is_true = cond_val.to_bool();
         if !is_true {
             let msg = match &msg_val {
                 StackValue::ByteString(bytes) => {
@@ -704,12 +690,18 @@ impl Context {
     ///
     /// # Panics
     ///
-    /// Panics if the top value is not an `Integer`.
+    /// Panics if the top value is not integer-compatible or does not fit in `i64`.
     pub fn pop_integer(&mut self) -> i64 {
-        match self.pop() {
-            StackValue::Integer(v) => v,
-            other => panic!("expected Integer on stack, got tag {}", other.type_tag()),
-        }
+        let value = self.pop();
+        value
+            .to_i128()
+            .and_then(|integer| i64::try_from(integer).ok())
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected integer-compatible StackValue fitting i64, got {:?}",
+                    value
+                )
+            })
     }
 }
 

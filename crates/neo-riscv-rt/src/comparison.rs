@@ -1,8 +1,7 @@
 //! Comparison and logic operations for the NeoVM `Context`.
 
-use crate::stack_value::{RuntimeStackValueExt, StackValue};
+use crate::stack_value::StackValue;
 use crate::Context;
-use alloc::format;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -149,25 +148,10 @@ impl Context {
     // Internal helper
     // ---------------------------------------------------------------
 
-    /// Pops the top of the stack and coerces it to a Rust `bool`.
-    ///
-    /// - `Boolean(v)` -> v
-    /// - `Integer(v)` -> v != 0
-    /// - `Null` -> false
-    /// - Other types -> fault
+    /// Pops the top of the stack and coerces it through the shared NeoVM
+    /// `StackValue` boolean semantics.
     fn pop_bool_value(&mut self) -> bool {
-        match self.pop() {
-            StackValue::Boolean(v) => v,
-            StackValue::Integer(v) => v != 0,
-            StackValue::Null => false,
-            other => {
-                self.fault(&format!(
-                    "expected Boolean/Integer on stack for bool coercion, got tag {}",
-                    other.type_tag()
-                ));
-                false
-            }
-        }
+        self.pop().to_bool()
     }
 }
 

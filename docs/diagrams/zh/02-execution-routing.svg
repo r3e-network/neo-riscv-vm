@@ -80,7 +80,7 @@
       <path d="M 242.1472 510.85920000000004 h 21.7056 M 247.288 516 l -2.2848 2.2848 l 2.2848 2.2848 M 252.4288 520.5696 l 2.2848 -9.1392 M 256.9984 516 l 2.2848 2.2848 l -2.2848 2.2848"/>
     </g>
     <text x="298" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">guest.polkavm</text>
-    <text x="240" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">加载缓存 interpreter</text>
+    <text x="240" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">加载缓存 guest facade</text>
   </g>
     <g>
     <path d="M 495 542 L 585 542" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>
@@ -118,7 +118,7 @@
       <path d="M 1448 504.00480000000005 v 4.5696 M 1448 523.4256 v 4.5696 M 1436.0048 516 h 4.5696 M 1455.4256 516 h 4.5696 M 1439.432 507.432 l 3.4272 3.4272 M 1453.1408000000001 521.1408 l 3.4272 3.4272 M 1456.568 507.432 l -3.4272 3.4272 M 1442.8592 521.1408 l -3.4272 3.4272"/>
     </g>
     <text x="1493" y="517" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">直接执行</text>
-    <text x="1435" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">无 interpreter 层</text>
+    <text x="1435" y="548" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">无 NeoVM 兼容层</text>
   </g>
     <g>
     <path d="M 690 610 C 810 610, 750 805, 870 805" fill="none" stroke="#475467" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-slate)"/>

@@ -8,7 +8,8 @@ Production-ready RISC-V execution stack for Neo N3, hardened through 8 review cy
 
 The current committed implementation is a plugin-first, cross-repo integration:
 
-- `neo-riscv-vm` owns the Rust runtime, guest interpreter, adapter plugin, docs, and validation scripts.
+- `neo-riscv-vm` owns the PolkaVM host/runtime, guest module packaging, adapter plugin, docs, and validation scripts.
+- NeoVM execution semantics are shared through `neo-vm-rs`; `neo-riscv-guest` is a facade around that shared interpreter, not a second private NeoVM implementation.
 - `neo-riscv-core` now stays generic and no longer carries an in-core `Neo.SmartContract.RiscV` bridge implementation.
 - `neo-riscv-node` is validated with the packaged adapter bundle and CLI smoke coverage.
 - Existing C# syscall and native-contract logic remains the source of truth.
@@ -18,7 +19,7 @@ This preserves contract compatibility while avoiding a second Rust/RISC-V implem
 
 ## Current Status
 
-- NeoVM bytecode runs inside the PolkaVM guest interpreter.
+- NeoVM bytecode runs through the `neo-vm-rs` interpreter behind the PolkaVM guest module boundary.
 - Native RISC-V contracts and legacy NeoVM contracts share the same adapter bridge surface.
 - `ApplicationEngine.Provider` must now be supplied explicitly by the adapter plugin or tests; core no longer auto-resolves an in-core RISC-V provider.
 - The integrated three-repo workspace is validated end to end.

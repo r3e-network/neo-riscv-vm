@@ -9,7 +9,7 @@ Make `neo-project/neo` on `master-n3` execute Neo contracts through a Rust runti
 - C# `neo` remains the source of truth for blockchain state, native contracts, policy, diagnostics, and event emission.
 - The managed `ApplicationEngine.Create()` entry point stays stable for all existing callers.
 - Neo bytecode is not translated to a new contract format in phase 1.
-- Execution moves into a Rust NeoVM interpreter running inside PolkaVM.
+- Execution moves through the shared `neo-vm-rs` NeoVM semantics behind a PolkaVM guest boundary.
 - The migration must be incremental and testable with focused parity slices.
 
 ## Architecture
@@ -30,7 +30,7 @@ The Rust host runtime is a native library loaded in-process by C#. It owns the P
 
 ### 3. PolkaVM Guest
 
-The PolkaVM guest is a Rust RISC-V binary that implements NeoVM semantics as a bytecode interpreter. It consumes Neo bytecode directly, maintains NeoVM stacks and contexts, and invokes host functions whenever blockchain or native-contract context is required. Phase 1 should support pure opcode execution and a minimal syscall surface before expanding toward full parity.
+The PolkaVM guest is a Rust RISC-V binary that exposes the shared `neo-vm-rs` execution path to the sandbox. It consumes Neo bytecode directly, relies on shared NeoVM stack/value semantics, and invokes host functions whenever blockchain or native-contract context is required. Phase 1 should support pure opcode execution and a minimal syscall surface before expanding toward full parity.
 
 ### 4. Host-Call Ownership
 
@@ -60,7 +60,7 @@ The following implementation detail changes:
 
 - managed opcode loop becomes bridge-driven
 - VM stack/context state is mirrored between C# and Rust
-- fault reporting is synthesized from Rust interpreter state
+- fault reporting is synthesized from shared `neo-vm-rs` execution state
 
 ## Delivery Strategy
 
@@ -69,7 +69,7 @@ Phase 1 is a vertical slice:
 - provider-based engine replacement in C#
 - Rust native bridge crate
 - PolkaVM guest crate
-- minimal Neo opcode interpreter for trivial scripts
+- minimal PolkaVM guest facade for trivial scripts
 - focused tests proving `ApplicationEngine.Create()` can redirect execution without caller changes
 
 Later phases expand opcode coverage, syscall coverage, state snapshot integration, native contract interop, and parity testing.

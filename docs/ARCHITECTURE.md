@@ -26,7 +26,7 @@
 The Neo RISC-V VM is a plugin-first execution stack for Neo N3. It uses:
 
 - **RISC-V** as the primary virtual machine (via PolkaVM)
-- **Internal NeoVM compatibility layer** for perfect backward compatibility
+- **Shared `neo-vm-rs` NeoVM compatibility layer** for backward compatibility without a second private NeoVM implementation
 - **External adapter ownership** so core no longer carries an in-tree RISC-V bridge implementation
 
 ### Key Metrics
@@ -146,7 +146,7 @@ All NeoVM bytecode executes identically:
 │  │ guest.polkavm (PolkaVM RISC-V binary)                               │   │
 │  │                                                                     │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │ NeoVM Interpreter (no_std Rust)                              │   │   │
+│  │  │ neo-vm-rs shared interpreter facade                          │   │   │
 │  │  │                                                             │   │   │
 │  │  │  ┌─────────────────────────────────────────────────────┐   │   │   │
 │  │  │  │ Opcode Handler                                       │   │   │   │
@@ -161,7 +161,6 @@ All NeoVM bytecode executes identically:
 │  │  │  ┌─────────────────────────────────────────────────────┐   │   │   │
 │  │  │  │ Stack Management                                     │   │   │   │
 │  │  │  │ ├── Evaluation stack (max 2048 items)               │   │   │   │
-│  │  │  │ ├── Alt stack                                       │   │   │   │
 │  │  │  │ ├── Local slots                                     │   │   │   │
 │  │  │  │ └── Static fields                                   │   │   │   │
 │  │  │  └─────────────────────────────────────────────────────┘   │   │   │
@@ -229,18 +228,16 @@ All NeoVM bytecode executes identically:
 
 ### Rust Guest (`neo-riscv-guest`)
 
-**Purpose:** NeoVM interpreter running inside RISC-V
+**Purpose:** Facade and guest-facing ABI for the shared `neo-vm-rs` interpreter.
 
 **Key Modules:**
-- `lib.rs` - Interpreter entry points
-- `opcodes.rs` - Opcode definitions and handlers
-- `runtime_types.rs` - Stack types and operations
-- `helpers.rs` - Utility functions
+- `lib.rs` - Re-exports the shared interpreter, stack values, VM state, and syscall provider traits from `neo-vm-rs`
+- `tests/shared_vm_dependency.rs` - Guards against reintroducing a private interpreter implementation
 
 **Key Features:**
 - No standard library (no_std)
-- Bump allocator for memory
-- Fixed-size buffers for host communication
+- Single source of NeoVM opcode, stack value, and syscall semantics through `neo-vm-rs`
+- PolkaVM guest module boundary remains responsible for sandboxed execution and host communication
 
 ---
 
@@ -531,7 +528,7 @@ Contract Source
 RISC-V Binary (guest.polkavm format)
       │
       ▼ Deploy
-Execute directly (no NeoVM interpreter)
+Execute directly (no NeoVM compatibility layer)
 ```
 
 **Benefits:**

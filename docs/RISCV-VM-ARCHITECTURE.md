@@ -38,7 +38,7 @@ target RISC-V directly.
   (ContractType.NeoVM=0)        (ContractType.RiscV=1)
   |                                  |
   PolkaVM loads guest.polkavm   PolkaVM loads contract binary
-  (NeoVM interpreter)           (direct execution)
+  (neo-vm-rs facade)            (direct execution)
   |                                  |
   Interprets NeoVM bytecode     Executes RISC-V code
   |                                  |
@@ -59,8 +59,8 @@ ApplicationEngine.Run()
     -> Collects ContractType per InvocationStack context
     -> bridge.Execute(RiscvExecutionRequest)
       -> RiscvExecutionDispatcher detects ContractType.NeoVM
-        -> PolkaVM loads guest.polkavm (cached NeoVM interpreter)
-        -> Interpreter runs contract.Nef.Script (NeoVM bytecode)
+        -> PolkaVM loads guest.polkavm (cached guest module)
+        -> neo-vm-rs runs contract.Nef.Script (NeoVM bytecode)
         -> SYSCALL/CALLT -> host_call -> C# callback
       -> Result returned
 ```
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
 - `crates/neo-riscv-host/src/runtime_cache.rs` -- `compile_native_module()`
 - `crates/neo-riscv-host/src/bridge.rs` -- shared `host_call` bridge
 - `crates/neo-riscv-abi/src/lib.rs` -- `StackValue`, `ExecutionResult`
-- `crates/neo-riscv-guest/src/lib.rs` -- NeoVM interpreter (guest)
+- `crates/neo-riscv-guest/src/lib.rs` -- facade over the shared `neo-vm-rs` interpreter
 - `crates/neo-riscv-guest-module/src/main.rs` -- guest binary entry
 
 ### C# (Neo N3 fork)

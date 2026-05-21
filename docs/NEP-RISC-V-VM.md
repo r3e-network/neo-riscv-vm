@@ -9,7 +9,7 @@
 
 ## Abstract
 
-This NEP specifies the RISC-V Virtual Machine stack used in the current Neo N3 integration workspace, with an internal NeoVM compatibility layer for backward-compatible execution.
+This NEP specifies the RISC-V Virtual Machine stack used in the current Neo N3 integration workspace, with backward-compatible NeoVM execution delegated to the shared `neo-vm-rs` interpreter through a PolkaVM guest boundary.
 
 ## Motivation
 
@@ -49,9 +49,9 @@ This NEP specifies the RISC-V Virtual Machine stack used in the current Neo N3 i
                               ▼ Internal Syscalls
 ┌─────────────────────────────────────────────────────────────────┐
 │ Layer 4: Guest VM (RISC-V)                                      │
-│ - NeoVM Interpreter                                             │
-│ - Stack Management                                              │
-│ - Opcode Execution                                              │
+│ - neo-vm-rs facade                                              │
+│ - Shared stack/value semantics                                  │
+│ - Sandboxed host-call boundary                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -72,7 +72,7 @@ This NEP specifies the RISC-V Virtual Machine stack used in the current Neo N3 i
 |-----------|----------------|
 | C# Core | Chain state, storage, native contracts |
 | Host Runtime | VM state, memory, gas tracking |
-| Guest VM | Execution context, stack, instruction pointer |
+| Guest VM | PolkaVM module boundary, host-call ABI, shared `neo-vm-rs` execution facade |
 
 ### 3. Memory Model
 
@@ -104,11 +104,11 @@ This NEP specifies the RISC-V Virtual Machine stack used in the current Neo N3 i
 | Item Size | 1 MB | Size limit error |
 | Call Depth | 1024 | Call depth exceeded |
 
-### 4. Opcode Implementation
+### 4. Opcode Semantics
 
 #### 4.1 Supported Opcodes
 
-All NeoVM opcodes (0x00-0xFF) are supported:
+NeoVM opcode semantics are sourced from `neo-vm-rs`, not reimplemented privately in this repository:
 
 | Category | Opcodes | Status |
 |----------|---------|--------|
@@ -121,7 +121,7 @@ All NeoVM opcodes (0x00-0xFF) are supported:
 | Arithmetic | 0x99-0xBB | ✅ Full |
 | Compound | 0xBE-0xD3 | ✅ Full |
 
-#### 4.2 Opcode Semantics
+#### 4.2 Semantics Ownership
 
 Key implementation details:
 

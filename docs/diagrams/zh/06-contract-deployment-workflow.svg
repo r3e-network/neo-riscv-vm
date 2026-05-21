@@ -91,7 +91,7 @@
       <path d="M 242.1472 740.8592 h 21.7056 M 247.288 746 l -2.2848 2.2848 l 2.2848 2.2848 M 252.4288 750.5696 l 2.2848 -9.1392 M 256.9984 746 l 2.2848 2.2848 l -2.2848 2.2848"/>
     </g>
     <text x="298" y="747" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">NeoVM 兼容执行</text>
-    <text x="240" y="778" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">加载 guest.polkavm，解释 NEF 中的 NeoVM script</text>
+    <text x="240" y="778" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">加载 guest.polkavm，转接 neo-vm-rs 执行 NEF</text>
   </g>
     <g filter="url(#soft-shadow)">
     <rect x="1160" y="705" width="430" height="150" rx="18" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
@@ -101,7 +101,7 @@
       <path d="M 1199.0016 746.5712 l 2.8560000000000003 2.8560000000000003 l 6.283200000000001 -7.425600000000001"/>
     </g>
     <text x="1248" y="747" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="21" font-weight="800" fill="#101828">原生 RISC-V 执行</text>
-    <text x="1190" y="778" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">直接加载 PVM binary，不经过 NeoVM interpreter</text>
+    <text x="1190" y="778" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="400" fill="#344054">直接加载 PVM binary，不经过 NeoVM 兼容层</text>
   </g>
     <g>
     <path d="M 760 600 C 640 600, 760 740, 640 740" fill="none" stroke="#0097a7" stroke-width="3.2" stroke-linecap="round" marker-end="url(#arrow-blue)"/>

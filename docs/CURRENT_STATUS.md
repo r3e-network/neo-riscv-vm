@@ -7,7 +7,8 @@
 
 The current committed implementation is a validated three-repo workspace integration:
 
-- `neo-riscv-vm` provides the Rust runtime, NeoVM-on-RISC-V guest, adapter plugin, compatibility tests, fuzz harnesses, and orchestration scripts.
+- `neo-riscv-vm` provides the Rust PolkaVM runtime, NeoVM-on-RISC-V guest module boundary, adapter plugin, compatibility tests, fuzz harnesses, and orchestration scripts.
+- NeoVM opcode, stack value, syscall metadata, and interpreter semantics are shared through `neo-vm-rs`; this repository does not maintain a second private NeoVM interpreter.
 - `neo-riscv-core` no longer contains its own `Neo.SmartContract.RiscV` bridge layer. That code now lives in `neo-riscv-vm/dotnet/Neo.Riscv.Adapter`.
 - `neo-riscv-node` is validated against the packaged adapter bundle, including CLI smoke coverage.
 - Existing C# syscall and native-contract implementations remain the only source of truth.
@@ -18,7 +19,7 @@ The current committed implementation is a validated three-repo workspace integra
 
 ### What is true now
 
-- NeoVM compatibility is provided by the Rust guest interpreter running on top of PolkaVM.
+- NeoVM compatibility is provided by `neo-vm-rs` through the PolkaVM guest module boundary.
 - The adapter plugin registers `ApplicationEngine.Provider` and resolves the native host library.
 - Adapter library lookup now resolves from straightforward published/plugin filesystem locations rather than depending on `Neo.Plugins.Plugin` static initialization.
 - Core is generic and now expects provider injection instead of auto-resolving an in-core RISC-V engine.

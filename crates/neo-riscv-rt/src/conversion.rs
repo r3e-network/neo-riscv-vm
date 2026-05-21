@@ -1,13 +1,14 @@
 //! Type conversion and introspection operations for the NeoVM `Context`.
 
 use crate::stack_value::{
-    RuntimeStackValueExt, StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER,
-    TAG_BYTESTRING, TAG_INTEGER, TAG_MAP, TAG_NULL, TAG_STRUCT,
+    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
+    TAG_MAP, TAG_NULL, TAG_STRUCT,
 };
 use crate::Context;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
+use neo_riscv_abi::encode_integer;
 
 const NEO_TAG_BOOLEAN: u8 = 0x20;
 const NEO_TAG_INTEGER: u8 = 0x21;
@@ -35,7 +36,7 @@ impl Context {
     /// Pops a value and pushes `true` if its type tag matches `type_byte`.
     pub fn is_type(&mut self, type_byte: u8) {
         let val = self.pop();
-        self.push_bool(val.type_tag() == normalize_type_tag(type_byte));
+        self.push_bool(val.compact_type_tag() == normalize_type_tag(type_byte));
     }
 
     /// Converts the top stack value to the NeoVM type indicated by `target_type`.
@@ -46,7 +47,7 @@ impl Context {
         let target_type = normalize_type_tag(target_type);
         let converted = match target_type {
             TAG_INTEGER => self.convert_to_integer(&val),
-            TAG_BOOLEAN => Some(StackValue::Boolean(self.value_to_bool(&val))),
+            TAG_BOOLEAN => Some(StackValue::Boolean(val.to_bool())),
             TAG_BYTESTRING => self.convert_to_bytestring(&val),
             TAG_BUFFER => self.convert_to_buffer(&val),
             TAG_ARRAY => match val {
@@ -101,51 +102,15 @@ impl Context {
     // ---------------------------------------------------------------
 
     fn convert_to_integer(&mut self, val: &StackValue) -> Option<StackValue> {
-        match val {
-            StackValue::Integer(_) => Some(val.clone()),
-            StackValue::Boolean(b) => Some(StackValue::Integer(if *b { 1 } else { 0 })),
-            StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => {
-                // Little-endian two's complement -> i64.
-                if bytes.is_empty() {
-                    return Some(StackValue::Integer(0));
-                }
-                if bytes.len() > 8 {
-                    self.fault("CONVERT: ByteString too large for i64 integer conversion");
-                    return None;
-                }
-                let mut buf = [0u8; 8];
-                buf[..bytes.len()].copy_from_slice(bytes);
-                // Sign-extend from the most significant byte of the input.
-                if bytes.last().is_some_and(|b| b & 0x80 != 0) {
-                    for b in &mut buf[bytes.len()..] {
-                        *b = 0xFF;
-                    }
-                }
-                Some(StackValue::Integer(i64::from_le_bytes(buf)))
-            }
-            StackValue::BigInteger(bytes) => {
-                if bytes.is_empty() {
-                    return Some(StackValue::Integer(0));
-                }
-                if bytes.len() <= 8 {
-                    let mut buf = [0u8; 8];
-                    buf[..bytes.len()].copy_from_slice(bytes);
-                    if bytes.last().is_some_and(|b| b & 0x80 != 0) {
-                        for b in &mut buf[bytes.len()..] {
-                            *b = 0xFF;
-                        }
-                    }
-                    Some(StackValue::Integer(i64::from_le_bytes(buf)))
-                } else {
-                    self.fault("CONVERT: BigInteger too large for i64");
-                    None
-                }
-            }
-            _ => {
-                self.fault("CONVERT: cannot convert to Integer");
-                None
-            }
-        }
+        let Some(value) = val.to_i128() else {
+            self.fault("CONVERT: cannot convert to Integer");
+            return None;
+        };
+        let Ok(value) = i64::try_from(value) else {
+            self.fault("CONVERT: integer too large for i64");
+            return None;
+        };
+        Some(StackValue::Integer(value))
     }
 
     fn convert_to_bytestring(&mut self, val: &StackValue) -> Option<StackValue> {
@@ -153,8 +118,7 @@ impl Context {
             StackValue::ByteString(_) => Some(val.clone()),
             StackValue::Buffer(b) => Some(StackValue::ByteString(b.clone())),
             StackValue::Integer(v) => {
-                // i64 to little-endian two's complement, minimal encoding.
-                let bytes = int_to_le_bytes(*v);
+                let bytes = encode_integer(*v);
                 Some(StackValue::ByteString(bytes))
             }
             StackValue::Boolean(b) => {
@@ -174,7 +138,7 @@ impl Context {
             StackValue::Buffer(_) => Some(val.clone()),
             StackValue::ByteString(b) => Some(StackValue::Buffer(b.clone())),
             StackValue::Integer(v) => {
-                let bytes = int_to_le_bytes(*v);
+                let bytes = encode_integer(*v);
                 Some(StackValue::Buffer(bytes))
             }
             _ => {
@@ -183,38 +147,6 @@ impl Context {
             }
         }
     }
-
-    /// Coerces a value to bool for conversion purposes.
-    fn value_to_bool(&self, val: &StackValue) -> bool {
-        match val {
-            StackValue::Boolean(b) => *b,
-            StackValue::Integer(v) => *v != 0,
-            StackValue::ByteString(bytes) | StackValue::Buffer(bytes) => {
-                bytes.iter().any(|b| *b != 0)
-            }
-            StackValue::Null => false,
-            _ => true,
-        }
-    }
-}
-
-/// Converts an i64 to minimal little-endian two's complement bytes.
-fn int_to_le_bytes(v: i64) -> Vec<u8> {
-    if v == 0 {
-        return vec![0];
-    }
-    let full = v.to_le_bytes();
-    // Trim trailing sign-extension bytes.
-    let sign_byte: u8 = if v < 0 { 0xFF } else { 0x00 };
-    let mut len = 8;
-    while len > 1 && full[len - 1] == sign_byte {
-        // Keep one extra byte if the next byte's sign bit doesn't match.
-        if (full[len - 2] & 0x80 != 0) != (v < 0) {
-            break;
-        }
-        len -= 1;
-    }
-    full[..len].to_vec()
 }
 
 #[cfg(test)]

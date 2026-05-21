@@ -133,9 +133,9 @@ Polkadot, as the execution backbone for Neo N3.
 The solution provides two execution paths on a unified infrastructure:
 
 \begin{enumerate}[noitemsep]
-    \item \textbf{NeoVM Path}: Existing NeoVM bytecode is interpreted by a
-          NeoVM interpreter running as a guest program inside the PolkaVM
-          sandbox. This path preserves complete backward compatibility with
+    \item \textbf{NeoVM Path}: Existing NeoVM bytecode is executed by the
+          shared \texttt{neo-vm-rs} interpreter through the PolkaVM guest
+          sandbox boundary. This path preserves complete backward compatibility with
           all existing contracts, tools, and SDKs.
     \item \textbf{RISC-V Path}: Native RISC-V binaries are executed directly
           by PolkaVM, providing near-native performance for new contracts
@@ -225,7 +225,7 @@ and interfaces, as shown in Figure~\ref{fig:layers}.
     \node[layer, fill=yellow!12] (guest) at (0, -0.2)
         {\textbf{Layer 1: Guest Programs}};
     \node[below=0.15cm of guest, font=\scriptsize\itshape, color=gray]
-        {NeoVM interpreter (guest.polkavm) \quad$\bullet$\quad Native RISC-V contract binaries};
+        {neo-vm-rs facade (guest.polkavm) \quad$\bullet$\quad Native RISC-V contract binaries};
 
     \draw[arr] (app) -- node[right, font=\scriptsize]{dispatch by ContractType} (bridge);
     \draw[arr] (bridge) -- node[right, font=\scriptsize]{P/Invoke (neo\_riscv\_execute\_script)} (pvm);
@@ -241,13 +241,12 @@ and interfaces, as shown in Figure~\ref{fig:layers}.
 Two types of guest programs execute inside the PolkaVM sandbox:
 
 \begin{itemize}[noitemsep]
-    \item \textbf{NeoVM Interpreter} (\texttt{guest.polkavm}): A \texttt{no\_std}
-          Rust program implementing the complete NeoVM instruction set
-          (130+ opcodes). It receives NeoVM bytecode via PolkaVM's auxiliary
-          data mechanism, interprets it, and communicates with the host
-          through \texttt{host\_call} SYSCALLs. The interpreter manages its
-          own evaluation stack, local variables, static fields, call stack,
-          alt stack, and exception handling frames internally.
+    \item \textbf{\texttt{neo-vm-rs} Facade} (\texttt{guest.polkavm}): A
+          \texttt{no\_std} guest-facing facade over the shared NeoVM semantics.
+          It receives NeoVM bytecode via PolkaVM's auxiliary data mechanism
+          and communicates with the host through \texttt{host\_call}
+          SYSCALLs. Opcode, stack value, syscall metadata, and conversion
+          semantics remain centralized in \texttt{neo-vm-rs}.
     \item \textbf{Native RISC-V Binaries}: Contract-specific PolkaVM binaries
           compiled from high-level languages (Rust, C, C++). They interact
           with the host through the identical \texttt{host\_call} SYSCALL
@@ -327,7 +326,7 @@ transaction submission through to result delivery.
     \node[decision, below=of bridge] (type) {Contract Type?};
 
     \node[box, below=2.0cm of type, xshift=-3cm, fill=neovmblue!10] (neovm)
-        {PolkaVM $\to$ NeoVM Interpreter\\[2pt]{\tiny 130+ opcodes, stack machine}};
+        {PolkaVM $\to$ neo-vm-rs Facade\\[2pt]{\tiny shared opcodes, stack semantics}};
     \node[box, below=2.0cm of type, xshift=3cm, fill=riscvgreen!10] (riscv)
         {PolkaVM $\to$ Direct Execution\\[2pt]{\tiny Native RISC-V binary}};
 
@@ -641,7 +640,7 @@ a RISC-V contract.
                 align=center, fill=blue!5, line width=0.5pt},
     arr/.style={->, thick, >=stealth},
 ]
-    \node[box, fill=neovmblue!10] (a1) {NeoVM Interpreter};
+    \node[box, fill=neovmblue!10] (a1) {neo-vm-rs Facade};
     \node[box, right=of a1] (h1) {Host Bridge};
     \node[box, right=of h1, fill=riscvgreen!10] (r1) {RISC-V Binary};
 
@@ -931,7 +930,7 @@ Gas prevents resource exhaustion at multiple levels:
 Execution faults propagate through two levels:
 
 \begin{enumerate}[noitemsep]
-    \item \textbf{Guest-level}: The NeoVM interpreter handles
+    \item \textbf{Guest-level}: The shared NeoVM execution path handles
           \texttt{THROW}/\texttt{ASSERT} opcodes and
           \texttt{TRY}/\texttt{CATCH}/\texttt{FINALLY} exception frames.
           Exceptions are re-thrown after \texttt{finally}-only blocks.
@@ -991,7 +990,7 @@ Witness {
 }
 \end{lstlisting}
 
-Verification runs through the NeoVM interpreter regardless of the contract
+Verification runs through the shared NeoVM execution path regardless of the contract
 being invoked. This is completely unchanged.
 
 % ============================================================================
@@ -1032,7 +1031,8 @@ Checksum & CRC32(script) & CRC32(script) \\
 \label{sec:native-contracts}
 
 All 11 native contracts continue to operate identically through the RISC-V
-bridge. Native contracts use the NeoVM path (interpreter-on-PolkaVM).
+bridge. Native contracts use the NeoVM compatibility path exposed through
+\texttt{neo-vm-rs} and the PolkaVM boundary.
 
 \begin{table}[H]
 \centering
@@ -1094,7 +1094,7 @@ completes. Both contract types emit and receive notifications identically.
 \textbf{Crate} & \textbf{Purpose} \\
 \midrule
 \texttt{neo-riscv-abi} & Shared types: StackValue, ExecutionResult, VmState, callback codec \\
-\texttt{neo-riscv-guest} & NeoVM interpreter (\texttt{no\_std}): 130+ opcodes, exception handling, alt stack \\
+\texttt{neo-riscv-guest} & \texttt{no\_std} facade over shared \texttt{neo-vm-rs} semantics \\
 \texttt{neo-riscv-guest-module} & PolkaVM entry point: bump allocator, static buffers, panic capture \\
 \texttt{neo-riscv-host} & Native runtime: engine/module caching (OnceLock), FFI, opcode pricing \\
 \bottomrule
@@ -1177,7 +1177,7 @@ ContractState        & +1 byte & Backward compatible & Default NeoVM \\
 \begin{enumerate}
     \item \textbf{Phase 1 --- Bridge Deployment}:
           Deploy updated node binary with the RISC-V bridge. Existing NeoVM
-          contracts execute transparently through the interpreter-on-PolkaVM
+          contracts execute transparently through the shared \texttt{neo-vm-rs}
           path. All existing tools, SDKs, and infrastructure work without
           modification. Zero protocol changes.
 

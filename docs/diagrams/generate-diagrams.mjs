@@ -40,7 +40,7 @@ const sets = {
     title2: "Execution Routing",
     sub2: "One Neo invocation surface routes legacy NeoVM bytecode and native RISC-V binaries to the right execution path.",
     title3: "NeoVM Inside RISC-V",
-    sub3: "Existing NeoVM bytecode runs unchanged because guest.polkavm embeds a NeoVM interpreter inside PolkaVM.",
+    sub3: "Existing NeoVM bytecode runs unchanged through the shared neo-vm-rs interpreter behind the PolkaVM boundary.",
     title4: "Syscall and Native Contract Data Flow",
     sub4: "RISC-V code asks for host operations; existing Neo C# executes storage, runtime, contract calls, and native logic.",
     title5: "ABI and Memory Model",
@@ -59,7 +59,7 @@ const sets = {
     title2: "执行路由",
     sub2: "同一个 Neo 调用入口把旧 NeoVM 字节码和原生 RISC-V 二进制路由到正确执行路径。",
     title3: "NeoVM 运行在 RISC-V 中",
-    sub3: "现有 NeoVM 字节码无需修改，因为 guest.polkavm 在 PolkaVM 中内置 NeoVM interpreter。",
+    sub3: "现有 NeoVM 字节码无需修改，因为 PolkaVM 边界后复用共享的 neo-vm-rs 解释器。",
     title4: "Syscall 与原生合约数据流",
     sub4: "RISC-V 代码请求 host 操作；现有 Neo C# 执行存储、运行时、合约调用和原生逻辑。",
     title5: "ABI 与内存模型",
@@ -364,7 +364,7 @@ function render1(lang) {
     ${arrow(530, 252, 690, 252, zh ? "Neo 调用" : "Neo invoke", c.green, "green")}
     ${arrow(1180, 252, 1295, 252, "Provider", c.purple, "purple")}
     ${box({ x: 310, y: 475, w: 500, h: 190, title: zh ? "Rust Host Runtime" : "Rust Host Runtime", body: [zh ? "FFI、缓存、PolkaVM Engine、实例池、ABI 封送" : "FFI, cache, PolkaVM engine, instance pool, ABI marshaling"], iconName: "gear", accent: c.amber, fill: c.amberSoft, max: 34 })}
-    ${box({ x: 990, y: 475, w: 500, h: 190, title: zh ? "PolkaVM / RISC-V Guest" : "PolkaVM / RISC-V Guest", body: [zh ? "guest.polkavm 内置 NeoVM interpreter；PVM 可直跑" : "guest.polkavm embeds NeoVM interpreter; PVM runs directly"], iconName: "shield", accent: c.teal, fill: c.tealSoft, max: 34 })}
+    ${box({ x: 990, y: 475, w: 500, h: 190, title: zh ? "PolkaVM / RISC-V Guest" : "PolkaVM / RISC-V Guest", body: [zh ? "guest.polkavm 转接 neo-vm-rs；PVM 可直跑" : "guest.polkavm bridges to neo-vm-rs; PVM runs directly"], iconName: "shield", accent: c.teal, fill: c.tealSoft, max: 34 })}
     ${arrow(1475, 330, 670, 475, "P/Invoke", c.slate, "slate", 360)}
     ${arrow(810, 563, 990, 563, zh ? "沙盒执行" : "sandbox execute", c.teal, "blue")}
     ${callout(150, 760, 430, 170, zh ? "C# 是语义事实源" : "C# owns Neo semantics", zh ? "syscall、原生合约、权限、gas 与链状态不在 Rust 里重写。" : "Syscalls, native contracts, permissions, gas, and chain state remain in C#.", c.blue, c.blueSoft)}
@@ -387,12 +387,12 @@ function render2(lang) {
     ${lane(970, 420, 675, 285, zh ? "原生 RISC-V 路径" : "Native RISC-V Path", c.purple)}
     ${arrow(1120, 325, 495, 420, zh ? "NeoVM = 0" : "NeoVM = 0", c.teal, "blue", -240)}
     ${arrow(1260, 325, 1305, 420, zh ? "RiscV = 1" : "RiscV = 1", c.purple, "purple")}
-    ${box({ x: 210, y: 475, w: 285, h: 135, title: "guest.polkavm", body: [zh ? "加载缓存 interpreter" : "Load cached interpreter"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true })}
+    ${box({ x: 210, y: 475, w: 285, h: 135, title: "guest.polkavm", body: [zh ? "加载缓存 guest facade" : "Load cached guest facade"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true })}
     ${arrow(495, 542, 585, 542, "", c.teal, "blue")}
     ${box({ x: 585, y: 475, w: 210, h: 135, title: zh ? "解释 NEF" : "Interpret NEF", body: [zh ? "NeoVM bytecode" : "NeoVM bytecode"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true, max: 12 })}
     ${box({ x: 1030, y: 475, w: 285, h: 135, title: zh ? "加载 PVM" : "Load PVM", body: [zh ? "NEF 内 PolkaVM binary" : "PolkaVM binary inside NEF"], iconName: "shield", accent: c.purple, fill: c.purpleSoft, compact: true })}
     ${arrow(1315, 542, 1405, 542, "", c.purple, "purple")}
-    ${box({ x: 1405, y: 475, w: 205, h: 135, title: zh ? "直接执行" : "Run Directly", body: [zh ? "无 interpreter 层" : "No interpreter layer"], iconName: "gear", accent: c.purple, fill: c.purpleSoft, compact: true, max: 13 })}
+    ${box({ x: 1405, y: 475, w: 205, h: 135, title: zh ? "直接执行" : "Run Directly", body: [zh ? "无 NeoVM 兼容层" : "No NeoVM compatibility layer"], iconName: "gear", accent: c.purple, fill: c.purpleSoft, compact: true, max: 13 })}
     ${arrow(690, 610, 870, 805, "", c.slate, "slate", 120)}
     ${arrow(1320, 610, 995, 805, "", c.slate, "slate", -160)}
     ${box({ x: 690, y: 805, w: 420, h: 130, title: zh ? "共享 Host Bridge" : "Shared Host Bridge", body: [zh ? "host_call + host_on_instruction + ABI" : "host_call + host_on_instruction + ABI"], iconName: "gear", accent: c.amber, fill: c.amberSoft, compact: true, max: 23 })}
@@ -430,7 +430,7 @@ function render3(lang) {
     ${arrow(1350, 505, 1510, 352, zh ? "syscall / gas" : "syscall / gas", c.red, "red", 80)}
     ${box({ x: 1190, y: 845, w: 500, h: 160, title: zh ? "回到 Neo C# 系统" : "Back to Neo C# System", body: [zh ? "storage、runtime、native call 仍由 C# 执行" : "storage, runtime, and native calls still execute in C#"], iconName: "chain", accent: c.blue, fill: c.blueSoft, compact: true, max: 27 })}
     ${arrow(1615, 435, 1460, 865, zh ? "请求 Neo 语义" : "request Neo semantics", c.blue, "blue", -120)}
-    ${callout(105, 780, 420, 170, zh ? "用户友好理解" : "User mental model", zh ? "不是把旧合约改写成 RISC-V；而是在 RISC-V 沙盒里运行一个 NeoVM interpreter。" : "Legacy contracts are not rewritten to RISC-V; a NeoVM interpreter runs inside the RISC-V sandbox.", c.green, c.greenSoft)}
+    ${callout(105, 780, 420, 170, zh ? "用户友好理解" : "User mental model", zh ? "不是把旧合约改写成 RISC-V；而是通过 PolkaVM 边界复用 neo-vm-rs 语义。" : "Legacy contracts are not rewritten to RISC-V; they reuse neo-vm-rs semantics through the PolkaVM boundary.", c.green, c.greenSoft)}
   `;
   return svg(t.title3, t.sub3, c.teal, body);
 }
@@ -507,8 +507,8 @@ function render6(lang) {
     ${step(1495, 185, "5", zh ? "存储" : "Persist", zh ? "hash、NEF、manifest、Type 入链" : "hash, NEF, manifest, Type stored", c.amber, c.amberSoft)}
     ${diamond(760, 515, 280, 165, zh ? "调用时路由" : "Route on Invoke", zh ? "NeoVM=0 / RiscV=1" : "NeoVM=0 / RiscV=1", c.amber)}
     ${arrow(1630, 331, 900, 515, zh ? "读取 Type" : "read Type", c.amber, "slate", 300)}
-    ${box({ x: 210, y: 705, w: 430, h: 150, title: zh ? "NeoVM 兼容执行" : "NeoVM Compatibility Execution", body: [zh ? "加载 guest.polkavm，解释 NEF 中的 NeoVM script" : "Load guest.polkavm and interpret NeoVM script from NEF"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true, max: 25 })}
-    ${box({ x: 1160, y: 705, w: 430, h: 150, title: zh ? "原生 RISC-V 执行" : "Native RISC-V Execution", body: [zh ? "直接加载 PVM binary，不经过 NeoVM interpreter" : "Load PVM binary directly without the NeoVM interpreter"], iconName: "shield", accent: c.purple, fill: c.purpleSoft, compact: true, max: 25 })}
+    ${box({ x: 210, y: 705, w: 430, h: 150, title: zh ? "NeoVM 兼容执行" : "NeoVM Compatibility Execution", body: [zh ? "加载 guest.polkavm，转接 neo-vm-rs 执行 NEF" : "Load guest.polkavm and route NEF execution to neo-vm-rs"], iconName: "vm", accent: c.teal, fill: c.tealSoft, compact: true, max: 25 })}
+    ${box({ x: 1160, y: 705, w: 430, h: 150, title: zh ? "原生 RISC-V 执行" : "Native RISC-V Execution", body: [zh ? "直接加载 PVM binary，不经过 NeoVM 兼容层" : "Load PVM binary directly without the NeoVM compatibility layer"], iconName: "shield", accent: c.purple, fill: c.purpleSoft, compact: true, max: 25 })}
     ${arrow(760, 600, 640, 740, zh ? "NeoVM" : "NeoVM", c.teal, "blue", -120)}
     ${arrow(1040, 600, 1160, 740, zh ? "RISC-V" : "RISC-V", c.purple, "purple", 120)}
     ${box({ x: 685, y: 865, w: 430, h: 120, title: zh ? "共享 C# 语义层" : "Shared C# Semantics", body: [zh ? "syscalls / native contracts / storage / gas" : "syscalls / native contracts / storage / gas"], iconName: "chain", accent: c.blue, fill: c.blueSoft, compact: true, max: 23 })}

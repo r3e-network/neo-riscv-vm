@@ -82,7 +82,7 @@
       <path d="M 1033.8592 522.7343999999999 l 3.6720000000000006 3.6720000000000006 l 8.078400000000002 -9.547200000000002"/>
     </g>
     <text x="1090" y="527" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#101828">PolkaVM / RISC-V Guest</text>
-    <text x="1020" y="563" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">guest.polkavm embeds NeoVM interpreter; PVM</text>
+    <text x="1020" y="563" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">guest.polkavm bridges to neo-vm-rs; PVM</text>
 <text x="1020" y="586" text-anchor="start" font-family="Inter, Noto Sans CJK SC, Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="400" fill="#344054">runs directly</text>
   </g>
     <g>

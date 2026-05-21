@@ -1,7 +1,7 @@
 use alloc::{string::String, vec, vec::Vec};
 use core::convert::TryInto;
 
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{byte_sequence_bytes, StackValue};
 
 use crate::{api_ids, ffi, syscalls::CALL_FLAGS_ALL};
 
@@ -73,16 +73,16 @@ pub(crate) fn call_native_with_flags(
 pub(crate) fn stack_item_as_bool(item: &StackValue) -> Option<bool> {
     match item {
         StackValue::Boolean(value) => Some(*value),
-        StackValue::Integer(value) => Some(*value != 0),
-        StackValue::BigInteger(bytes) => Some(big_integer_to_i64(bytes)? != 0),
+        StackValue::Integer(_) | StackValue::BigInteger(_) => {
+            stack_item_as_i64(item).map(|value| value != 0)
+        }
         _ => None,
     }
 }
 
 pub(crate) fn stack_item_as_i64(item: &StackValue) -> Option<i64> {
     match item {
-        StackValue::Integer(value) => Some(*value),
-        StackValue::BigInteger(bytes) => big_integer_to_i64(bytes),
+        StackValue::Integer(_) | StackValue::BigInteger(_) => item.to_i128()?.try_into().ok(),
         _ => None,
     }
 }
@@ -96,10 +96,7 @@ pub(crate) fn stack_item_as_u8(item: &StackValue) -> Option<u8> {
 }
 
 pub(crate) fn stack_item_as_bytes(item: &StackValue) -> Option<Vec<u8>> {
-    match item {
-        StackValue::ByteString(bytes) => Some(bytes.clone()),
-        _ => None,
-    }
+    byte_sequence_bytes(item).map(<[u8]>::to_vec)
 }
 
 pub(crate) fn stack_item_as_fixed_bytes<const N: usize>(item: &StackValue) -> Option<[u8; N]> {
@@ -116,28 +113,6 @@ pub(crate) fn stack_item_into_items(item: StackValue) -> Option<Vec<StackValue>>
         StackValue::Array(items) | StackValue::Struct(items) => Some(items),
         _ => None,
     }
-}
-
-fn big_integer_to_i64(bytes: &[u8]) -> Option<i64> {
-    if bytes.is_empty() {
-        return Some(0);
-    }
-
-    if bytes.len() <= 8 {
-        let negative = bytes.last().copied().unwrap_or_default() & 0x80 != 0;
-        let mut extended = [if negative { 0xff } else { 0x00 }; 8];
-        extended[..bytes.len()].copy_from_slice(bytes);
-        return Some(i64::from_le_bytes(extended));
-    }
-
-    if bytes.len() > 16 {
-        return None;
-    }
-
-    let negative = bytes.last().copied().unwrap_or_default() & 0x80 != 0;
-    let mut extended = [if negative { 0xff } else { 0x00 }; 16];
-    extended[..bytes.len()].copy_from_slice(bytes);
-    i128::from_le_bytes(extended).try_into().ok()
 }
 
 #[cfg(test)]
@@ -175,6 +150,26 @@ mod tests {
             stack_item_as_i64(&StackValue::BigInteger(vec![0xff, 0x00])),
             Some(255)
         );
+        assert_eq!(
+            stack_item_as_i64(&StackValue::BigInteger(vec![0; 16])),
+            Some(0)
+        );
+        assert_eq!(
+            stack_item_as_i64(&StackValue::BigInteger(vec![0xff; 16])),
+            Some(-1)
+        );
+        assert_eq!(
+            stack_item_as_i64(&StackValue::BigInteger(vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
+            ])),
+            Some(i64::MIN)
+        );
+        assert_eq!(
+            stack_item_as_i64(&StackValue::BigInteger(vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00,
+            ])),
+            None
+        );
         assert_eq!(stack_item_as_i64(&StackValue::Null), None);
 
         assert_eq!(stack_item_as_bool(&StackValue::Boolean(true)), Some(true));
@@ -183,6 +178,10 @@ mod tests {
 
         assert_eq!(
             stack_item_as_fixed_bytes::<4>(&StackValue::ByteString(vec![1, 2, 3, 4])),
+            Some([1, 2, 3, 4])
+        );
+        assert_eq!(
+            stack_item_as_fixed_bytes::<4>(&StackValue::Buffer(vec![1, 2, 3, 4])),
             Some([1, 2, 3, 4])
         );
         assert_eq!(

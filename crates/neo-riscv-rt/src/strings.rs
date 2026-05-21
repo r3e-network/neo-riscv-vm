@@ -1,6 +1,8 @@
 //! String and byte-array operations for the NeoVM `Context`.
 
-use crate::stack_value::StackValue;
+use crate::stack_value::{
+    byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, slice_byte_sequence, StackValue,
+};
 use crate::Context;
 
 impl Context {
@@ -8,26 +10,9 @@ impl Context {
     pub fn cat(&mut self) {
         let b = self.pop();
         let a = self.pop();
-        match (a, b) {
-            (StackValue::ByteString(mut a_bytes), StackValue::ByteString(b_bytes)) => {
-                a_bytes.extend_from_slice(&b_bytes);
-                self.push(StackValue::ByteString(a_bytes));
-            }
-            (StackValue::Buffer(mut a_buf), StackValue::Buffer(b_buf)) => {
-                a_buf.extend_from_slice(&b_buf);
-                self.push(StackValue::Buffer(a_buf));
-            }
-            (StackValue::ByteString(mut a_bytes), StackValue::Buffer(b_buf)) => {
-                a_bytes.extend_from_slice(&b_buf);
-                self.push(StackValue::ByteString(a_bytes));
-            }
-            (StackValue::Buffer(mut a_buf), StackValue::ByteString(b_bytes)) => {
-                a_buf.extend_from_slice(&b_bytes);
-                self.push(StackValue::Buffer(a_buf));
-            }
-            _ => {
-                self.fault("CAT: operands must be ByteString or Buffer");
-            }
+        match concat_byte_sequences(a, b) {
+            Some(value) => self.push(value),
+            None => self.fault("CAT: operands must be ByteString or Buffer"),
         }
     }
 
@@ -37,13 +22,9 @@ impl Context {
         let index = self.pop_integer();
         let val = self.pop();
 
-        let bytes = match &val {
-            StackValue::ByteString(b) => b,
-            StackValue::Buffer(b) => b,
-            _ => {
-                self.fault("SUBSTR: not a ByteString or Buffer");
-                return;
-            }
+        let Some(len) = byte_sequence_len(&val) else {
+            self.fault("SUBSTR: not a ByteString or Buffer");
+            return;
         };
 
         if index < 0 || count < 0 {
@@ -54,15 +35,18 @@ impl Context {
         #[allow(clippy::cast_sign_loss)]
         let (index, count) = (index as usize, count as usize);
 
-        if index + count > bytes.len() {
+        let Some(end) = index.checked_add(count) else {
+            self.fault("SUBSTR: range out of bounds");
+            return;
+        };
+        if end > len {
             self.fault("SUBSTR: range out of bounds");
             return;
         }
 
-        let sub = bytes[index..index + count].to_vec();
-        match val {
-            StackValue::Buffer(_) => self.push(StackValue::Buffer(sub)),
-            _ => self.push(StackValue::ByteString(sub)),
+        match slice_byte_sequence(val, index, count) {
+            Some(value) => self.push(value),
+            None => self.fault("SUBSTR: range out of bounds"),
         }
     }
 
@@ -71,13 +55,9 @@ impl Context {
         let count = self.pop_integer();
         let val = self.pop();
 
-        let bytes = match &val {
-            StackValue::ByteString(b) => b,
-            StackValue::Buffer(b) => b,
-            _ => {
-                self.fault("LEFT: not a ByteString or Buffer");
-                return;
-            }
+        let Some(len) = byte_sequence_len(&val) else {
+            self.fault("LEFT: not a ByteString or Buffer");
+            return;
         };
 
         if count < 0 {
@@ -87,15 +67,14 @@ impl Context {
 
         #[allow(clippy::cast_sign_loss)]
         let count = count as usize;
-        if count > bytes.len() {
+        if count > len {
             self.fault("LEFT: count exceeds length");
             return;
         }
 
-        let sub = bytes[..count].to_vec();
-        match val {
-            StackValue::Buffer(_) => self.push(StackValue::Buffer(sub)),
-            _ => self.push(StackValue::ByteString(sub)),
+        match slice_byte_sequence(val, 0, count) {
+            Some(value) => self.push(value),
+            None => self.fault("LEFT: count exceeds length"),
         }
     }
 
@@ -104,13 +83,9 @@ impl Context {
         let count = self.pop_integer();
         let val = self.pop();
 
-        let bytes = match &val {
-            StackValue::ByteString(b) => b,
-            StackValue::Buffer(b) => b,
-            _ => {
-                self.fault("RIGHT: not a ByteString or Buffer");
-                return;
-            }
+        let Some(len) = byte_sequence_len(&val) else {
+            self.fault("RIGHT: not a ByteString or Buffer");
+            return;
         };
 
         if count < 0 {
@@ -120,16 +95,14 @@ impl Context {
 
         #[allow(clippy::cast_sign_loss)]
         let count = count as usize;
-        if count > bytes.len() {
+        if count > len {
             self.fault("RIGHT: count exceeds length");
             return;
         }
 
-        let start = bytes.len() - count;
-        let sub = bytes[start..].to_vec();
-        match val {
-            StackValue::Buffer(_) => self.push(StackValue::Buffer(sub)),
-            _ => self.push(StackValue::ByteString(sub)),
+        match slice_byte_sequence(val, len - count, count) {
+            Some(value) => self.push(value),
+            None => self.fault("RIGHT: count exceeds length"),
         }
     }
 
@@ -143,12 +116,9 @@ impl Context {
         let src = self.pop();
         let di = self.pop_integer();
 
-        let src_bytes = match &src {
-            StackValue::ByteString(b) | StackValue::Buffer(b) => b,
-            _ => {
-                self.fault("MEMCPY: source is not a ByteString or Buffer");
-                return;
-            }
+        let Some(src_bytes) = byte_sequence_bytes(&src) else {
+            self.fault("MEMCPY: source is not a ByteString or Buffer");
+            return;
         };
 
         if count < 0 || si < 0 || di < 0 {
@@ -159,21 +129,29 @@ impl Context {
         #[allow(clippy::cast_sign_loss)]
         let (count, si, di) = (count as usize, si as usize, di as usize);
 
-        if si + count > src_bytes.len() {
+        let Some(src_end) = si.checked_add(count) else {
+            self.fault("MEMCPY: source range out of bounds");
+            return;
+        };
+        if src_end > src_bytes.len() {
             self.fault("MEMCPY: source range out of bounds");
             return;
         }
 
-        let src_slice = src_bytes[si..si + count].to_vec();
+        let src_slice = src_bytes[si..src_end].to_vec();
 
         let dst = self.stack.last_mut();
         match dst {
             Some(StackValue::Buffer(ref mut buf)) => {
-                if di + count > buf.len() {
+                let Some(dst_end) = di.checked_add(count) else {
+                    self.fault("MEMCPY: destination range out of bounds");
+                    return;
+                };
+                if dst_end > buf.len() {
                     self.fault("MEMCPY: destination range out of bounds");
                     return;
                 }
-                buf[di..di + count].copy_from_slice(&src_slice);
+                buf[di..dst_end].copy_from_slice(&src_slice);
             }
             _ => {
                 self.fault("MEMCPY: destination is not a Buffer");
@@ -201,6 +179,20 @@ mod tests {
     }
 
     #[test]
+    fn cat_preserves_left_byte_sequence_type() {
+        let mut c = ctx();
+        c.push(StackValue::Buffer(b"neo".to_vec()));
+        c.push(StackValue::ByteString(b"n4".to_vec()));
+        c.cat();
+        assert_eq!(c.pop(), StackValue::Buffer(b"neon4".to_vec()));
+
+        c.push(StackValue::ByteString(b"neo".to_vec()));
+        c.push(StackValue::Buffer(b"n4".to_vec()));
+        c.cat();
+        assert_eq!(c.pop(), StackValue::ByteString(b"neon4".to_vec()));
+    }
+
+    #[test]
     fn substr_op() {
         let mut c = ctx();
         c.push(StackValue::ByteString(b"hello world".to_vec()));
@@ -208,6 +200,16 @@ mod tests {
         c.push_int(5); // count
         c.substr();
         assert_eq!(c.pop(), StackValue::ByteString(b"world".to_vec()));
+    }
+
+    #[test]
+    fn substr_preserves_buffer_type() {
+        let mut c = ctx();
+        c.push(StackValue::Buffer(b"hello world".to_vec()));
+        c.push_int(6); // index
+        c.push_int(5); // count
+        c.substr();
+        assert_eq!(c.pop(), StackValue::Buffer(b"world".to_vec()));
     }
 
     #[test]
@@ -220,12 +222,30 @@ mod tests {
     }
 
     #[test]
+    fn left_preserves_buffer_type() {
+        let mut c = ctx();
+        c.push(StackValue::Buffer(b"hello".to_vec()));
+        c.push_int(3);
+        c.left();
+        assert_eq!(c.pop(), StackValue::Buffer(b"hel".to_vec()));
+    }
+
+    #[test]
     fn right_op() {
         let mut c = ctx();
         c.push(StackValue::ByteString(b"hello".to_vec()));
         c.push_int(3);
         c.right();
         assert_eq!(c.pop(), StackValue::ByteString(b"llo".to_vec()));
+    }
+
+    #[test]
+    fn right_preserves_buffer_type() {
+        let mut c = ctx();
+        c.push(StackValue::Buffer(b"hello".to_vec()));
+        c.push_int(3);
+        c.right();
+        assert_eq!(c.pop(), StackValue::Buffer(b"llo".to_vec()));
     }
 
     #[test]

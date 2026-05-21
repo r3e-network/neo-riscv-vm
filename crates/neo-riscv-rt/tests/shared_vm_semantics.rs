@@ -26,3 +26,16 @@ fn collections_use_shared_new_array_default_helper() {
     assert!(source.contains("new_array_default_value_for_type_tag"));
     assert!(!source.contains("fn default_for_type"));
 }
+
+#[test]
+fn strings_use_shared_byte_sequence_helpers() {
+    let source = fs::read_to_string(rt_src_path("strings.rs")).expect("strings source is readable");
+
+    assert!(source.contains("concat_byte_sequences"));
+    assert!(source.contains("slice_byte_sequence"));
+    assert!(source.contains("byte_sequence_len"));
+    assert!(source.contains("byte_sequence_bytes"));
+    assert!(!source.contains("StackValue::ByteString(mut"));
+    assert!(!source.contains("index + count"));
+    assert!(!source.contains("di + count"));
+}

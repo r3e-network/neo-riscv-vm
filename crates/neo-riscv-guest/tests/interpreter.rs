@@ -3036,38 +3036,12 @@ fn try_finally_executes_on_normal() {
 }
 
 #[test]
-fn throwifnot_does_not_throw_on_true() {
-    // PUSHT, THROWIFNOT, PUSH1, RET → should produce 1
-    let script: &[u8] = &[
-        0x08, // PUSHT
-        0xf1, // THROWIFNOT
-        0x11, // PUSH1
-        0x40, // RET
-    ];
-    let result = interpret(script).expect("THROWIFNOT on true should not fault");
-    assert_eq!(result.state, VmState::Halt);
-    assert_eq!(result.stack, vec![StackValue::Integer(1)]);
-}
-
-#[test]
-fn throwifnot_throws_on_false() {
-    // PUSHF, THROWIFNOT → should FAULT
-    let script: &[u8] = &[
-        0x09, // PUSHF
-        0xf1, // THROWIFNOT
-    ];
-    let result = interpret(script);
-    match result {
-        Err(e) => assert!(
-            e.contains("THROW") || e.contains("FAULT") || e.contains("fault"),
-            "error should mention THROW or FAULT: {e}"
-        ),
-        Ok(r) => assert_eq!(
-            r.state,
-            VmState::Fault,
-            "THROWIFNOT on false should cause FAULT"
-        ),
-    }
+fn reserved_throwifnot_byte_is_rejected() {
+    let error = interpret(&[0xf1]).expect_err("0xf1 is not a NeoVM 3.9.x opcode");
+    assert!(
+        error.contains("unsupported opcode 0xf1"),
+        "error should mention unsupported 0xf1: {error}"
+    );
 }
 
 #[test]
@@ -3411,21 +3385,15 @@ fn calla_calls_address() {
 }
 
 #[test]
-fn toaltstack_fromaltstack_round_trip() {
-    // PUSH5, TOALTSTACK, PUSH3, FROMALTSTACK -> stack [3, 5]
-    let script: &[u8] = &[
-        0x15, // PUSH5
-        0x06, // TOALTSTACK
-        0x13, // PUSH3
-        0x07, // FROMALTSTACK
-        0x40, // RET
-    ];
-    let result = interpret(script).expect("TOALTSTACK/FROMALTSTACK should round-trip values");
-    assert_eq!(result.state, VmState::Halt);
-    assert_eq!(
-        result.stack,
-        vec![StackValue::Integer(3), StackValue::Integer(5)]
-    );
+fn legacy_reserved_stack_opcode_bytes_are_rejected() {
+    for byte in [0x06, 0x07] {
+        let error =
+            interpret(&[byte]).expect_err("legacy stack opcodes are not NeoVM 3.9.x opcodes");
+        assert!(
+            error.contains(&format!("unsupported opcode 0x{byte:02x}")),
+            "error should mention unsupported byte {byte:#04x}: {error}"
+        );
+    }
 }
 
 #[test]

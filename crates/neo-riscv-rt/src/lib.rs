@@ -15,11 +15,8 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub mod arithmetic;
-pub mod collections;
-pub mod comparison;
-pub mod conversion;
 pub mod memory;
+mod opcode_adapters;
 pub mod stack_value;
 pub mod strings;
 

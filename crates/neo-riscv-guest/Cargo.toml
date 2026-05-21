@@ -6,10 +6,7 @@ license.workspace = true
 
 [dependencies]
 neo-riscv-abi = { path = "../neo-riscv-abi" }
-num-bigint.workspace = true
-num-traits.workspace = true
-polkavm-derive.workspace = true
-postcard.workspace = true
+neo-vm-rs.workspace = true
 
 [lib]
 path = "src/lib.rs"

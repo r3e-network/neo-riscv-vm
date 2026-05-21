@@ -587,10 +587,7 @@ name = "neo-riscv-guest"
 version = "0.1.0"
 dependencies = [
  "neo-riscv-abi",
- "num-bigint",
- "num-traits",
- "polkavm-derive",
- "postcard",
+ "neo-vm-rs",
 ]
 
 [[package]]
@@ -626,8 +623,10 @@ dependencies = [
 [[package]]
 name = "neo-vm-rs"
 version = "0.1.0"
-source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=9a93950#9a9395090fae9fff99249a5e3f2eaab11f5a42a0"
+source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=f61f764#f61f764a3e80e9f9925615e23f6c7fc6ee31ae37"
 dependencies = [
+ "num-bigint",
+ "num-traits",
  "serde",
  "sha2 0.11.0",
 ]

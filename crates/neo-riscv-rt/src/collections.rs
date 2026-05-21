@@ -2,7 +2,7 @@
 //!
 //! Implements array, struct, map, and buffer creation and manipulation.
 
-use crate::stack_value::{StackValue, TAG_ARRAY, TAG_BUFFER, TAG_BYTESTRING, TAG_MAP, TAG_STRUCT};
+use crate::stack_value::{new_array_default_value_for_type_tag, StackValue};
 use crate::Context;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -37,7 +37,7 @@ impl Context {
             return;
         }
         #[allow(clippy::cast_sign_loss)]
-        let default_val = default_for_type(type_byte);
+        let default_val = new_array_default_value_for_type_tag(type_byte);
         let arr = vec![default_val; count as usize];
         self.push(StackValue::Array(arr));
     }
@@ -439,18 +439,6 @@ impl Context {
     }
 }
 
-/// Returns the default `StackValue` for a NeoVM type tag.
-fn default_for_type(type_byte: u8) -> StackValue {
-    match type_byte {
-        TAG_ARRAY => StackValue::Null,
-        TAG_STRUCT => StackValue::Null,
-        TAG_MAP => StackValue::Null,
-        TAG_BUFFER => StackValue::Null,
-        TAG_BYTESTRING => StackValue::Null,
-        _ => StackValue::Null,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::stack_value::StackValue;
@@ -472,6 +460,34 @@ mod tests {
         assert_eq!(
             arr,
             StackValue::Array(vec![StackValue::Null, StackValue::Null, StackValue::Null])
+        );
+    }
+
+    #[test]
+    fn new_array_t_uses_neovm_default_values() {
+        let mut c = ctx();
+        c.push_int(2);
+        c.new_array_t(0x21);
+        assert_eq!(
+            c.pop(),
+            StackValue::Array(vec![StackValue::Integer(0), StackValue::Integer(0)])
+        );
+
+        c.push_int(2);
+        c.new_array_t(0x28);
+        assert_eq!(
+            c.pop(),
+            StackValue::Array(vec![
+                StackValue::ByteString(Vec::new()),
+                StackValue::ByteString(Vec::new()),
+            ])
+        );
+
+        c.push_int(2);
+        c.new_array_t(0x20);
+        assert_eq!(
+            c.pop(),
+            StackValue::Array(vec![StackValue::Null, StackValue::Null])
         );
     }
 

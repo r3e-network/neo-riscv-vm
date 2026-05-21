@@ -17,3 +17,12 @@ fn conversion_uses_shared_stack_item_type_helpers() {
     assert!(!source.contains("const NEO_TAG_"));
     assert!(!source.contains("fn normalize_type_tag"));
 }
+
+#[test]
+fn collections_use_shared_new_array_default_helper() {
+    let source =
+        fs::read_to_string(rt_src_path("collections.rs")).expect("collections source is readable");
+
+    assert!(source.contains("new_array_default_value_for_type_tag"));
+    assert!(!source.contains("fn default_for_type"));
+}

@@ -13,8 +13,9 @@ pub mod fast_codec;
 pub mod result_codec;
 
 pub use neo_vm_rs::{
-    encode_integer, interop_hash, syscall_arg_count, BackendKind, ExecutionResult, StackValue,
-    VmState, COMPACT_TAG_ARRAY as TAG_ARRAY, COMPACT_TAG_BIG_INTEGER as TAG_BIG_INTEGER,
+    default_value_for_type_tag, encode_integer, interop_hash, normalize_stack_item_type_tag,
+    syscall_arg_count, BackendKind, ExecutionResult, StackValue, VmState,
+    COMPACT_TAG_ARRAY as TAG_ARRAY, COMPACT_TAG_BIG_INTEGER as TAG_BIG_INTEGER,
     COMPACT_TAG_BOOLEAN as TAG_BOOLEAN, COMPACT_TAG_BUFFER as TAG_BUFFER,
     COMPACT_TAG_BYTESTRING as TAG_BYTESTRING, COMPACT_TAG_INTEGER as TAG_INTEGER,
     COMPACT_TAG_INTEROP as TAG_INTEROP, COMPACT_TAG_ITERATOR as TAG_ITERATOR,

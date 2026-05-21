@@ -6,6 +6,7 @@
 //! shared VM crate so generated code and the interpreter agree on classification.
 
 pub use neo_riscv_abi::{
-    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
-    TAG_INTEROP, TAG_ITERATOR, TAG_MAP, TAG_NULL, TAG_POINTER, TAG_STRUCT,
+    default_value_for_type_tag, normalize_stack_item_type_tag, StackValue, TAG_ARRAY,
+    TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER, TAG_INTEROP,
+    TAG_ITERATOR, TAG_MAP, TAG_NULL, TAG_POINTER, TAG_STRUCT,
 };

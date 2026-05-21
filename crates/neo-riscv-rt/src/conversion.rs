@@ -1,40 +1,17 @@
 //! Type conversion and introspection operations for the NeoVM `Context`.
 
 use crate::stack_value::{
-    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
-    TAG_MAP, TAG_NULL, TAG_STRUCT,
+    default_value_for_type_tag, normalize_stack_item_type_tag, StackValue, TAG_ARRAY, TAG_BOOLEAN,
+    TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER, TAG_STRUCT,
 };
 use crate::Context;
 use alloc::format;
-use alloc::vec::Vec;
-
-const NEO_TAG_BOOLEAN: u8 = 0x20;
-const NEO_TAG_INTEGER: u8 = 0x21;
-const NEO_TAG_BYTESTRING: u8 = 0x28;
-const NEO_TAG_BUFFER: u8 = 0x30;
-const NEO_TAG_ARRAY: u8 = 0x40;
-const NEO_TAG_STRUCT: u8 = 0x41;
-const NEO_TAG_MAP: u8 = 0x48;
-
-#[inline]
-fn normalize_type_tag(type_byte: u8) -> u8 {
-    match type_byte {
-        NEO_TAG_BOOLEAN => TAG_BOOLEAN,
-        NEO_TAG_INTEGER => TAG_INTEGER,
-        NEO_TAG_BYTESTRING => TAG_BYTESTRING,
-        NEO_TAG_BUFFER => TAG_BUFFER,
-        NEO_TAG_ARRAY => TAG_ARRAY,
-        NEO_TAG_STRUCT => TAG_STRUCT,
-        NEO_TAG_MAP => TAG_MAP,
-        other => other,
-    }
-}
 
 impl Context {
     /// Pops a value and pushes `true` if its type tag matches `type_byte`.
     pub fn is_type(&mut self, type_byte: u8) {
         let val = self.pop();
-        self.push_bool(val.compact_type_tag() == normalize_type_tag(type_byte));
+        self.push_bool(val.compact_type_tag() == normalize_stack_item_type_tag(type_byte));
     }
 
     /// Converts the top stack value to the NeoVM type indicated by `target_type`.
@@ -42,7 +19,7 @@ impl Context {
     /// This replaces the existing `convert` stub with a more complete implementation.
     pub fn convert_to(&mut self, target_type: u8) {
         let val = self.pop();
-        let target_type = normalize_type_tag(target_type);
+        let target_type = normalize_stack_item_type_tag(target_type);
         let converted = match target_type {
             TAG_INTEGER => self.convert_to_integer(&val),
             TAG_BOOLEAN => Some(StackValue::Boolean(val.to_bool())),
@@ -81,18 +58,7 @@ impl Context {
 
     /// Pushes the default value for the given NeoVM type tag.
     pub fn push_default(&mut self, type_byte: u8) {
-        let val = match normalize_type_tag(type_byte) {
-            TAG_BOOLEAN => StackValue::Boolean(false),
-            TAG_INTEGER | TAG_BIG_INTEGER => StackValue::Integer(0),
-            TAG_BYTESTRING => StackValue::ByteString(Vec::new()),
-            TAG_BUFFER => StackValue::Buffer(Vec::new()),
-            TAG_ARRAY => StackValue::Array(Vec::new()),
-            TAG_STRUCT => StackValue::Struct(Vec::new()),
-            TAG_MAP => StackValue::Map(Vec::new()),
-            TAG_NULL => StackValue::Null,
-            _ => StackValue::Null,
-        };
-        self.push(val);
+        self.push(default_value_for_type_tag(type_byte));
     }
 
     // ---------------------------------------------------------------

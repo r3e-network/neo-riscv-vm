@@ -1,7 +1,7 @@
 //! Comparison and logic operations for the NeoVM `Context`.
 
-use crate::stack_value::StackValue;
 use crate::Context;
+use neo_riscv_abi::semantics::comparison as vm_comparison;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -12,49 +12,49 @@ impl Context {
     pub fn not_equal(&mut self) {
         let b = self.pop();
         let a = self.pop();
-        self.push_bool(a != b);
+        self.push_bool(vm_comparison::not_equal_values(&a, &b));
     }
 
     /// Pops two integers and pushes `true` if a < b.
     pub fn less_than(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a < b);
+        self.push_bool(vm_comparison::less_than_i64(a, b));
     }
 
     /// Pops two integers and pushes `true` if a <= b.
     pub fn less_or_equal(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a <= b);
+        self.push_bool(vm_comparison::less_or_equal_i64(a, b));
     }
 
     /// Pops two integers and pushes `true` if a > b.
     pub fn greater_than(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a > b);
+        self.push_bool(vm_comparison::greater_than_i64(a, b));
     }
 
     /// Pops two integers and pushes `true` if a >= b.
     pub fn greater_or_equal(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a >= b);
+        self.push_bool(vm_comparison::greater_or_equal_i64(a, b));
     }
 
     /// Pops two integers and pushes `true` if they are equal (numeric comparison).
     pub fn num_equal(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a == b);
+        self.push_bool(vm_comparison::num_equal_i64(a, b));
     }
 
     /// Pops two integers and pushes `true` if they are not equal (numeric comparison).
     pub fn num_not_equal(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_bool(a != b);
+        self.push_bool(vm_comparison::num_not_equal_i64(a, b));
     }
 
     // ---------------------------------------------------------------
@@ -65,32 +65,32 @@ impl Context {
     pub fn bool_and(&mut self) {
         let b = self.pop_bool_value();
         let a = self.pop_bool_value();
-        self.push_bool(a && b);
+        self.push_bool(vm_comparison::bool_and(a, b));
     }
 
     /// Pops two booleans and pushes their logical OR.
     pub fn bool_or(&mut self) {
         let b = self.pop_bool_value();
         let a = self.pop_bool_value();
-        self.push_bool(a || b);
+        self.push_bool(vm_comparison::bool_or(a, b));
     }
 
     /// Pops a boolean and pushes its logical NOT.
     pub fn not(&mut self) {
         let a = self.pop_bool_value();
-        self.push_bool(!a);
+        self.push_bool(vm_comparison::bool_not(a));
     }
 
     /// Pops a value and pushes `true` if it is non-zero / truthy.
     pub fn nz(&mut self) {
-        let v = self.pop_bool_value();
-        self.push_bool(v);
+        let value = self.pop();
+        self.push_bool(vm_comparison::nz(&value));
     }
 
     /// Pops a value and pushes `true` if it is Null.
     pub fn is_null(&mut self) {
         let v = self.pop();
-        self.push_bool(v == StackValue::Null);
+        self.push_bool(vm_comparison::is_null(&v));
     }
 
     // ---------------------------------------------------------------
@@ -106,42 +106,42 @@ impl Context {
     pub fn pop_cmp_eq(&mut self) -> bool {
         let b = self.pop();
         let a = self.pop();
-        a == b
+        vm_comparison::equal_values(&a, &b)
     }
 
     /// Pops two values and returns `true` if they are not equal.
     pub fn pop_cmp_ne(&mut self) -> bool {
         let b = self.pop();
         let a = self.pop();
-        a != b
+        vm_comparison::not_equal_values(&a, &b)
     }
 
     /// Pops two integers and returns `true` if a > b.
     pub fn pop_cmp_gt(&mut self) -> bool {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        a > b
+        vm_comparison::greater_than_i64(a, b)
     }
 
     /// Pops two integers and returns `true` if a >= b.
     pub fn pop_cmp_ge(&mut self) -> bool {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        a >= b
+        vm_comparison::greater_or_equal_i64(a, b)
     }
 
     /// Pops two integers and returns `true` if a < b.
     pub fn pop_cmp_lt(&mut self) -> bool {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        a < b
+        vm_comparison::less_than_i64(a, b)
     }
 
     /// Pops two integers and returns `true` if a <= b.
     pub fn pop_cmp_le(&mut self) -> bool {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        a <= b
+        vm_comparison::less_or_equal_i64(a, b)
     }
 
     // ---------------------------------------------------------------

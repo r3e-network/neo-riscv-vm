@@ -30,7 +30,10 @@ mod mem_intrinsics;
 
 pub use stack_value::StackValue;
 
-use neo_riscv_abi::{ExecutionResult, VmState};
+use neo_riscv_abi::{
+    semantics::{arithmetic as vm_arithmetic, comparison as vm_comparison},
+    ExecutionResult, VmState,
+};
 
 /// A try/catch/finally exception frame for the compiled state machine.
 #[derive(Debug, Clone)]
@@ -443,28 +446,28 @@ impl Context {
     pub fn add(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a.wrapping_add(b));
+        self.push_int(vm_arithmetic::add_i64(a, b));
     }
 
     /// Pops two integers and pushes their difference (a - b).
     pub fn sub(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a.wrapping_sub(b));
+        self.push_int(vm_arithmetic::sub_i64(a, b));
     }
 
     /// Pops two integers and pushes their product.
     pub fn mul(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a.wrapping_mul(b));
+        self.push_int(vm_arithmetic::mul_i64(a, b));
     }
 
     /// Pops two values and pushes whether they are equal.
     pub fn equal(&mut self) {
         let b = self.pop();
         let a = self.pop();
-        self.push_bool(a == b);
+        self.push_bool(vm_comparison::equal_values(&a, &b));
     }
 
     // ---------------------------------------------------------------

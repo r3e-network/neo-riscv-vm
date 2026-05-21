@@ -1,6 +1,7 @@
 //! Arithmetic and bitwise operations for the NeoVM `Context`.
 
 use crate::Context;
+use neo_riscv_abi::semantics::arithmetic as vm_arithmetic;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -11,83 +12,59 @@ impl Context {
     pub fn div(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        if b == 0 {
-            self.fault("DIV: division by zero");
-            return;
-        }
-        self.push_int(a.wrapping_div(b));
+        self.push_arithmetic_result(vm_arithmetic::div_i64(a, b));
     }
 
     /// Pops two integers and pushes a % b.
     pub fn modulo(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        if b == 0 {
-            self.fault("MOD: division by zero");
-            return;
-        }
-        self.push_int(a.wrapping_rem(b));
+        self.push_arithmetic_result(vm_arithmetic::modulo_i64(a, b));
     }
 
     /// Pops one integer and pushes its negation.
     pub fn negate(&mut self) {
         let a = self.pop_integer();
-        self.push_int(a.wrapping_neg());
+        self.push_int(vm_arithmetic::negate_i64(a));
     }
 
     /// Pops one integer and pushes its absolute value.
     pub fn abs_val(&mut self) {
         let a = self.pop_integer();
-        self.push_int(a.wrapping_abs());
+        self.push_int(vm_arithmetic::abs_i64(a));
     }
 
     /// Pops one integer and pushes its sign (-1, 0, or 1).
     pub fn sign(&mut self) {
         let a = self.pop_integer();
-        self.push_int(a.signum());
+        self.push_int(vm_arithmetic::sign_i64(a));
     }
 
     /// Pops two integers and pushes the larger one.
     pub fn max(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a.max(b));
+        self.push_int(vm_arithmetic::max_i64(a, b));
     }
 
     /// Pops two integers and pushes the smaller one.
     pub fn min(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a.min(b));
+        self.push_int(vm_arithmetic::min_i64(a, b));
     }
 
     /// Pops exponent then base and pushes base^exponent.
     pub fn pow(&mut self) {
         let exp = self.pop_integer();
         let base = self.pop_integer();
-        if exp < 0 {
-            self.fault("POW: negative exponent");
-            return;
-        }
-        // Clamp exponent to avoid unreasonably large computations.
-        if exp > 63 {
-            self.fault("POW: exponent too large for i64 fast path");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let result = base.wrapping_pow(exp as u32);
-        self.push_int(result);
+        self.push_arithmetic_result(vm_arithmetic::pow_i64(base, exp));
     }
 
     /// Pops one integer and pushes its integer square root.
     pub fn sqrt(&mut self) {
         let a = self.pop_integer();
-        if a < 0 {
-            self.fault("SQRT: negative value");
-            return;
-        }
-        let r = isqrt(a as u64) as i64;
-        self.push_int(r);
+        self.push_arithmetic_result(vm_arithmetic::sqrt_i64(a));
     }
 
     /// Pops modulus, then b, then a, and pushes (a * b) % modulus.
@@ -95,15 +72,7 @@ impl Context {
         let modulus = self.pop_integer();
         let b = self.pop_integer();
         let a = self.pop_integer();
-        if modulus == 0 {
-            self.fault("MODMUL: division by zero");
-            return;
-        }
-        // Use i128 to avoid overflow in the intermediate product.
-        let result = ((a as i128) * (b as i128)) % (modulus as i128);
-        #[allow(clippy::cast_possible_truncation)]
-        let result = result as i64;
-        self.push_int(result);
+        self.push_arithmetic_result(vm_arithmetic::modmul_i64(a, b, modulus));
     }
 
     /// Pops modulus, then exponent, then base, and pushes base^exponent % modulus.
@@ -111,16 +80,7 @@ impl Context {
         let modulus = self.pop_integer();
         let exp = self.pop_integer();
         let base = self.pop_integer();
-        if modulus == 0 {
-            self.fault("MODPOW: division by zero");
-            return;
-        }
-        if exp < 0 {
-            self.fault("MODPOW: negative exponent");
-            return;
-        }
-        let result = mod_pow_i64(base, exp, modulus);
-        self.push_int(result);
+        self.push_arithmetic_result(vm_arithmetic::modpow_i64(base, exp, modulus));
     }
 
     // ---------------------------------------------------------------
@@ -131,24 +91,14 @@ impl Context {
     pub fn shl(&mut self) {
         let shift = self.pop_integer();
         let value = self.pop_integer();
-        if !(0..64).contains(&shift) {
-            self.fault("SHL: shift amount out of range");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        self.push_int(value.wrapping_shl(shift as u32));
+        self.push_arithmetic_result(vm_arithmetic::shl_i64(value, shift));
     }
 
     /// Pops shift amount then value and pushes value >> shift (arithmetic).
     pub fn shr(&mut self) {
         let shift = self.pop_integer();
         let value = self.pop_integer();
-        if !(0..64).contains(&shift) {
-            self.fault("SHR: shift amount out of range");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        self.push_int(value.wrapping_shr(shift as u32));
+        self.push_arithmetic_result(vm_arithmetic::shr_i64(value, shift));
     }
 
     // ---------------------------------------------------------------
@@ -159,27 +109,27 @@ impl Context {
     pub fn bitwise_and(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a & b);
+        self.push_int(vm_arithmetic::bitwise_and_i64(a, b));
     }
 
     /// Pops two integers and pushes their bitwise OR.
     pub fn bitwise_or(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a | b);
+        self.push_int(vm_arithmetic::bitwise_or_i64(a, b));
     }
 
     /// Pops two integers and pushes their bitwise XOR.
     pub fn bitwise_xor(&mut self) {
         let b = self.pop_integer();
         let a = self.pop_integer();
-        self.push_int(a ^ b);
+        self.push_int(vm_arithmetic::bitwise_xor_i64(a, b));
     }
 
     /// Pops one integer and pushes its bitwise NOT.
     pub fn bitwise_not(&mut self) {
         let a = self.pop_integer();
-        self.push_int(!a);
+        self.push_int(vm_arithmetic::bitwise_not_i64(a));
     }
 
     // ---------------------------------------------------------------
@@ -204,13 +154,13 @@ impl Context {
     /// Pops one integer and pushes value + 1 (NeoVM INC)
     pub fn inc(&mut self) {
         let a = self.pop_integer();
-        self.push_int(a.wrapping_add(1));
+        self.push_int(vm_arithmetic::inc_i64(a));
     }
 
     /// Pops one integer and pushes value - 1 (NeoVM DEC)
     pub fn dec(&mut self) {
         let a = self.pop_integer();
-        self.push_int(a.wrapping_sub(1));
+        self.push_int(vm_arithmetic::dec_i64(a));
     }
 
     /// Pops b, a, x and pushes (a <= x < b) (NeoVM WITHIN)
@@ -218,41 +168,15 @@ impl Context {
         let b = self.pop_integer();
         let a = self.pop_integer();
         let x = self.pop_integer();
-        self.push_bool(x >= a && x < b);
+        self.push_bool(vm_arithmetic::within_i64(x, a, b));
     }
-}
 
-/// Modular exponentiation: base^exp % modulus, using i128 to avoid overflow.
-fn mod_pow_i64(mut base: i64, mut exp: i64, modulus: i64) -> i64 {
-    if modulus == 1 || modulus == -1 {
-        return 0;
-    }
-    let m = modulus as i128;
-    let mut result: i128 = 1;
-    base = ((base as i128) % m) as i64;
-    let mut b = base as i128;
-    while exp > 0 {
-        if exp & 1 == 1 {
-            result = (result * b) % m;
+    fn push_arithmetic_result(&mut self, result: Result<i64, &'static str>) {
+        match result {
+            Ok(value) => self.push_int(value),
+            Err(message) => self.fault(message),
         }
-        exp >>= 1;
-        b = (b * b) % m;
     }
-    result as i64
-}
-
-/// Integer square root using Newton's method (no floating point).
-fn isqrt(n: u64) -> u64 {
-    if n == 0 {
-        return 0;
-    }
-    let mut x = n;
-    let mut y = x.div_ceil(2);
-    while y < x {
-        x = y;
-        y = (x + n / x) / 2;
-    }
-    x
 }
 
 #[cfg(test)]

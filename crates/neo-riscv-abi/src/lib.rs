@@ -12,6 +12,7 @@ pub mod callback_codec;
 pub mod fast_codec;
 pub mod result_codec;
 
+pub use neo_vm_rs::semantics;
 pub use neo_vm_rs::{
     byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, default_value_for_type_tag,
     encode_integer, interop_hash, new_array_default_value_for_type_tag,

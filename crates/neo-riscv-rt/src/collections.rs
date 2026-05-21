@@ -2,10 +2,10 @@
 //!
 //! Implements array, struct, map, and buffer creation and manipulation.
 
-use crate::stack_value::{new_array_default_value_for_type_tag, StackValue};
+use crate::stack_value::StackValue;
 use crate::Context;
-use alloc::vec;
 use alloc::vec::Vec;
+use neo_riscv_abi::semantics::collections as vm_collections;
 
 impl Context {
     // ---------------------------------------------------------------
@@ -20,26 +20,13 @@ impl Context {
     /// Pops a count and pushes an array of that many `Null` values.
     pub fn new_array(&mut self) {
         let count = self.pop_integer();
-        if count < 0 {
-            self.fault("NEWARRAY: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let arr = vec![StackValue::Null; count as usize];
-        self.push(StackValue::Array(arr));
+        self.push_collection_result(vm_collections::new_array(count));
     }
 
     /// Pops a count and pushes a typed array (for now, all items are default for type).
     pub fn new_array_t(&mut self, type_byte: u8) {
         let count = self.pop_integer();
-        if count < 0 {
-            self.fault("NEWARRAY_T: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let default_val = new_array_default_value_for_type_tag(type_byte);
-        let arr = vec![default_val; count as usize];
-        self.push(StackValue::Array(arr));
+        self.push_collection_result(vm_collections::new_array_t(count, type_byte));
     }
 
     /// Pushes an empty struct onto the stack.
@@ -50,13 +37,7 @@ impl Context {
     /// Pops a count and pushes a struct of that many `Null` values.
     pub fn new_struct(&mut self) {
         let count = self.pop_integer();
-        if count < 0 {
-            self.fault("NEWSTRUCT: negative count");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        let s = vec![StackValue::Null; count as usize];
-        self.push(StackValue::Struct(s));
+        self.push_collection_result(vm_collections::new_struct(count));
     }
 
     /// Pushes an empty map onto the stack.
@@ -67,12 +48,7 @@ impl Context {
     /// Pops a size and pushes a zero-filled buffer of that size.
     pub fn new_buffer(&mut self) {
         let size = self.pop_integer();
-        if size < 0 {
-            self.fault("NEWBUFFER: negative size");
-            return;
-        }
-        #[allow(clippy::cast_sign_loss)]
-        self.push(StackValue::Buffer(vec![0u8; size as usize]));
+        self.push_collection_result(vm_collections::new_buffer(size));
     }
 
     // ---------------------------------------------------------------
@@ -82,17 +58,12 @@ impl Context {
     /// Pops a value then an array/struct/map and appends the value.
     pub fn append(&mut self) {
         let value = self.pop();
-        let collection = self.stack.last_mut();
-        match collection {
-            Some(StackValue::Array(ref mut items)) => {
-                items.push(value);
-            }
-            Some(StackValue::Struct(ref mut items)) => {
-                items.push(value);
-            }
-            _ => {
-                self.fault("APPEND: top-1 is not an array or struct");
-            }
+        let result = match self.stack.last_mut() {
+            Some(collection) => vm_collections::append(collection, value),
+            None => Err("APPEND: top-1 is not an array or struct".into()),
+        };
+        if let Err(message) = result {
+            self.fault(&message);
         }
     }
 
@@ -100,50 +71,12 @@ impl Context {
     pub fn set_item(&mut self) {
         let value = self.pop();
         let key = self.pop();
-        let collection = self.stack.last_mut();
-        match collection {
-            Some(StackValue::Array(ref mut items)) | Some(StackValue::Struct(ref mut items)) => {
-                if let StackValue::Integer(idx) = key {
-                    #[allow(clippy::cast_sign_loss)]
-                    let idx = idx as usize;
-                    if idx >= items.len() {
-                        self.fault("SETITEM: index out of range");
-                        return;
-                    }
-                    items[idx] = value;
-                } else {
-                    self.fault("SETITEM: non-integer index for array/struct");
-                }
-            }
-            Some(StackValue::Map(ref mut pairs)) => {
-                // Update existing or insert new.
-                for pair in pairs.iter_mut() {
-                    if pair.0 == key {
-                        pair.1 = value;
-                        return;
-                    }
-                }
-                pairs.push((key, value));
-            }
-            Some(StackValue::Buffer(ref mut buf)) => {
-                if let (StackValue::Integer(idx), StackValue::Integer(val)) = (&key, &value) {
-                    #[allow(clippy::cast_sign_loss)]
-                    let idx = *idx as usize;
-                    if idx >= buf.len() {
-                        self.fault("SETITEM: buffer index out of range");
-                        return;
-                    }
-                    #[allow(clippy::cast_sign_loss)]
-                    {
-                        buf[idx] = *val as u8;
-                    }
-                } else {
-                    self.fault("SETITEM: buffer requires integer key and value");
-                }
-            }
-            _ => {
-                self.fault("SETITEM: not a collection");
-            }
+        let result = match self.stack.last_mut() {
+            Some(collection) => vm_collections::set_item(collection, key, value),
+            None => Err("SETITEM: not a collection".into()),
+        };
+        if let Err(message) = result {
+            self.fault(&message);
         }
     }
 
@@ -151,95 +84,30 @@ impl Context {
     pub fn pick_item(&mut self) {
         let key = self.pop();
         let collection = self.pop();
-        match (&collection, &key) {
-            (StackValue::Array(items) | StackValue::Struct(items), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                if idx >= items.len() {
-                    self.fault("PICKITEM: index out of range");
-                    return;
-                }
-                self.push(items[idx].clone());
-            }
-            (StackValue::Map(pairs), _) => {
-                for (k, v) in pairs {
-                    if *k == key {
-                        self.push(v.clone());
-                        return;
-                    }
-                }
-                self.fault("PICKITEM: key not found in map");
-            }
-            (StackValue::ByteString(bytes), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                if idx >= bytes.len() {
-                    self.fault("PICKITEM: byte index out of range");
-                    return;
-                }
-                self.push_int(i64::from(bytes[idx]));
-            }
-            (StackValue::Buffer(buf), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                if idx >= buf.len() {
-                    self.fault("PICKITEM: buffer index out of range");
-                    return;
-                }
-                self.push_int(i64::from(buf[idx]));
-            }
-            _ => {
-                self.fault("PICKITEM: unsupported types");
-            }
+        match vm_collections::pick_item(&collection, &key) {
+            Ok(value) => self.push(value),
+            Err(message) => self.fault(&message),
         }
     }
 
     /// Pops key then collection and removes the entry.
     pub fn remove(&mut self) {
         let key = self.pop();
-        let collection = self.stack.last_mut();
-        match collection {
-            Some(StackValue::Array(ref mut items)) | Some(StackValue::Struct(ref mut items)) => {
-                if let StackValue::Integer(idx) = key {
-                    #[allow(clippy::cast_sign_loss)]
-                    let idx = idx as usize;
-                    if idx >= items.len() {
-                        self.fault("REMOVE: index out of range");
-                        return;
-                    }
-                    items.remove(idx);
-                } else {
-                    self.fault("REMOVE: non-integer index for array/struct");
-                }
-            }
-            Some(StackValue::Map(ref mut pairs)) => {
-                pairs.retain(|(k, _)| *k != key);
-            }
-            _ => {
-                self.fault("REMOVE: not a collection");
-            }
+        let result = match self.stack.last_mut() {
+            Some(collection) => vm_collections::remove(collection, &key),
+            None => Err("REMOVE: not a collection".into()),
+        };
+        if let Err(message) = result {
+            self.fault(&message);
         }
     }
 
     /// Pops a collection/string/buffer and pushes its size.
     pub fn size(&mut self) {
         let val = self.pop();
-        match &val {
-            StackValue::Array(items) | StackValue::Struct(items) => {
-                self.push_int(items.len() as i64);
-            }
-            StackValue::Map(pairs) => {
-                self.push_int(pairs.len() as i64);
-            }
-            StackValue::ByteString(bytes) => {
-                self.push_int(bytes.len() as i64);
-            }
-            StackValue::Buffer(buf) => {
-                self.push_int(buf.len() as i64);
-            }
-            _ => {
-                self.fault("SIZE: unsupported type");
-            }
+        match vm_collections::size(&val) {
+            Ok(size) => self.push_int(size),
+            Err(message) => self.fault(&message),
         }
     }
 
@@ -247,61 +115,27 @@ impl Context {
     pub fn has_key(&mut self) {
         let key = self.pop();
         let collection = self.pop();
-        match (&collection, &key) {
-            (StackValue::Array(items) | StackValue::Struct(items), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                self.push_bool(idx < items.len());
-            }
-            (StackValue::Map(pairs), _) => {
-                let found = pairs.iter().any(|(k, _)| *k == key);
-                self.push_bool(found);
-            }
-            (StackValue::ByteString(bytes), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                self.push_bool(idx < bytes.len());
-            }
-            (StackValue::Buffer(buf), StackValue::Integer(idx)) => {
-                #[allow(clippy::cast_sign_loss)]
-                let idx = *idx as usize;
-                self.push_bool(idx < buf.len());
-            }
-            _ => {
-                self.fault("HASKEY: unsupported types");
-            }
+        match vm_collections::has_key(&collection, &key) {
+            Ok(found) => self.push_bool(found),
+            Err(message) => self.fault(&message),
         }
     }
 
     /// Pops a map and pushes an array of its keys.
     pub fn keys(&mut self) {
         let val = self.pop();
-        match val {
-            StackValue::Map(pairs) => {
-                let key_arr: Vec<StackValue> = pairs.into_iter().map(|(k, _)| k).collect();
-                self.push(StackValue::Array(key_arr));
-            }
-            _ => {
-                self.fault("KEYS: not a map");
-            }
+        match vm_collections::keys(val) {
+            Ok(value) => self.push(value),
+            Err(message) => self.fault(&message),
         }
     }
 
     /// Pops a map and pushes an array of its values.
     pub fn values(&mut self) {
         let val = self.pop();
-        match val {
-            StackValue::Map(pairs) => {
-                let val_arr: Vec<StackValue> = pairs.into_iter().map(|(_, v)| v).collect();
-                self.push(StackValue::Array(val_arr));
-            }
-            StackValue::Array(items) | StackValue::Struct(items) => {
-                // NeoVM VALUES on array returns the array as-is (as a new array).
-                self.push(StackValue::Array(items));
-            }
-            _ => {
-                self.fault("VALUES: not a map or array");
-            }
+        match vm_collections::values(val) {
+            Ok(value) => self.push(value),
+            Err(message) => self.fault(&message),
         }
     }
 
@@ -319,80 +153,53 @@ impl Context {
             items.push(self.pop());
         }
         items.reverse();
-        self.push(StackValue::Array(items));
+        self.push(vm_collections::pack(items));
     }
 
     /// Pops an array and pushes all its items then the count.
     pub fn unpack(&mut self) {
         let val = self.pop();
-        match val {
-            StackValue::Array(items) | StackValue::Struct(items) => {
-                let count = items.len() as i64;
-                for item in items {
-                    self.push(item);
+        match vm_collections::unpack(val) {
+            Ok(values) => {
+                for value in values {
+                    self.push(value);
                 }
-                self.push_int(count);
             }
-            _ => {
-                self.fault("UNPACK: not an array or struct");
-            }
+            Err(message) => self.fault(&message),
         }
     }
 
     /// Pops a collection and pushes it with items in reverse order.
     pub fn reverse_items(&mut self) {
-        let collection = self.stack.last_mut();
-        match collection {
-            Some(StackValue::Array(ref mut items)) | Some(StackValue::Struct(ref mut items)) => {
-                items.reverse();
-            }
-            _ => {
-                self.fault("REVERSEITEMS: not an array or struct");
-            }
+        let result = match self.stack.last_mut() {
+            Some(collection) => vm_collections::reverse_items(collection),
+            None => Err("REVERSEITEMS: not an array or struct".into()),
+        };
+        if let Err(message) = result {
+            self.fault(&message);
         }
     }
 
     /// Removes all items from the collection at the top of the stack.
     pub fn clear_items(&mut self) {
-        let collection = self.stack.last_mut();
-        match collection {
-            Some(StackValue::Array(ref mut items)) | Some(StackValue::Struct(ref mut items)) => {
-                items.clear();
-            }
-            Some(StackValue::Map(ref mut pairs)) => {
-                pairs.clear();
-            }
-            _ => {
-                self.fault("CLEARITEMS: not a collection");
-            }
+        let result = match self.stack.last_mut() {
+            Some(collection) => vm_collections::clear_items(collection),
+            None => Err("CLEARITEMS: not a collection".into()),
+        };
+        if let Err(message) = result {
+            self.fault(&message);
         }
     }
 
     /// Pops the last item from the array at the top of the stack and pushes it.
     pub fn pop_item(&mut self) {
-        match self.pop() {
-            StackValue::Array(mut items) => match items.pop() {
-                Some(value) => self.push(value),
-                None => self.fault("POPITEM: array is empty"),
-            },
-            StackValue::Struct(mut items) => match items.pop() {
-                Some(value) => self.push(value),
-                None => self.fault("POPITEM: struct is empty"),
-            },
-            StackValue::Map(mut pairs) => match pairs.pop() {
-                Some((key, value)) => {
-                    self.push(key);
+        match vm_collections::pop_item(self.pop()) {
+            Ok(values) => {
+                for value in values {
                     self.push(value);
                 }
-                None => self.fault("POPITEM: map is empty"),
-            },
-            StackValue::Buffer(mut bytes) => match bytes.pop() {
-                Some(value) => self.push_int(i64::from(value)),
-                None => self.fault("POPITEM: buffer is empty"),
-            },
-            _ => {
-                self.fault("POPITEM: not a collection");
             }
+            Err(message) => self.fault(&message),
         }
     }
 
@@ -413,6 +220,10 @@ impl Context {
     /// Pops count, then that many key-value pairs, and pushes a Map (NeoVM PACKSTRUCT)
     pub fn pack_struct(&mut self) {
         let count = self.pop_integer();
+        if count < 0 {
+            self.fault("PACKSTRUCT: negative count");
+            return;
+        }
         #[allow(clippy::cast_sign_loss)]
         let n = count as usize;
         let mut items = Vec::with_capacity(n);
@@ -420,12 +231,16 @@ impl Context {
             items.push(self.pop());
         }
         items.reverse();
-        self.push(StackValue::Struct(items));
+        self.push(vm_collections::pack_struct(items));
     }
 
     /// Pops count, then that many key-value pairs, and pushes a Map (NeoVM PACKMAP)
     pub fn pack_map(&mut self) {
         let count = self.pop_integer();
+        if count < 0 {
+            self.fault("PACKMAP: negative count");
+            return;
+        }
         #[allow(clippy::cast_sign_loss)]
         let n = count as usize;
         let mut pairs = Vec::with_capacity(n);
@@ -435,7 +250,14 @@ impl Context {
             pairs.push((key, value));
         }
         pairs.reverse();
-        self.push(StackValue::Map(pairs));
+        self.push(vm_collections::pack_map(pairs));
+    }
+
+    fn push_collection_result(&mut self, result: Result<StackValue, String>) {
+        match result {
+            Ok(value) => self.push(value),
+            Err(message) => self.fault(&message),
+        }
     }
 }
 

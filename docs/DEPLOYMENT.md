@@ -501,7 +501,7 @@ file target/debug/libneo_riscv_host.so
 # Use release build
 cargo build -p neo-riscv-host --release
 
-# Enable optimizations (see OPTIMIZATION_PLAN.md)
+# Enable release-mode optimizations
 ```
 
 ---

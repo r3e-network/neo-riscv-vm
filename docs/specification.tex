@@ -79,7 +79,7 @@ where $\equiv$ denotes identical \texttt{(VmState, Vec<StackValue>)} output.
   % Arrows
   \draw[arr] (csharp) -- node[right, font=\footnotesize] {syscalls} (bridge);
   \draw[arr, <->] (bridge) -- node[right, font=\footnotesize] {C ABI (FFI)} (host);
-  \draw[arr, <->] (host) -- node[right, font=\footnotesize] {postcard serde} (guest);
+  \draw[arr, <->] (host) -- node[right, font=\footnotesize] {shared fast codec} (guest);
   \draw[arr, dashed] (abi) -- (guest);
   \draw[arr, dashed] (abi) -- (host);
 

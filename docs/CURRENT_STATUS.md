@@ -65,7 +65,8 @@ Fresh committed-state verification passed with:
   - core matrix: `1,169` tests passed (89 + 92 + 988)
   - node matrix: `477` tests passed
   - `neo-cli` smoke passed
-- `dotnet test neo-devpack-dotnet.sln --configuration Release --no-build -m:1`
+- external devpack compatibility test, run from the maintained devpack repository:
+  `dotnet test neo-devpack-dotnet.sln --configuration Release --no-build -m:1`
   - `Neo.Compiler.CSharp.UnitTests`: `1107/1107`
   - `Neo.SmartContract.Framework.UnitTests`: `239/239`
   - `Neo.SmartContract.Testing.UnitTests`: `49/49`

@@ -28,9 +28,9 @@ pub mod strings;
 #[cfg(not(feature = "std"))]
 mod mem_intrinsics;
 
-pub use stack_value::StackValue;
+pub use stack_value::{RuntimeStackValueExt, StackValue};
 
-use neo_riscv_abi::{ExecutionResult, StackValue as AbiStackValue, VmState};
+use neo_riscv_abi::{ExecutionResult, VmState};
 
 /// A try/catch/finally exception frame for the compiled state machine.
 #[derive(Debug, Clone)]
@@ -129,8 +129,7 @@ impl Context {
     /// Creates a new context from ABI stack values (the initial evaluation stack
     /// provided by the host).
     #[must_use]
-    pub fn from_abi_stack(abi_stack: Vec<AbiStackValue>) -> Self {
-        let stack = abi_stack.iter().map(StackValue::from_abi).collect();
+    pub fn from_abi_stack(stack: Vec<StackValue>) -> Self {
         Self {
             stack,
             locals: Vec::new(),
@@ -181,11 +180,10 @@ impl Context {
     /// Converts the context into an `ExecutionResult` for return to the host.
     #[must_use]
     pub fn to_execution_result(self, fee_consumed_pico: i64) -> ExecutionResult {
-        let stack = self.stack.iter().map(StackValue::to_abi).collect();
         ExecutionResult {
             fee_consumed_pico,
             state: self.state,
-            stack,
+            stack: self.stack,
             fault_message: self.fault_message,
             fault_ip: None,
             fault_locals: None,
@@ -722,16 +720,16 @@ mod tests {
     #[test]
     fn from_abi_stack_roundtrip() {
         let abi_stack = vec![
-            AbiStackValue::Integer(42),
-            AbiStackValue::Boolean(true),
-            AbiStackValue::Null,
+            StackValue::Integer(42),
+            StackValue::Boolean(true),
+            StackValue::Null,
         ];
         let ctx = Context::from_abi_stack(abi_stack);
         let result = ctx.to_execution_result(1000);
         assert_eq!(result.state, VmState::Halt);
         assert_eq!(result.fee_consumed_pico, 1000);
         assert_eq!(result.stack.len(), 3);
-        assert_eq!(result.stack[0], AbiStackValue::Integer(42));
+        assert_eq!(result.stack[0], StackValue::Integer(42));
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! Type conversion and introspection operations for the NeoVM `Context`.
 
 use crate::stack_value::{
-    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
-    TAG_MAP, TAG_NULL, TAG_STRUCT,
+    RuntimeStackValueExt, StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER,
+    TAG_BYTESTRING, TAG_INTEGER, TAG_MAP, TAG_NULL, TAG_STRUCT,
 };
 use crate::Context;
 use alloc::format;

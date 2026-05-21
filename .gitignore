@@ -12,6 +12,16 @@ dist/
 **/obj/
 .venv/
 
+# Local build/test artifacts
+/contract.nef
+/manifest.json
+/test_script.rs
+/fuzz-*.log
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+
 # Local chain/state validation artifacts
 mainnet-validation/
 Data_LevelDB_*/

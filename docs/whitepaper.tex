@@ -283,7 +283,7 @@ The C\#--Rust bridge manages all inter-layer communication:
           are routed to C\# \texttt{HandleHostCallback}, which dispatches
           by SYSCALL hash to the appropriate handler.
     \item \textbf{Stack Item Codec}: Bidirectional serialization between
-          guest \texttt{StackValue} (postcard) and C\# \texttt{StackItem}
+          guest \texttt{StackValue} (shared fast codec) and C\# \texttt{StackItem}
           (native struct).
     \item \textbf{Fee Tracking}: Gas consumed by the guest is accumulated
           and reported back to the ApplicationEngine.
@@ -358,7 +358,7 @@ Data exchange between the guest and host uses two serialization formats:
 
 \begin{enumerate}[noitemsep]
     \item \textbf{Postcard Codec} (guest $\leftrightarrow$ host): Stack items
-          are serialized using the \texttt{postcard} binary format. Tags:
+          are serialized using the shared \texttt{neo-vm-rs} fast codec. Tags:
           0=Integer, 1=BigInteger, 2=ByteString, 3=Boolean, 4=Array,
           5=Struct, 6=Map, 7=Interop, 8=Iterator, 9=Null.
     \item \textbf{Native Struct} (Rust $\leftrightarrow$ C\#): The FFI layer

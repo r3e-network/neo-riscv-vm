@@ -1,6 +1,18 @@
 use neo_riscv_abi::StackValue;
 use neo_riscv_devpack::syscalls::{build_contract_call_stack, CALL_FLAGS_ALL};
 
+#[no_mangle]
+pub extern "C" fn host_call(
+    _api: u32,
+    _ip: u32,
+    _stack_ptr: usize,
+    _stack_len: usize,
+    _result_ptr: usize,
+    _result_cap: usize,
+) -> usize {
+    0
+}
+
 #[test]
 fn build_contract_call_stack_matches_bridge_tail_order() {
     let args = [StackValue::Integer(7), StackValue::Boolean(true)];

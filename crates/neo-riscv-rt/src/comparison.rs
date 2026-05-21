@@ -1,6 +1,6 @@
 //! Comparison and logic operations for the NeoVM `Context`.
 
-use crate::stack_value::StackValue;
+use crate::stack_value::{RuntimeStackValueExt, StackValue};
 use crate::Context;
 use alloc::format;
 

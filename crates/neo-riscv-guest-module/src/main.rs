@@ -306,6 +306,7 @@ pub extern "C" fn alloc(size: u32) -> *mut u8 {
     ptr
 }
 
+#[cfg(not(test))]
 #[polkavm_derive::polkavm_import]
 extern "C" {
     fn host_call(
@@ -317,6 +318,25 @@ extern "C" {
         result_cap: u32,
     ) -> u32;
     fn host_on_instruction(opcode: u32) -> u32;
+}
+
+#[cfg(test)]
+#[no_mangle]
+unsafe extern "C" fn host_call(
+    _api: u32,
+    _ip: u32,
+    _stack_ptr: u32,
+    _stack_len: u32,
+    _result_ptr: u32,
+    _result_cap: u32,
+) -> u32 {
+    0
+}
+
+#[cfg(test)]
+#[no_mangle]
+unsafe extern "C" fn host_on_instruction(_opcode: u32) -> u32 {
+    1
 }
 
 struct PolkaVmSyscallProvider;
@@ -718,12 +738,14 @@ fn execute_inner(
 
 #[cfg(test)]
 mod tests {
+    use core::hint::black_box;
+
     use super::ALLOC_ARENA_SIZE;
 
     #[test]
     fn mainnet_470449_requires_heap_headroom_above_16_mib() {
         assert!(
-            ALLOC_ARENA_SIZE >= 32 * 1024 * 1024,
+            black_box(ALLOC_ARENA_SIZE) >= 32 * 1024 * 1024,
             "mainnet block 470449 GhostMarket.NFT.fixRoyalties exhausted a 16 MiB guest arena"
         );
     }
@@ -731,7 +753,7 @@ mod tests {
     #[test]
     fn mainnet_2368696_requires_heap_headroom_above_32_mib() {
         assert!(
-            ALLOC_ARENA_SIZE >= 64 * 1024 * 1024,
+            black_box(ALLOC_ARENA_SIZE) >= 64 * 1024 * 1024,
             "mainnet block 2368696 GhostMarket:_initialize exhausted a 32 MiB guest arena"
         );
     }
@@ -739,7 +761,7 @@ mod tests {
     #[test]
     fn mainnet_2655903_requires_heap_headroom_above_64_mib() {
         assert!(
-            ALLOC_ARENA_SIZE >= 128 * 1024 * 1024,
+            black_box(ALLOC_ARENA_SIZE) >= 128 * 1024 * 1024,
             "mainnet block 2655903 exhausted a 64 MiB guest arena during Contract.Call execution"
         );
     }

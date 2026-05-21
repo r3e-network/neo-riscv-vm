@@ -12,8 +12,7 @@ use alloc::format;
 use alloc::vec::Vec;
 use neo_riscv_abi::callback_codec;
 use neo_riscv_abi::fast_codec;
-use neo_riscv_abi::StackValue as AbiStackValue;
-use neo_riscv_rt::Context;
+use neo_riscv_rt::{Context, StackValue};
 
 // === PolkaVM host import ===
 // Declared here (not in generated contracts) so bridge_syscall can call it
@@ -62,11 +61,11 @@ pub fn decode_entry(stack_data: &[u8]) -> EntryResult {
     };
 
     let method_name = match abi_stack.first() {
-        Some(AbiStackValue::ByteString(b)) => b.clone(),
+        Some(StackValue::ByteString(b)) => b.clone(),
         _ => Vec::new(),
     };
 
-    let args: Vec<AbiStackValue> = if abi_stack.len() > 1 {
+    let args: Vec<StackValue> = if abi_stack.len() > 1 {
         abi_stack[1..].to_vec()
     } else {
         Vec::new()
@@ -233,9 +232,9 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
     // Pop arguments from the evaluation stack (top-of-stack first).
     // abi_args[0] = top-of-stack (last-pushed arg), which is the first
     // parameter the host callback expects (context for Storage.Put, etc.).
-    let mut abi_args: Vec<AbiStackValue> = Vec::with_capacity(actual_count);
+    let mut abi_args: Vec<StackValue> = Vec::with_capacity(actual_count);
     for _ in 0..actual_count {
-        abi_args.push(ctx.pop().to_abi());
+        abi_args.push(ctx.pop());
     }
 
     // Encode arguments using fast_codec (the host decodes with fast_codec)
@@ -302,7 +301,7 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
             let count = items.len();
             maybe_debug_record(8, hash, count as u32, 0, 0, 0, None);
             for item in items {
-                ctx.push(StackValue::from_abi(&item));
+                ctx.push(item);
             }
             maybe_debug_record(4, hash, count as u32, 0, 0, result_len, None);
         }
@@ -366,7 +365,7 @@ fn try_check_witness_fast_path(ctx: &mut Context, hash: u32) -> bool {
     match callback_codec::decode_stack_result(result_data) {
         Ok(Ok(items)) => {
             for item in items {
-                ctx.push(StackValue::from_abi(&item));
+                ctx.push(item);
             }
         }
         Ok(Err(e)) => ctx.fault(&format!("syscall 0x{:08x} error: {}", hash, e)),

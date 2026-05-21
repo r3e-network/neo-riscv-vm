@@ -1,16 +1,15 @@
 # Documentation Index
 
-**Version:** 1.1  
-**Last Updated:** 2026-03-24  
+**Version:** 1.2
+**Last Updated:** 2026-05-21
 **Status:** Current
 
 ## Start Here
 
 - [Current Status](./CURRENT_STATUS.md)
-- [Final Validation Report](./FINAL_VALIDATION_REPORT.md)
 - [Testing Guide](./TESTING.md)
 - [Architecture](./ARCHITECTURE.md)
-- [Visual Diagrams / 图解](./diagrams/README.md)
+- [Visual Diagrams](./diagrams/README.md)
 - [API Reference](./API_REFERENCE.md)
 
 ## Recommended Reading By Role
@@ -18,40 +17,31 @@
 ### Operators
 
 1. [Current Status](./CURRENT_STATUS.md)
-2. [DEPLOYMENT.md](./DEPLOYMENT.md)
-3. [TESTING.md](./TESTING.md)
-4. [troubleshooting.md](./troubleshooting.md)
+2. [Deployment Guide](./DEPLOYMENT.md)
+3. [Testing Guide](./TESTING.md)
+4. [Troubleshooting](./troubleshooting.md)
 
 ### Developers
 
 1. [Architecture](./ARCHITECTURE.md)
-2. [Visual Diagrams / 图解](./diagrams/README.md)
+2. [Visual Diagrams](./diagrams/README.md)
 3. [API Reference](./API_REFERENCE.md)
 4. [Testing Guide](./TESTING.md)
-5. [NEP-RISC-V-VM](./NEP-RISC-V-VM.md)
+5. [NEP RISC-V VM](./NEP-RISC-V-VM.md)
 
 ### Stakeholders
 
 1. [Current Status](./CURRENT_STATUS.md)
-2. [Visual Diagrams / 图解](./diagrams/README.md)
-3. [Final Validation Report](./FINAL_VALIDATION_REPORT.md)
-4. [README](../README.md)
+2. [Visual Diagrams](./diagrams/README.md)
+3. [README](../README.md)
 
 ## Canonical Current Documents
 
 - [Current Status](./CURRENT_STATUS.md): exact architecture and caveats
-- [Final Validation Report](./FINAL_VALIDATION_REPORT.md): fresh evidence from the committed matrix
 - [Testing Guide](./TESTING.md): commands and suite boundaries
 - [Architecture](./ARCHITECTURE.md): system design
-- [Visual Diagrams / 图解](./diagrams/README.md): bilingual architecture, data-flow, workflow, and validation diagrams
-- [NEP-RISC-V-VM](./NEP-RISC-V-VM.md): technical specification
-
-## Historical Documents
-
-These are retained for context, not as the exact current implementation narrative:
-
-- [Historical Zero-Change Target](./ACHIEVED_ZERO_CHANGE.md)
-- [Historical Zero-Change Architecture](./ZERO_CHANGE_ARCHITECTURE.md)
+- [Visual Diagrams](./diagrams/README.md): architecture, data-flow, workflow, and validation diagrams
+- [NEP RISC-V VM](./NEP-RISC-V-VM.md): technical specification
 
 ## Current Validation Snapshot
 

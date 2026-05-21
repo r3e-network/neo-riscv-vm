@@ -437,7 +437,8 @@ Trusted:
 
 *Note:* Custom serialization (fast codec) has already replaced postcard.
 
-See [Optimization Plan](./OPTIMIZATION_PLAN.md) for details.
+The current optimization baseline is documented in this architecture page and
+the benchmark guide.
 
 ---
 
@@ -555,4 +556,4 @@ RiscvApplicationEngine
 - [NEP Specification](./NEP-RISC-V-VM.md)
 - [Testing Guide](./TESTING.md)
 - [Deployment Guide](./DEPLOYMENT.md)
-- [Optimization Plan](./OPTIMIZATION_PLAN.md)
+- [Benchmarking Guide](./benchmarking.md)

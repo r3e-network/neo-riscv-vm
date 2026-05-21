@@ -1,6 +1,6 @@
 # Neo RISC-V VM
 
-[![Validation](https://img.shields.io/badge/validation-cross--repo%20passing-brightgreen)](./docs/FINAL_VALIDATION_REPORT.md)
+[![Validation](https://img.shields.io/badge/validation-cross--repo%20passing-brightgreen)](./docs/CURRENT_STATUS.md)
 [![Status](https://img.shields.io/badge/status-workspace%20production%20ready-brightgreen)](./docs/CURRENT_STATUS.md)
 [![Syscalls](https://img.shields.io/badge/syscalls-C%23%20source%20of%20truth-blue)](./docs/architecture-syscalls.md)
 
@@ -46,7 +46,7 @@ Canonical full validation command:
 ./scripts/cross-repo-test.sh
 ```
 
-Detailed evidence is recorded in [Final Validation Report](./docs/FINAL_VALIDATION_REPORT.md).
+Detailed evidence is recorded in [Current Status](./docs/CURRENT_STATUS.md).
 
 ## Architecture
 
@@ -145,15 +145,9 @@ neo-riscv-devpack = { git = "https://github.com/r3e-network/neo-riscv-devpack" }
 
 - [Current Status](./docs/CURRENT_STATUS.md)
 - [Visual Diagrams / 图解](./docs/diagrams/README.md)
-- [Final Validation Report](./docs/FINAL_VALIDATION_REPORT.md)
 - [Testing Guide](./docs/TESTING.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [NEP-RISC-V-VM](./docs/NEP-RISC-V-VM.md)
 - [API Reference](./docs/API_REFERENCE.md)
 - [Syscall Architecture](./docs/architecture-syscalls.md)
 - [Native Contracts](./docs/native-contracts.md)
-
-Historical zero-change design notes are retained here for context, but they no longer describe the exact committed workspace state:
-
-- [Historical Zero-Change Target](./docs/ACHIEVED_ZERO_CHANGE.md)
-- [Historical Zero-Change Architecture](./docs/ZERO_CHANGE_ARCHITECTURE.md)

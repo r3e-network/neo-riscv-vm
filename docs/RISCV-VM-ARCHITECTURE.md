@@ -129,7 +129,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
 - Contract must export: `execute(u32, u32)`, `get_result_ptr()`, `get_result_len()`
 - Contract may import: `host_call` for syscalls, `host_on_instruction` for gas metering
 - Method name prepended as ByteString to initial stack for dispatch
-- Result serialized as postcard-encoded `ExecutionResult`
+- Result serialized as a shared-codec `ExecutionResult`
 
 ## Backward Compatibility
 

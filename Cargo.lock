@@ -626,7 +626,7 @@ dependencies = [
 [[package]]
 name = "neo-vm-rs"
 version = "0.1.0"
-source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=05fa120#05fa1201f54012aaa13fb35e3bd36c2c825f5d1c"
+source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=f6a8abb#f6a8abbb4e339528bf55b652020936fc7202b0c7"
 dependencies = [
  "serde",
  "sha2 0.11.0",

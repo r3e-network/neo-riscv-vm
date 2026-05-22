@@ -1,11 +1,11 @@
 use alloc::{string::String, vec::Vec};
 
-use neo_riscv_abi::StackValue;
-
-use super::{
-    call_native, call_native_read_only, stack_item_as_bool, stack_item_as_fixed_bytes,
-    stack_item_as_i64, stack_item_as_string, stack_item_as_u8,
+use neo_riscv_abi::{
+    stack_value_as_bool, stack_value_as_fixed_bytes, stack_value_as_i64, stack_value_as_string,
+    stack_value_as_u8, StackValue,
 };
+
+use super::{call_native, call_native_read_only};
 
 // NeoToken native contract bindings
 //
@@ -19,7 +19,7 @@ pub const NEO_TOKEN_HASH: [u8; 20] = [
 pub fn neo_balance_of(account: &[u8; 20]) -> i64 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NEO_TOKEN_HASH, "balanceOf", &args)
-        .and_then(|v| stack_item_as_i64(&v))
+        .and_then(|v| stack_value_as_i64(&v))
         .unwrap_or(0)
 }
 
@@ -31,7 +31,7 @@ pub fn neo_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
         StackValue::Null,
     ];
     call_native(&NEO_TOKEN_HASH, "transfer", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
@@ -50,8 +50,8 @@ pub fn neo_get_candidates() -> Vec<([u8; 33], i64)> {
         .into_iter()
         .filter_map(|candidate| match candidate {
             StackValue::Struct(fields) | StackValue::Array(fields) if fields.len() >= 2 => {
-                let pubkey = stack_item_as_fixed_bytes::<33>(&fields[0])?;
-                let votes = stack_item_as_i64(&fields[1])?;
+                let pubkey = stack_value_as_fixed_bytes::<33>(&fields[0])?;
+                let votes = stack_value_as_i64(&fields[1])?;
                 Some((pubkey, votes))
             }
             _ => None,
@@ -62,7 +62,7 @@ pub fn neo_get_candidates() -> Vec<([u8; 33], i64)> {
 pub fn neo_register_candidate(pubkey: &[u8; 33]) -> bool {
     let args = [StackValue::ByteString(pubkey.to_vec())];
     call_native(&NEO_TOKEN_HASH, "registerCandidate", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
@@ -72,7 +72,7 @@ pub fn neo_vote(account: &[u8; 20], pubkey: &[u8; 33]) -> bool {
         StackValue::ByteString(pubkey.to_vec()),
     ];
     call_native(&NEO_TOKEN_HASH, "vote", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
@@ -82,25 +82,25 @@ pub fn neo_unclaimed_gas(account: &[u8; 20], end: u32) -> i64 {
         StackValue::Integer(i64::from(end)),
     ];
     call_native_read_only(&NEO_TOKEN_HASH, "unclaimedGas", &args)
-        .and_then(|v| stack_item_as_i64(&v))
+        .and_then(|v| stack_value_as_i64(&v))
         .unwrap_or(0)
 }
 
 pub fn neo_symbol() -> String {
     const DEFAULT: &str = "NEO";
     call_native_read_only(&NEO_TOKEN_HASH, "symbol", &[])
-        .and_then(|v| stack_item_as_string(&v))
+        .and_then(|v| stack_value_as_string(&v))
         .unwrap_or_else(|| String::from(DEFAULT))
 }
 
 pub fn neo_decimals() -> u8 {
     call_native_read_only(&NEO_TOKEN_HASH, "decimals", &[])
-        .and_then(|v| stack_item_as_u8(&v))
+        .and_then(|v| stack_value_as_u8(&v))
         .unwrap_or(0)
 }
 
 pub fn neo_total_supply() -> i64 {
     call_native_read_only(&NEO_TOKEN_HASH, "totalSupply", &[])
-        .and_then(|v| stack_item_as_i64(&v))
+        .and_then(|v| stack_value_as_i64(&v))
         .unwrap_or(100_000_000)
 }

@@ -1,7 +1,6 @@
-use alloc::{string::String, vec, vec::Vec};
-use core::convert::TryInto;
+use alloc::{vec, vec::Vec};
 
-use neo_riscv_abi::{byte_sequence_bytes, StackValue};
+use neo_riscv_abi::StackValue;
 
 use crate::{api_ids, ffi, syscalls::CALL_FLAGS_ALL};
 
@@ -70,60 +69,12 @@ pub(crate) fn call_native_with_flags(
     .and_then(|result| result.into_iter().next())
 }
 
-pub(crate) fn stack_item_as_bool(item: &StackValue) -> Option<bool> {
-    match item {
-        StackValue::Boolean(value) => Some(*value),
-        StackValue::Integer(_) | StackValue::BigInteger(_) => {
-            stack_item_as_i64(item).map(|value| value != 0)
-        }
-        _ => None,
-    }
-}
-
-pub(crate) fn stack_item_as_i64(item: &StackValue) -> Option<i64> {
-    match item {
-        StackValue::Integer(_) | StackValue::BigInteger(_) => item.to_i128()?.try_into().ok(),
-        _ => None,
-    }
-}
-
-pub(crate) fn stack_item_as_u32(item: &StackValue) -> Option<u32> {
-    stack_item_as_i64(item)?.try_into().ok()
-}
-
-pub(crate) fn stack_item_as_u8(item: &StackValue) -> Option<u8> {
-    stack_item_as_i64(item)?.try_into().ok()
-}
-
-pub(crate) fn stack_item_as_bytes(item: &StackValue) -> Option<Vec<u8>> {
-    byte_sequence_bytes(item).map(<[u8]>::to_vec)
-}
-
-pub(crate) fn stack_item_as_fixed_bytes<const N: usize>(item: &StackValue) -> Option<[u8; N]> {
-    let bytes = stack_item_as_bytes(item)?;
-    bytes.try_into().ok()
-}
-
-pub(crate) fn stack_item_as_string(item: &StackValue) -> Option<String> {
-    String::from_utf8(stack_item_as_bytes(item)?).ok()
-}
-
-pub(crate) fn stack_item_into_items(item: StackValue) -> Option<Vec<StackValue>> {
-    match item {
-        StackValue::Array(items) | StackValue::Struct(items) => Some(items),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use alloc::vec;
     use neo_riscv_abi::StackValue;
 
-    use super::{
-        build_contract_call_stack, stack_item_as_bool, stack_item_as_fixed_bytes,
-        stack_item_as_i64, CALL_FLAGS_ALL,
-    };
+    use super::{build_contract_call_stack, CALL_FLAGS_ALL};
 
     #[test]
     fn build_contract_call_stack_matches_bridge_shape() {
@@ -140,53 +91,6 @@ mod tests {
                 StackValue::ByteString(b"bls12381Add".to_vec()),
                 StackValue::ByteString(hash.to_vec()),
             ]
-        );
-    }
-
-    #[test]
-    fn extractors_handle_common_values_and_defaults() {
-        assert_eq!(stack_item_as_i64(&StackValue::Integer(42)), Some(42));
-        assert_eq!(
-            stack_item_as_i64(&StackValue::BigInteger(vec![0xff, 0x00])),
-            Some(255)
-        );
-        assert_eq!(
-            stack_item_as_i64(&StackValue::BigInteger(vec![0; 16])),
-            Some(0)
-        );
-        assert_eq!(
-            stack_item_as_i64(&StackValue::BigInteger(vec![0xff; 16])),
-            Some(-1)
-        );
-        assert_eq!(
-            stack_item_as_i64(&StackValue::BigInteger(vec![
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
-            ])),
-            Some(i64::MIN)
-        );
-        assert_eq!(
-            stack_item_as_i64(&StackValue::BigInteger(vec![
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00,
-            ])),
-            None
-        );
-        assert_eq!(stack_item_as_i64(&StackValue::Null), None);
-
-        assert_eq!(stack_item_as_bool(&StackValue::Boolean(true)), Some(true));
-        assert_eq!(stack_item_as_bool(&StackValue::Integer(0)), Some(false));
-        assert_eq!(stack_item_as_bool(&StackValue::Null), None);
-
-        assert_eq!(
-            stack_item_as_fixed_bytes::<4>(&StackValue::ByteString(vec![1, 2, 3, 4])),
-            Some([1, 2, 3, 4])
-        );
-        assert_eq!(
-            stack_item_as_fixed_bytes::<4>(&StackValue::Buffer(vec![1, 2, 3, 4])),
-            Some([1, 2, 3, 4])
-        );
-        assert_eq!(
-            stack_item_as_fixed_bytes::<4>(&StackValue::ByteString(vec![1, 2, 3])),
-            None
         );
     }
 }

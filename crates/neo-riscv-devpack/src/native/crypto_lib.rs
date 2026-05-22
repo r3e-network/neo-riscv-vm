@@ -1,6 +1,6 @@
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_bool, stack_value_as_fixed_bytes, StackValue};
 
-use super::{call_native_read_only, stack_item_as_bool, stack_item_as_fixed_bytes};
+use super::call_native_read_only;
 
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
@@ -15,14 +15,14 @@ const DEFAULT_ECDSA_CURVE_HASH_SECP256R1_SHA256: i64 = 23;
 pub fn crypto_sha256(data: &[u8]) -> [u8; 32] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "sha256", &args)
-        .and_then(|v| stack_item_as_fixed_bytes::<32>(&v))
+        .and_then(|v| stack_value_as_fixed_bytes::<32>(&v))
         .unwrap_or([0; 32])
 }
 
 pub fn crypto_ripemd160(data: &[u8]) -> [u8; 20] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "ripemd160", &args)
-        .and_then(|v| stack_item_as_fixed_bytes::<20>(&v))
+        .and_then(|v| stack_value_as_fixed_bytes::<20>(&v))
         .unwrap_or([0; 20])
 }
 
@@ -36,7 +36,7 @@ pub fn crypto_verify_with_ecdsa(message: &[u8], pubkey: &[u8], signature: &[u8])
         StackValue::Integer(DEFAULT_ECDSA_CURVE_HASH_SECP256R1_SHA256),
     ];
     call_native_read_only(&CRYPTO_LIB_HASH, "verifyWithECDsa", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
@@ -46,14 +46,14 @@ pub fn crypto_murmur32(data: &[u8], seed: u32) -> [u8; 4] {
         StackValue::Integer(i64::from(seed)),
     ];
     call_native_read_only(&CRYPTO_LIB_HASH, "murmur32", &args)
-        .and_then(|v| stack_item_as_fixed_bytes::<4>(&v))
+        .and_then(|v| stack_value_as_fixed_bytes::<4>(&v))
         .unwrap_or([0; 4])
 }
 
 pub fn crypto_keccak256(data: &[u8]) -> [u8; 32] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "keccak256", &args)
-        .and_then(|v| stack_item_as_fixed_bytes::<32>(&v))
+        .and_then(|v| stack_value_as_fixed_bytes::<32>(&v))
         .unwrap_or([0; 32])
 }
 
@@ -64,6 +64,6 @@ pub fn crypto_verify_with_ed25519(message: &[u8], pubkey: &[u8], signature: &[u8
         StackValue::ByteString(signature.to_vec()),
     ];
     call_native_read_only(&CRYPTO_LIB_HASH, "verifyWithEd25519", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }

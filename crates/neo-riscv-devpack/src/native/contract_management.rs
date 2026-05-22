@@ -1,11 +1,8 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_fixed_bytes, StackValue};
 
-use super::{
-    call_native, call_native_read_only, stack_item_as_fixed_bytes,
-    std_lib::stdlib_serialize_stack_item,
-};
+use super::{call_native, call_native_read_only, std_lib::stdlib_serialize_stack_item};
 
 // ContractManagement native contract bindings
 //
@@ -28,7 +25,7 @@ pub fn contract_deploy(nef: &[u8], manifest: &[u8]) -> [u8; 20] {
 
     match result {
         StackValue::Array(fields) | StackValue::Struct(fields) if fields.len() >= 3 => {
-            stack_item_as_fixed_bytes::<20>(&fields[2]).unwrap_or([0; 20])
+            stack_value_as_fixed_bytes::<20>(&fields[2]).unwrap_or([0; 20])
         }
         _ => [0; 20],
     }

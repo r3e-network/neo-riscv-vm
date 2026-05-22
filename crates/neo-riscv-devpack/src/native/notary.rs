@@ -1,8 +1,6 @@
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_bool, stack_value_as_i64, stack_value_as_u32, StackValue};
 
-use super::{
-    call_native, call_native_read_only, stack_item_as_bool, stack_item_as_i64, stack_item_as_u32,
-};
+use super::{call_native, call_native_read_only};
 
 // Notary native contract bindings
 //
@@ -16,20 +14,20 @@ pub const NOTARY_HASH: [u8; 20] = [
 pub fn notary_balance_of(account: &[u8; 20]) -> i64 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NOTARY_HASH, "balanceOf", &args)
-        .and_then(|v| stack_item_as_i64(&v))
+        .and_then(|v| stack_value_as_i64(&v))
         .unwrap_or(0)
 }
 
 pub fn notary_expiration_of(account: &[u8; 20]) -> u32 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NOTARY_HASH, "expirationOf", &args)
-        .and_then(|v| stack_item_as_u32(&v))
+        .and_then(|v| stack_value_as_u32(&v))
         .unwrap_or(0)
 }
 
 pub fn notary_get_max_not_valid_before_delta() -> u32 {
     call_native_read_only(&NOTARY_HASH, "getMaxNotValidBeforeDelta", &[])
-        .and_then(|v| stack_item_as_u32(&v))
+        .and_then(|v| stack_value_as_u32(&v))
         .unwrap_or(0)
 }
 
@@ -39,7 +37,7 @@ pub fn notary_lock_deposit_until(account: &[u8; 20], till: u32) -> bool {
         StackValue::Integer(i64::from(till)),
     ];
     call_native(&NOTARY_HASH, "lockDepositUntil", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
@@ -49,14 +47,14 @@ pub fn notary_withdraw(from: &[u8; 20], to: &[u8; 20]) -> bool {
         StackValue::ByteString(to.to_vec()),
     ];
     call_native(&NOTARY_HASH, "withdraw", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 
 pub fn notary_verify(signature: &[u8]) -> bool {
     let args = [StackValue::ByteString(signature.to_vec())];
     call_native_read_only(&NOTARY_HASH, "verify", &args)
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 

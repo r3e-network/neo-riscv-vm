@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_fixed_bytes, stack_value_into_items, StackValue};
 
-use super::{call_native_read_only, stack_item_as_fixed_bytes, stack_item_into_items};
+use super::call_native_read_only;
 
 // RoleManagement native contract bindings
 //
@@ -22,12 +22,12 @@ pub fn role_get_designated_by_role(role: u8, index: u32) -> Vec<[u8; 33]> {
         Some(value) => value,
         None => return Vec::new(),
     };
-    let items = match stack_item_into_items(value) {
+    let items = match stack_value_into_items(value) {
         Some(items) => items,
         None => return Vec::new(),
     };
     items
         .iter()
-        .filter_map(stack_item_as_fixed_bytes::<33>)
+        .filter_map(stack_value_as_fixed_bytes::<33>)
         .collect()
 }

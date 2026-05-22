@@ -1,6 +1,6 @@
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_bool, StackValue};
 
-use super::{call_native, call_native_read_only, stack_item_as_bool};
+use super::{call_native, call_native_read_only};
 
 // Treasury native contract bindings
 //
@@ -13,7 +13,7 @@ pub const TREASURY_HASH: [u8; 20] = [
 
 pub fn treasury_verify() -> bool {
     call_native_read_only(&TREASURY_HASH, "verify", &[])
-        .and_then(|v| stack_item_as_bool(&v))
+        .and_then(|v| stack_value_as_bool(&v))
         .unwrap_or(false)
 }
 

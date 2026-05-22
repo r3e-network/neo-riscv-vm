@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{stack_value_as_bytes, stack_value_as_i64, StackValue};
 
-use super::{call_native_read_only, stack_item_as_bytes, stack_item_as_i64};
+use super::call_native_read_only;
 
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
@@ -13,7 +13,7 @@ pub const STD_LIB_HASH: [u8; 20] = [
 
 pub(crate) fn stdlib_serialize_stack_item(item: &StackValue) -> Option<Vec<u8>> {
     let args = [item.clone()];
-    call_native_read_only(&STD_LIB_HASH, "serialize", &args).and_then(|v| stack_item_as_bytes(&v))
+    call_native_read_only(&STD_LIB_HASH, "serialize", &args).and_then(|v| stack_value_as_bytes(&v))
 }
 
 pub(crate) fn stdlib_deserialize_stack_item(data: &[u8]) -> Option<StackValue> {
@@ -39,7 +39,7 @@ pub fn stdlib_deserialize(data: &[u8]) -> Vec<u8> {
 pub fn stdlib_json_serialize(item: &[u8]) -> Vec<u8> {
     let args = [StackValue::ByteString(item.to_vec())];
     call_native_read_only(&STD_LIB_HASH, "jsonSerialize", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }
 
@@ -55,14 +55,14 @@ pub fn stdlib_json_deserialize(json: &[u8]) -> Vec<u8> {
 pub fn stdlib_base64_encode(data: &[u8]) -> Vec<u8> {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&STD_LIB_HASH, "base64Encode", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }
 
 pub fn stdlib_base64_decode(data: &[u8]) -> Vec<u8> {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&STD_LIB_HASH, "base64Decode", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }
 
@@ -72,7 +72,7 @@ pub fn stdlib_itoa(value: i64, base: u8) -> Vec<u8> {
         StackValue::Integer(i64::from(base)),
     ];
     call_native_read_only(&STD_LIB_HASH, "itoa", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }
 
@@ -82,20 +82,20 @@ pub fn stdlib_atoi(value: &[u8], base: u8) -> i64 {
         StackValue::Integer(i64::from(base)),
     ];
     call_native_read_only(&STD_LIB_HASH, "atoi", &args)
-        .and_then(|v| stack_item_as_i64(&v))
+        .and_then(|v| stack_value_as_i64(&v))
         .unwrap_or(0)
 }
 
 pub fn stdlib_base58_encode(data: &[u8]) -> Vec<u8> {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&STD_LIB_HASH, "base58Encode", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }
 
 pub fn stdlib_base58_decode(data: &[u8]) -> Vec<u8> {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&STD_LIB_HASH, "base58Decode", &args)
-        .and_then(|v| stack_item_as_bytes(&v))
+        .and_then(|v| stack_value_as_bytes(&v))
         .unwrap_or_default()
 }

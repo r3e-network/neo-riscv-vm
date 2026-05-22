@@ -1,11 +1,10 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::StackValue;
-
-use super::{
-    call_native_read_only, stack_item_as_fixed_bytes, stack_item_as_i64, stack_item_as_u32,
-    std_lib::stdlib_serialize_stack_item,
+use neo_riscv_abi::{
+    stack_value_as_fixed_bytes, stack_value_as_i64, stack_value_as_u32, StackValue,
 };
+
+use super::{call_native_read_only, std_lib::stdlib_serialize_stack_item};
 
 // LedgerContract native contract bindings
 //
@@ -31,14 +30,14 @@ pub fn ledger_get_transaction(hash: &[u8; 32]) -> Option<Vec<u8>> {
 
 pub fn ledger_current_index() -> u32 {
     call_native_read_only(&LEDGER_CONTRACT_HASH, "currentIndex", &[])
-        .and_then(|v| stack_item_as_u32(&v))
+        .and_then(|v| stack_value_as_u32(&v))
         .unwrap_or(0)
 }
 
 pub fn ledger_get_transaction_height(hash: &[u8; 32]) -> Option<u32> {
     let args = [StackValue::ByteString(hash.to_vec())];
     let height = call_native_read_only(&LEDGER_CONTRACT_HASH, "getTransactionHeight", &args)
-        .and_then(|v| stack_item_as_i64(&v))?;
+        .and_then(|v| stack_value_as_i64(&v))?;
     if height < 0 {
         return None;
     }
@@ -47,6 +46,6 @@ pub fn ledger_get_transaction_height(hash: &[u8; 32]) -> Option<u32> {
 
 pub fn ledger_current_hash() -> [u8; 32] {
     call_native_read_only(&LEDGER_CONTRACT_HASH, "currentHash", &[])
-        .and_then(|v| stack_item_as_fixed_bytes::<32>(&v))
+        .and_then(|v| stack_value_as_fixed_bytes::<32>(&v))
         .unwrap_or([0; 32])
 }

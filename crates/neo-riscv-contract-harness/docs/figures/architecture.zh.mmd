@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
+    N2["Inputs: 合约模块 | mock 上下文 | 期望栈"]
+    N3["neo-riscv-contract-harness: 用于合约级 RISC-V 执行和 syscall 模拟的测试 harness。"]
+    N4["Responsibilities: 初始化测试上下文 | 运行合约 export | 断言状态/栈"]
+    N5["Outputs: 测试结果 | 轨迹 | 失败诊断"]
+    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

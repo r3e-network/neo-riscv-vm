@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
+    N2["Inputs: PolkaVM 模块 | 执行上下文 | 宿主 syscall provider"]
+    N3["neo-riscv-host: 执行 PolkaVM guest 模块、计费 gas 并桥接 syscall 的 host runtime。"]
+    N4["Responsibilities: 实例化模块 | 按 opcode 计费 | 编组栈值 | 返回 VM 结果"]
+    N5["Outputs: 执行结果 | gas 报告 | host 轨迹"]
+    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

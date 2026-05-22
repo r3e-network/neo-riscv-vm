@@ -1,0 +1,12 @@
+flowchart LR
+    N1["Step 1: Prepare contract/input"]
+    N2["Step 2: Encode ABI"]
+    N3["Step 3: Execute in PolkaVM path"]
+    N4["Step 4: Collect result"]
+    N5["Step 5: Validate evidence"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N2 crate

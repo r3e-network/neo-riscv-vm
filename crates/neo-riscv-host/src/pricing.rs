@@ -1,4 +1,5 @@
 use crate::RuntimeContext;
+use neo_riscv_abi::OpCode;
 
 /// Hard instruction-count ceiling for a single `execute_script` call. Guards the
 /// block processor against infinite-loop bugs in the NeoVM-on-RISC-V guest that
@@ -105,36 +106,198 @@ pub(crate) fn charge_native_instructions(
 }
 
 pub(crate) fn opcode_price(opcode: u8) -> i64 {
+    OpCode::try_from(opcode).map_or(65_536, opcode_price_for)
+}
+
+fn opcode_price_for(opcode: OpCode) -> i64 {
     match opcode {
-        0x38 | 0x40 | 0x41 | 0xe0 => 0,
-        0x00..=0x03 | 0x08 | 0x09 | 0x0b | 0x0f | 0x10..=0x21 | 0x39 | 0xe1 => 1,
-        0x22..=0x33 => 2,
-        0x43
-        | 0x45
-        | 0x46
-        | 0x4a
-        | 0x4b
-        | 0x4d
-        | 0x4e
-        | 0x50
-        | 0x51
-        | 0x53
-        | 0x54
-        | 0x58..=0x87
-        | 0xd8
-        | 0xd9 => 2,
-        0x04 | 0x05 | 0x0a | 0x3b..=0x3f | 0x90 | 0x99..=0x9d | 0xaa | 0xb1 | 0xca => 4,
-        0x0c | 0x91..=0x93 | 0x9e..=0xa2 | 0xa8 | 0xa9 | 0xab | 0xac | 0xb3..=0xbb | 0xc8 => 8,
-        0x48 | 0x49 | 0x52 | 0x55 | 0x56 | 0xc2 | 0xc5 | 0xcc | 0xd2..=0xd4 => 16,
-        0x97 | 0x98 | 0xa5 => 32,
-        0x57 | 0xa3 | 0xa4 | 0xcb | 0xce => 64,
-        0x88 => 256,
-        0x0d | 0x34..=0x36 | 0x3a | 0xc3 | 0xc4 | 0xc6 => 512,
-        0x89 | 0x8b..=0x8e | 0xa6 | 0xbe..=0xc1 => 2048,
-        0x0e => 4096,
-        0xcd | 0xcf..=0xd1 | 0xdb => 8192,
-        0x37 => 32768,
-        _ => 65536,
+        OpCode::ABORT | OpCode::RET | OpCode::SYSCALL | OpCode::ABORTMSG => 0,
+        OpCode::PUSHINT8
+        | OpCode::PUSHINT16
+        | OpCode::PUSHINT32
+        | OpCode::PUSHINT64
+        | OpCode::PUSHT
+        | OpCode::PUSHF
+        | OpCode::PUSHNULL
+        | OpCode::PUSHM1
+        | OpCode::PUSH0
+        | OpCode::PUSH1
+        | OpCode::PUSH2
+        | OpCode::PUSH3
+        | OpCode::PUSH4
+        | OpCode::PUSH5
+        | OpCode::PUSH6
+        | OpCode::PUSH7
+        | OpCode::PUSH8
+        | OpCode::PUSH9
+        | OpCode::PUSH10
+        | OpCode::PUSH11
+        | OpCode::PUSH12
+        | OpCode::PUSH13
+        | OpCode::PUSH14
+        | OpCode::PUSH15
+        | OpCode::PUSH16
+        | OpCode::NOP
+        | OpCode::ASSERT
+        | OpCode::ASSERTMSG => 1,
+        OpCode::JMP
+        | OpCode::JMP_L
+        | OpCode::JMPIF
+        | OpCode::JMPIF_L
+        | OpCode::JMPIFNOT
+        | OpCode::JMPIFNOT_L
+        | OpCode::JMPEQ
+        | OpCode::JMPEQ_L
+        | OpCode::JMPNE
+        | OpCode::JMPNE_L
+        | OpCode::JMPGT
+        | OpCode::JMPGT_L
+        | OpCode::JMPGE
+        | OpCode::JMPGE_L
+        | OpCode::JMPLT
+        | OpCode::JMPLT_L
+        | OpCode::JMPLE
+        | OpCode::JMPLE_L
+        | OpCode::DEPTH
+        | OpCode::DROP
+        | OpCode::NIP
+        | OpCode::DUP
+        | OpCode::OVER
+        | OpCode::PICK
+        | OpCode::TUCK
+        | OpCode::SWAP
+        | OpCode::ROT
+        | OpCode::REVERSE3
+        | OpCode::REVERSE4
+        | OpCode::LDSFLD0
+        | OpCode::LDSFLD1
+        | OpCode::LDSFLD2
+        | OpCode::LDSFLD3
+        | OpCode::LDSFLD4
+        | OpCode::LDSFLD5
+        | OpCode::LDSFLD6
+        | OpCode::LDSFLD
+        | OpCode::STSFLD0
+        | OpCode::STSFLD1
+        | OpCode::STSFLD2
+        | OpCode::STSFLD3
+        | OpCode::STSFLD4
+        | OpCode::STSFLD5
+        | OpCode::STSFLD6
+        | OpCode::STSFLD
+        | OpCode::LDLOC0
+        | OpCode::LDLOC1
+        | OpCode::LDLOC2
+        | OpCode::LDLOC3
+        | OpCode::LDLOC4
+        | OpCode::LDLOC5
+        | OpCode::LDLOC6
+        | OpCode::LDLOC
+        | OpCode::STLOC0
+        | OpCode::STLOC1
+        | OpCode::STLOC2
+        | OpCode::STLOC3
+        | OpCode::STLOC4
+        | OpCode::STLOC5
+        | OpCode::STLOC6
+        | OpCode::STLOC
+        | OpCode::LDARG0
+        | OpCode::LDARG1
+        | OpCode::LDARG2
+        | OpCode::LDARG3
+        | OpCode::LDARG4
+        | OpCode::LDARG5
+        | OpCode::LDARG6
+        | OpCode::LDARG
+        | OpCode::STARG0
+        | OpCode::STARG1
+        | OpCode::STARG2
+        | OpCode::STARG3
+        | OpCode::STARG4
+        | OpCode::STARG5
+        | OpCode::STARG6
+        | OpCode::STARG
+        | OpCode::ISNULL
+        | OpCode::ISTYPE => 2,
+        OpCode::PUSHINT128
+        | OpCode::PUSHINT256
+        | OpCode::PUSHA
+        | OpCode::TRY
+        | OpCode::TRY_L
+        | OpCode::ENDTRY
+        | OpCode::ENDTRY_L
+        | OpCode::ENDFINALLY
+        | OpCode::INVERT
+        | OpCode::SIGN
+        | OpCode::ABS
+        | OpCode::NEGATE
+        | OpCode::INC
+        | OpCode::DEC
+        | OpCode::NOT
+        | OpCode::NZ
+        | OpCode::SIZE => 4,
+        OpCode::PUSHDATA1
+        | OpCode::AND
+        | OpCode::OR
+        | OpCode::XOR
+        | OpCode::ADD
+        | OpCode::SUB
+        | OpCode::MUL
+        | OpCode::DIV
+        | OpCode::MOD
+        | OpCode::SHL
+        | OpCode::SHR
+        | OpCode::BOOLAND
+        | OpCode::BOOLOR
+        | OpCode::NUMEQUAL
+        | OpCode::NUMNOTEQUAL
+        | OpCode::LT
+        | OpCode::LE
+        | OpCode::GT
+        | OpCode::GE
+        | OpCode::MIN
+        | OpCode::MAX
+        | OpCode::WITHIN
+        | OpCode::NEWMAP => 8,
+        OpCode::XDROP
+        | OpCode::CLEAR
+        | OpCode::ROLL
+        | OpCode::REVERSEN
+        | OpCode::INITSSLOT
+        | OpCode::NEWARRAY0
+        | OpCode::NEWSTRUCT0
+        | OpCode::KEYS
+        | OpCode::REMOVE
+        | OpCode::CLEARITEMS
+        | OpCode::POPITEM => 16,
+        OpCode::EQUAL | OpCode::NOTEQUAL | OpCode::MODMUL => 32,
+        OpCode::INITSLOT | OpCode::POW | OpCode::SQRT | OpCode::HASKEY | OpCode::PICKITEM => 64,
+        OpCode::NEWBUFFER => 256,
+        OpCode::PUSHDATA2
+        | OpCode::CALL
+        | OpCode::CALL_L
+        | OpCode::CALLA
+        | OpCode::THROW
+        | OpCode::NEWARRAY
+        | OpCode::NEWARRAY_T
+        | OpCode::NEWSTRUCT => 512,
+        OpCode::MEMCPY
+        | OpCode::CAT
+        | OpCode::SUBSTR
+        | OpCode::LEFT
+        | OpCode::RIGHT
+        | OpCode::MODPOW
+        | OpCode::PACKMAP
+        | OpCode::PACKSTRUCT
+        | OpCode::PACK
+        | OpCode::UNPACK => 2048,
+        OpCode::PUSHDATA4 => 4096,
+        OpCode::VALUES
+        | OpCode::APPEND
+        | OpCode::SETITEM
+        | OpCode::REVERSEITEMS
+        | OpCode::CONVERT => 8192,
+        OpCode::CALLT => 32768,
     }
 }
 
@@ -145,34 +308,53 @@ mod tests {
     #[test]
     fn opcode_price_push_opcodes() {
         // PUSHINT8..PUSHINT64 (0x00-0x03) = 1
-        assert_eq!(opcode_price(0x00), 1, "PUSHINT8");
-        assert_eq!(opcode_price(0x01), 1, "PUSHINT16");
-        assert_eq!(opcode_price(0x02), 1, "PUSHINT32");
-        assert_eq!(opcode_price(0x03), 1, "PUSHINT64");
+        assert_eq!(opcode_price(OpCode::PUSHINT8.byte()), 1, "PUSHINT8");
+        assert_eq!(opcode_price(OpCode::PUSHINT16.byte()), 1, "PUSHINT16");
+        assert_eq!(opcode_price(OpCode::PUSHINT32.byte()), 1, "PUSHINT32");
+        assert_eq!(opcode_price(OpCode::PUSHINT64.byte()), 1, "PUSHINT64");
         // PUSHINT128 (0x04) = 4, PUSHINT256 (0x05) = 4
-        assert_eq!(opcode_price(0x04), 4, "PUSHINT128");
-        assert_eq!(opcode_price(0x05), 4, "PUSHINT256");
+        assert_eq!(opcode_price(OpCode::PUSHINT128.byte()), 4, "PUSHINT128");
+        assert_eq!(opcode_price(OpCode::PUSHINT256.byte()), 4, "PUSHINT256");
     }
 
     #[test]
     fn opcode_price_flow_control() {
-        assert_eq!(opcode_price(0x21), 1, "NOP");
-        // JMP range 0x22..=0x33 = 2
-        for op in 0x22..=0x33u8 {
-            assert_eq!(opcode_price(op), 2, "JMP-family 0x{op:02x}");
+        assert_eq!(opcode_price(OpCode::NOP.byte()), 1, "NOP");
+        // Canonical NeoVM short and long conditional jump family.
+        for opcode in [
+            OpCode::JMP,
+            OpCode::JMP_L,
+            OpCode::JMPIF,
+            OpCode::JMPIF_L,
+            OpCode::JMPIFNOT,
+            OpCode::JMPIFNOT_L,
+            OpCode::JMPEQ,
+            OpCode::JMPEQ_L,
+            OpCode::JMPNE,
+            OpCode::JMPNE_L,
+            OpCode::JMPGT,
+            OpCode::JMPGT_L,
+            OpCode::JMPGE,
+            OpCode::JMPGE_L,
+            OpCode::JMPLT,
+            OpCode::JMPLT_L,
+            OpCode::JMPLE,
+            OpCode::JMPLE_L,
+        ] {
+            assert_eq!(opcode_price(opcode.byte()), 2, "JMP-family {opcode}");
         }
-        assert_eq!(opcode_price(0x34), 512, "CALL");
-        assert_eq!(opcode_price(0x37), 32768, "CALLT");
-        assert_eq!(opcode_price(0x38), 0, "ABORT");
-        assert_eq!(opcode_price(0x40), 0, "RET");
-        assert_eq!(opcode_price(0x41), 0, "SYSCALL");
+        assert_eq!(opcode_price(OpCode::CALL.byte()), 512, "CALL");
+        assert_eq!(opcode_price(OpCode::CALLT.byte()), 32768, "CALLT");
+        assert_eq!(opcode_price(OpCode::ABORT.byte()), 0, "ABORT");
+        assert_eq!(opcode_price(OpCode::RET.byte()), 0, "RET");
+        assert_eq!(opcode_price(OpCode::SYSCALL.byte()), 0, "SYSCALL");
     }
 
     #[test]
     fn opcode_price_expensive_opcodes() {
-        assert_eq!(opcode_price(0xcd), 8192, "VALUES");
-        assert_eq!(opcode_price(0xdb), 8192, "CONVERT");
-        assert_eq!(opcode_price(0x88), 256, "NEWBUFFER");
+        assert_eq!(opcode_price(OpCode::VALUES.byte()), 8192, "VALUES");
+        assert_eq!(opcode_price(OpCode::CONVERT.byte()), 8192, "CONVERT");
+        assert_eq!(opcode_price(OpCode::NEWBUFFER.byte()), 256, "NEWBUFFER");
     }
 
     #[test]
@@ -191,8 +373,7 @@ mod tests {
             exec_fee_factor_pico: 10_000,
         };
         let mut fee = 0i64;
-        // PUSH1 = opcode 0x11, price = 1
-        charge_opcode(&mut ctx, &mut fee, 0x11).expect("charge should succeed");
+        charge_opcode(&mut ctx, &mut fee, OpCode::PUSH1.byte()).expect("charge should succeed");
         assert!(ctx.gas_left < 1_000_000, "gas should have decreased");
     }
 
@@ -207,7 +388,7 @@ mod tests {
             exec_fee_factor_pico: 10_000,
         };
         let mut fee = 0i64;
-        let err = charge_opcode(&mut ctx, &mut fee, 0x11).unwrap_err();
+        let err = charge_opcode(&mut ctx, &mut fee, OpCode::PUSH1.byte()).unwrap_err();
         assert!(
             err.contains("Insufficient GAS"),
             "error should mention Insufficient GAS: {err}"
@@ -252,7 +433,8 @@ mod tests {
             exec_fee_factor_pico: 0,
         };
         let mut fee = 0i64;
-        charge_opcode(&mut ctx, &mut fee, 0x11).expect("should succeed with zero fee factor");
+        charge_opcode(&mut ctx, &mut fee, OpCode::PUSH1.byte())
+            .expect("should succeed with zero fee factor");
         assert_eq!(ctx.gas_left, 500, "gas_left should be unchanged");
     }
 

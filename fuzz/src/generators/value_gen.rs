@@ -1,10 +1,8 @@
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
+use crate::SimpleRng;
 use neo_riscv_abi::StackValue;
-use neo_riscv_fuzz::SimpleRng;
 
 pub fn generate_integer(seed: u64) -> i64 {
     let mut rng = SimpleRng::new(seed);
@@ -39,7 +37,7 @@ pub fn generate_stack_value(depth: u64, seed: u64) -> StackValue {
         0 => StackValue::Integer(generate_integer(rng.next())),
         1 => StackValue::BigInteger(generate_big_integer(rng.next(), 16)),
         2 => StackValue::ByteString(generate_bytestring(rng.next(), 256)),
-        3 => StackValue::Boolean(rng.next() % 2 == 0),
+        3 => StackValue::Boolean(rng.next().is_multiple_of(2)),
         4 => StackValue::Null,
         5 if depth < 3 => {
             let count = 1 + (rng.next() % 4) as usize;
@@ -77,8 +75,7 @@ mod tests {
 
     #[test]
     fn test_generate_integer() {
-        let val = generate_integer(12345);
-        assert!(val != 0 || true);
+        let _ = generate_integer(12345);
     }
 
     #[test]

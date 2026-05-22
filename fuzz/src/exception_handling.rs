@@ -5,7 +5,7 @@ extern crate libfuzzer_sys;
 
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
-use neo_riscv_abi::VmState;
+use neo_riscv_abi::{OpCode, VmState};
 use neo_riscv_fuzz::{run_with_stack, SimpleRng};
 
 fuzz_target!(|data: &[u8]| {
@@ -39,8 +39,8 @@ fn build_exception_script(seed: u64, context: &[u8]) -> Vec<u8> {
     let mut rng = SimpleRng::new(seed);
     let mut script = Vec::new();
 
-    script.push(0x11);
-    script.push(0x11);
+    script.push(OpCode::PUSH1.byte());
+    script.push(OpCode::PUSH1.byte());
 
     let remaining_len = if context.is_empty() {
         10
@@ -54,24 +54,28 @@ fn build_exception_script(seed: u64, context: &[u8]) -> Vec<u8> {
 
         match choice {
             0 => {
-                script.push(0x3b);
+                script.push(OpCode::TRY.byte());
                 script.push((rng.next() % 5) as u8);
             }
             1 => {
-                script.push(0x3d);
+                script.push(OpCode::ENDTRY.byte());
             }
             2 => {
-                script.push(0x3a);
+                script.push(OpCode::THROW.byte());
             }
             3 => {
-                script.push(0xf1);
+                script.push(u8::MAX);
             }
             4 => {
-                script.push(0x3f);
+                script.push(OpCode::ENDFINALLY.byte());
             }
             _ => {
-                if byte != 0x40 && (byte == 0x11 || byte == 0x12 || byte == 0x4a) {
-                    script.push(byte);
+                if let Ok(opcode) = OpCode::try_from(byte) {
+                    if opcode != OpCode::RET
+                        && matches!(opcode, OpCode::PUSH1 | OpCode::PUSH2 | OpCode::DUP)
+                    {
+                        script.push(opcode.byte());
+                    }
                 }
             }
         }
@@ -81,7 +85,7 @@ fn build_exception_script(seed: u64, context: &[u8]) -> Vec<u8> {
         }
     }
 
-    script.push(0x40);
+    script.push(OpCode::RET.byte());
 
     script
 }

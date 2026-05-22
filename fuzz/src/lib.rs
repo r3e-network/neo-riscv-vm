@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+pub mod generators;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use neo_riscv_abi::{ExecutionResult, StackValue, VmState};
@@ -103,6 +105,7 @@ impl SimpleRng {
         Self(seed)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> u64 {
         self.0 = self
             .0

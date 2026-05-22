@@ -5,6 +5,7 @@ extern crate libfuzzer_sys;
 
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
+use neo_riscv_abi::OpCode;
 use neo_riscv_fuzz::{check_stack_values, run_with_stack, SimpleRng};
 
 fuzz_target!(|data: &[u8]| {
@@ -30,7 +31,7 @@ fn build_mem_op_script(seed: u64, context: &[u8]) -> Vec<u8> {
     let mut rng = SimpleRng::new(seed);
     let mut script = Vec::new();
 
-    script.push(0x88);
+    script.push(OpCode::NEWBUFFER.byte());
 
     let size_byte = context
         .first()
@@ -38,17 +39,30 @@ fn build_mem_op_script(seed: u64, context: &[u8]) -> Vec<u8> {
         .unwrap_or_else(|| (rng.next() % 256) as u8);
     script.push(size_byte.saturating_add(1));
 
-    let mem_ops = [0x8b, 0x8c, 0x8d, 0x8e, 0x89, 0xca];
+    let mem_ops = [
+        OpCode::CAT,
+        OpCode::SUBSTR,
+        OpCode::LEFT,
+        OpCode::RIGHT,
+        OpCode::MEMCPY,
+        OpCode::SIZE,
+    ];
 
     for (i, &byte) in context.iter().enumerate() {
-        if mem_ops.contains(&byte) {
-            script.push(byte);
+        if let Ok(opcode) = OpCode::try_from(byte) {
+            if !mem_ops.contains(&opcode) {
+                continue;
+            }
 
-            if byte == 0x89 && i + 3 < context.len() {
+            script.push(opcode.byte());
+
+            if opcode == OpCode::MEMCPY && i + 3 < context.len() {
                 script.push(context[i + 1]);
                 script.push(context[i + 2]);
                 script.push(context[i + 3]);
-            } else if (byte == 0x8c || byte == 0x8d || byte == 0x8e) && i + 2 < context.len() {
+            } else if matches!(opcode, OpCode::SUBSTR | OpCode::LEFT | OpCode::RIGHT)
+                && i + 2 < context.len()
+            {
                 script.push(context[i + 1]);
                 script.push(context[i + 2]);
             }
@@ -60,11 +74,11 @@ fn build_mem_op_script(seed: u64, context: &[u8]) -> Vec<u8> {
     }
 
     if script.len() < 3 {
-        script.push(0x11);
-        script.push(0x8b);
-        script.push(0x40);
+        script.push(OpCode::PUSH1.byte());
+        script.push(OpCode::CAT.byte());
+        script.push(OpCode::RET.byte());
     } else {
-        script.push(0x40);
+        script.push(OpCode::RET.byte());
     }
 
     script

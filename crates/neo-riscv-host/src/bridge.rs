@@ -1,7 +1,13 @@
 #![allow(clippy::items_after_test_module)]
 
 use crate::{pricing::charge_opcode, HostCallbackResult, RuntimeContext};
-use neo_riscv_abi::{callback_codec, fast_codec};
+use neo_riscv_abi::{
+    callback_codec, fast_codec, STACK_VALUE_CODEC_TAG_ARRAY, STACK_VALUE_CODEC_TAG_BIG_INTEGER,
+    STACK_VALUE_CODEC_TAG_BOOLEAN, STACK_VALUE_CODEC_TAG_BUFFER, STACK_VALUE_CODEC_TAG_BYTESTRING,
+    STACK_VALUE_CODEC_TAG_INTEGER, STACK_VALUE_CODEC_TAG_INTEROP, STACK_VALUE_CODEC_TAG_ITERATOR,
+    STACK_VALUE_CODEC_TAG_MAP, STACK_VALUE_CODEC_TAG_NULL, STACK_VALUE_CODEC_TAG_POINTER,
+    STACK_VALUE_CODEC_TAG_STRUCT,
+};
 use neo_riscv_guest::SyscallProvider;
 use polkavm::Linker;
 use std::collections::HashMap;
@@ -822,7 +828,7 @@ fn extract_last_bytestring(raw_stack: &[u8]) -> Option<&[u8]> {
         let (tag, next) = read_u8(raw_stack, offset)?;
         offset = next;
         match tag {
-            0x03 | 0x02 | 0x0C => {
+            tag if is_byte_sequence_codec_tag(tag) => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 let end = offset.checked_add(len)?;
@@ -832,17 +838,17 @@ fn extract_last_bytestring(raw_stack: &[u8]) -> Option<&[u8]> {
                 last = Some(&raw_stack[offset..end]);
                 offset = end;
             }
-            0x01 | 0x0B | 0x08 | 0x09 => offset += 8,
-            0x04 => offset += 1,
-            0x0A => {}
-            0x05 | 0x06 => {
+            tag if is_fixed_u64_codec_tag(tag) => offset += 8,
+            STACK_VALUE_CODEC_TAG_BOOLEAN => offset += 1,
+            STACK_VALUE_CODEC_TAG_NULL => {}
+            tag if is_list_codec_tag(tag) => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 for _ in 0..len {
                     offset = skip_value(raw_stack, offset)?;
                 }
             }
-            0x07 => {
+            STACK_VALUE_CODEC_TAG_MAP => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 for _ in 0..len {
@@ -866,7 +872,7 @@ fn extract_last_two_bytestrings(raw_stack: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> 
         let (tag, next) = read_u8(raw_stack, offset)?;
         offset = next;
         match tag {
-            0x03 | 0x02 | 0x0C => {
+            tag if is_byte_sequence_codec_tag(tag) => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 let end = offset.checked_add(len)?;
@@ -879,17 +885,17 @@ fn extract_last_two_bytestrings(raw_stack: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> 
                 }
                 offset = end;
             }
-            0x01 | 0x0B | 0x08 | 0x09 => offset += 8,
-            0x04 => offset += 1,
-            0x0A => {}
-            0x05 | 0x06 => {
+            tag if is_fixed_u64_codec_tag(tag) => offset += 8,
+            STACK_VALUE_CODEC_TAG_BOOLEAN => offset += 1,
+            STACK_VALUE_CODEC_TAG_NULL => {}
+            tag if is_list_codec_tag(tag) => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 for _ in 0..len {
                     offset = skip_value(raw_stack, offset)?;
                 }
             }
-            0x07 => {
+            STACK_VALUE_CODEC_TAG_MAP => {
                 let len = read_u32(raw_stack, offset)? as usize;
                 offset += 4;
                 for _ in 0..len {
@@ -911,16 +917,16 @@ fn extract_last_two_bytestrings(raw_stack: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> 
 fn skip_value(raw_stack: &[u8], offset: usize) -> Option<usize> {
     let (tag, mut next) = read_u8(raw_stack, offset)?;
     match tag {
-        0x01 | 0x0B | 0x08 | 0x09 => Some(next + 8),
-        0x03 | 0x02 | 0x0C => {
+        tag if is_fixed_u64_codec_tag(tag) => Some(next + 8),
+        tag if is_byte_sequence_codec_tag(tag) => {
             let len = read_u32(raw_stack, next)? as usize;
             next += 4;
             let end = next.checked_add(len)?;
             (end <= raw_stack.len()).then_some(end)
         }
-        0x04 => Some(next + 1),
-        0x0A => Some(next),
-        0x05 | 0x06 => {
+        STACK_VALUE_CODEC_TAG_BOOLEAN => Some(next + 1),
+        STACK_VALUE_CODEC_TAG_NULL => Some(next),
+        tag if is_list_codec_tag(tag) => {
             let len = read_u32(raw_stack, next)? as usize;
             next += 4;
             for _ in 0..len {
@@ -928,7 +934,7 @@ fn skip_value(raw_stack: &[u8], offset: usize) -> Option<usize> {
             }
             Some(next)
         }
-        0x07 => {
+        STACK_VALUE_CODEC_TAG_MAP => {
             let len = read_u32(raw_stack, next)? as usize;
             next += 4;
             for _ in 0..len {
@@ -939,6 +945,32 @@ fn skip_value(raw_stack: &[u8], offset: usize) -> Option<usize> {
         }
         _ => None,
     }
+}
+
+fn is_byte_sequence_codec_tag(tag: u8) -> bool {
+    matches!(
+        tag,
+        STACK_VALUE_CODEC_TAG_BYTESTRING
+            | STACK_VALUE_CODEC_TAG_BIG_INTEGER
+            | STACK_VALUE_CODEC_TAG_BUFFER
+    )
+}
+
+fn is_fixed_u64_codec_tag(tag: u8) -> bool {
+    matches!(
+        tag,
+        STACK_VALUE_CODEC_TAG_INTEGER
+            | STACK_VALUE_CODEC_TAG_POINTER
+            | STACK_VALUE_CODEC_TAG_INTEROP
+            | STACK_VALUE_CODEC_TAG_ITERATOR
+    )
+}
+
+fn is_list_codec_tag(tag: u8) -> bool {
+    matches!(
+        tag,
+        STACK_VALUE_CODEC_TAG_ARRAY | STACK_VALUE_CODEC_TAG_STRUCT
+    )
 }
 
 fn read_u8(raw: &[u8], offset: usize) -> Option<(u8, usize)> {

@@ -136,14 +136,34 @@ Key implementation details:
 Gas costs match NeoVM exactly:
 
 ```rust
+use neo_vm_rs::OpCode;
+
 fn opcode_price(opcode: u8) -> i64 {
-    match opcode {
-        0x38 | 0x40 | 0x41 | 0xe0 => 0,           // Free
-        0x00..=0x03 | 0x08 | 0x09 | 0x0b | 
-        0x0f | 0x10..=0x21 | 0x39 | 0xe1 => 1,   // Cheapest
-        0x22..=0x33 => 2,                          // Jumps
-        // ... etc
-        _ => 65536,                                // Default (expensive)
+    match OpCode::try_from(opcode) {
+        Ok(opcode) => match opcode {
+            OpCode::ABORT | OpCode::RET | OpCode::SYSCALL | OpCode::ABORTMSG => 0,
+            OpCode::PUSHINT8
+            | OpCode::PUSHINT16
+            | OpCode::PUSHINT32
+            | OpCode::PUSHT
+            | OpCode::PUSHF
+            | OpCode::PUSHNULL
+            | OpCode::PUSHM1
+            | OpCode::PUSH0
+            | OpCode::PUSH1
+            | OpCode::NOP
+            | OpCode::ASSERT
+            | OpCode::ASSERTMSG => 1,
+            OpCode::JMP
+            | OpCode::JMP_L
+            | OpCode::JMPIF
+            | OpCode::JMPIF_L
+            | OpCode::JMPIFNOT
+            | OpCode::JMPIFNOT_L => 2,
+            // ... etc
+            _ => 65_536,
+        },
+        Err(_) => 65_536,
     }
 }
 ```

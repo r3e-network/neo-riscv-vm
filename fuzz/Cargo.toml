@@ -12,9 +12,13 @@ cargo-fuzz = true
 neo-riscv-guest = { path = "../crates/neo-riscv-guest" }
 neo-riscv-abi = { path = "../crates/neo-riscv-abi" }
 neo-riscv-host = { path = "../crates/neo-riscv-host" }
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { version = "0.4", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[features]
+default = []
+fuzzing = ["dep:libfuzzer-sys"]
 
 [[bin]]
 name = "opcode_seq"
@@ -22,6 +26,7 @@ path = "src/opcode_seq.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "type_convert"
@@ -29,6 +34,7 @@ path = "src/type_convert.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "stack_ops"
@@ -36,6 +42,7 @@ path = "src/stack_ops.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "exception_handling"
@@ -43,6 +50,7 @@ path = "src/exception_handling.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "syscall_fuzz"
@@ -50,6 +58,7 @@ path = "src/syscall_fuzz.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "mem_op"
@@ -57,6 +66,7 @@ path = "src/mem_op.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [[bin]]
 name = "whole_system_parity"
@@ -64,5 +74,6 @@ path = "src/whole_system_parity.rs"
 test = false
 doc = false
 bench = false
+required-features = ["fuzzing"]
 
 [workspace]

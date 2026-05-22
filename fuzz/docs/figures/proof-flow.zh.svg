@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-fuzz 证明与证据流图">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#08111f"/><stop offset="100%" stop-color="#111827"/></linearGradient>
+<filter id="shadow" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.42"/></filter>
+</defs>
+<rect width="1760" height="100%" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="802" rx="10" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+<text x="72" y="92" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700">neo-riscv-fuzz: 证明与证据流图</text>
+<text x="72" y="132" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19">Neo N4 技术原理学习图 - 声明如何变成可验证证据</text>
+<rect x="92" y="178" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="131" y="219" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1</text>
+<text x="168" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">neo-riscv-fuzz</text>
+<text x="118" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">证明与证据流说明技术声明如何变成可检查结果。</text>
+<rect x="630" y="178" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="669" y="219" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">2</text>
+<text x="706" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">声明</text>
+<text x="656" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">本单元完成了：生成有效脚本 | 覆盖 codec | 发现 host/guest </text>
+<text x="656" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">不一致。</text>
+<rect x="1168" y="178" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="1207" y="219" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">3</text>
+<text x="1244" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">见证或输入</text>
+<text x="1194" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">种子语料 | 生成 opcode | 变异栈值</text>
+<rect x="92" y="376" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="131" y="417" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">4</text>
+<text x="168" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">执行或检查</text>
+<text x="118" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">在 PolkaVM 与 host 边界执行</text>
+<rect x="630" y="376" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="669" y="417" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">5</text>
+<text x="706" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">公开承诺</text>
+<text x="656" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">ABI 摘要、执行结果、gas 报告和 syscall 轨迹</text>
+<rect x="1168" y="376" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="1207" y="417" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">6</text>
+<text x="1244" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">验证者</text>
+<text x="1194" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">RISC-V host | Neo N4 L2 节点 | 开发者工具</text>
+<rect x="92" y="574" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="131" y="615" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">7</text>
+<text x="168" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">接受结果</text>
+<text x="118" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">回归 seed | 崩溃案例 | 覆盖率信号</text>
+<rect x="630" y="574" width="500" height="168" rx="8" fill="#3b1700" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#f97316" stroke-width="1"/>
+<text x="669" y="615" text-anchor="middle" fill="#f97316" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">8</text>
+<text x="706" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">拒绝结果</text>
+<text x="656" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">拒绝 ABI、guest fault 或 host callback；不提交状态变化</text>
+<text x="72" y="826" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16">本图根据 crate 技术角色元数据生成；不是源码阅读图，也不是实现全景图。</text>
+</svg>

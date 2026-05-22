@@ -1,12 +1,13 @@
 flowchart TB
-    N1["1. nep17-token: 工作流由 5 个阶段组成；源码入口优先看 src/lib.rs。"]
-    N2["2. 阶段 1: 准备合约/输入；相关源码：src/lib.rs (crate 根、公开导出和顶层文档)"]
-    N3["3. 阶段 2: 编码 ABI；相关源码：src/main.rs (二进制或 CLI 入口)"]
-    N4["4. 阶段 3: 在 PolkaVM 路径执行；相关源码：src/main.rs (二进制或 CLI 入口)"]
-    N5["5. 阶段 4: 收集结果；相关源码：src/main.rs (二进制或 CLI 入口)"]
-    N6["6. 阶段 5: 验证证据；相关源码：src/main.rs (二进制或 CLI 入口)"]
-    N7["7. 验证方式: src/lib.rs（3 个测试）"]
-    N8["8. 输出检查: 编译后合约 | 示例结果 | 教程产物"]
+    N1["1. nep17-token: 工作流表达技术阶段，不表达源码调用栈。"]
+    N2["2. 前置条件: 开发者源码 | 模板 runtime | 测试上下文"]
+    N3["3. 阶段 1: 准备合约/输入"]
+    N4["4. 阶段 2: 编码 ABI"]
+    N5["5. 阶段 3: 在 PolkaVM 路径执行"]
+    N6["6. 阶段 4: 收集结果"]
+    N7["7. 阶段 5: 验证证据"]
+    N8["8. 成功条件: 编译后合约 | 示例结果 | 教程产物"]
+    N9["9. 拒绝条件: ABI 解码失败、host callback 拒绝、gas 耗尽或 guest fault"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
@@ -14,5 +15,8 @@ flowchart TB
     N5 --> N6
     N6 --> N7
     N7 --> N8
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    N8 --> N9
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8,N9 support;

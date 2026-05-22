@@ -1,0 +1,20 @@
+flowchart TB
+    N1["1. neo-riscv-host: 证明与证据流说明技术声明如何变成可检查结果。"]
+    N2["2. 声明: 本单元完成了：实例化模块 | 按 opcode 计费 | 编组栈值 | 返回 VM 结果。"]
+    N3["3. 见证或输入: PolkaVM 模块 | 执行上下文 | 宿主 syscall provider"]
+    N4["4. 执行或检查: 在 PolkaVM 与 host 边界执行"]
+    N5["5. 公开承诺: ABI 摘要、执行结果、gas 报告和 syscall 轨迹"]
+    N6["6. 验证者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N7["7. 接受结果: 执行结果 | gas 报告 | host 轨迹"]
+    N8["8. 拒绝结果: 拒绝 ABI、guest fault 或 host callback；不提交状态变化"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

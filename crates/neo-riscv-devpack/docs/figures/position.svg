@@ -1,89 +1,55 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1068" viewBox="0 0 1760 1068" role="img" aria-label="neo-riscv-devpack Position">
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-devpack System Position">
 <defs>
-<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
-<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#08111f"/><stop offset="100%" stop-color="#111827"/></linearGradient>
+<filter id="shadow" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.42"/></filter>
 </defs>
-<rect x="0" y="0" width="1760" height="1068" fill="url(#bg)"/>
-<rect x="34" y="34" width="1692" height="1000" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
-<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-devpack Position</text>
-<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Source-aware Neo N4 crate learning diagram</text>
-<text x="1240" y="82" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo.toml, Rust files, public symbols, tests</text>
-<rect x="92" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="178" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="183" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1</text>
-<text x="114" y="182" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Neo N4 layer</text>
-<text x="114" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">NeoVM2 / RISC-V execution profile</text>
-<rect x="630" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="178" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="183" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2</text>
-<text x="652" y="182" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Upstream inputs</text>
-<text x="652" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">contract source</text>
-<text x="652" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">template config</text>
-<text x="652" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">toolchain settings</text>
-<rect x="1168" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<circle cx="1640" cy="178" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
-<text x="1640" y="183" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">3</text>
-<text x="1190" y="182" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-devpack</text>
-<text x="1190" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Developer packaging utilities for compiling and</text>
-<text x="1190" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">preparing RISC-V Neo contracts.</text>
-<rect x="92" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="376" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="381" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4</text>
-<text x="114" y="380" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Downstream users</text>
-<text x="114" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">RISC-V host</text>
-<text x="114" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Neo N4 L2 node</text>
-<text x="114" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">developer tooling</text>
-<rect x="630" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="376" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="381" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">5</text>
-<text x="652" y="380" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Source scale</text>
-<text x="652" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">26 source files, 192 public symbols, 22 tests, 1</text>
-<text x="652" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">deps</text>
-<rect x="1168" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
-<circle cx="1640" cy="376" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
-<text x="1640" y="381" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">6</text>
-<text x="1190" y="380" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Source entrypoints</text>
-<text x="1190" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/lib.rs (0 API/0 tests)</text>
-<text x="1190" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/api_ids.rs (43 API/0 tests)</text>
-<text x="1190" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/syscalls.rs (34 API/0 tests)</text>
-<rect x="92" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="574" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="579" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7</text>
-<text x="114" y="578" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Core API</text>
-<text x="114" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">encode_string_params</text>
-<text x="114" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">encode_int_params</text>
-<text x="114" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">decode_string_result</text>
-<text x="114" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">decode_int_result +121</text>
-<rect x="630" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="574" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="579" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8</text>
-<text x="652" y="578" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Test guardrails</text>
-<text x="652" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/syscalls_test.rs (9 tests)</text>
-<text x="652" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/native_wrappers_test.rs (9 tests)</text>
-<text x="652" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/syscalls_shape_test.rs (2 tests)</text>
-<text x="652" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/api_ids_test.rs (1 tests)</text>
-<text x="652" y="694" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/native/mod.rs (1 tests)</text>
-<rect x="1168" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<circle cx="1640" cy="574" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
-<text x="1640" y="579" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">9</text>
-<text x="1190" y="578" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Direct dependencies</text>
-<text x="1190" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">neo-riscv-abi</text>
-<rect x="92" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="772" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="777" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">10</text>
-<text x="114" y="776" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Learning focus</text>
-<text x="114" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Locate upstream and downstream first, then read</text>
-<text x="114" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">this crate boundary, core data structures, and</text>
-<text x="114" y="852" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests.</text>
-<line x1="574" y1="234" x2="648" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="234" x2="1186" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="432" x2="648" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="432" x2="1186" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="630" x2="648" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="630" x2="1186" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<path d="M1418 306 C1418 358, 342 308, 342 360" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<path d="M1418 504 C1418 556, 342 506, 342 558" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<path d="M1418 702 C1418 754, 342 704, 342 756" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<text x="70" y="1030" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated by tools/docs/generate_crate_visual_docs.py. The SVG and Mermaid files are regenerated from source layout, API symbols, tests, dependencies, and Neo N4 architecture roles.</text>
+<rect width="1760" height="100%" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="802" rx="10" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+<text x="72" y="92" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700">neo-riscv-devpack: System Position</text>
+<text x="72" y="132" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19">Neo N4 technical learning diagram - where this crate sits in Neo N4</text>
+<rect x="92" y="178" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="131" y="219" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1</text>
+<text x="168" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Neo N4 layer</text>
+<text x="118" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">NeoVM2 / RISC-V execution profile</text>
+<rect x="630" y="178" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="669" y="219" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">2</text>
+<text x="706" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Upstream domains</text>
+<text x="656" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">contract source</text>
+<text x="656" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">template config</text>
+<text x="656" y="298" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">toolchain settings</text>
+<rect x="1168" y="178" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="1207" y="219" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">3</text>
+<text x="1244" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">neo-riscv-devpack</text>
+<text x="1194" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Developer packaging utilities for compiling and preparing</text>
+<text x="1194" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">RISC-V Neo contracts.</text>
+<rect x="92" y="376" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="131" y="417" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">4</text>
+<text x="168" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Downstream domains</text>
+<text x="118" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">RISC-V host</text>
+<text x="118" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Neo N4 L2 node</text>
+<text x="118" y="496" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">developer tooling</text>
+<rect x="630" y="376" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="669" y="417" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">5</text>
+<text x="706" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Owned boundary</text>
+<text x="656" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Build artifacts</text>
+<text x="656" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Validate metadata</text>
+<text x="656" y="496" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Package deployment files</text>
+<rect x="1168" y="376" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="1207" y="417" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">6</text>
+<text x="1244" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Outside boundary</text>
+<text x="1194" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">does not own proof generation, bridge custody, or L1</text>
+<text x="1194" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">finality</text>
+<rect x="92" y="574" width="500" height="168" rx="8" fill="#052e1a" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#22c55e" stroke-width="1"/>
+<text x="131" y="615" text-anchor="middle" fill="#22c55e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">7</text>
+<text x="168" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Learning focus</text>
+<text x="118" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Understand accepted facts, produced evidence, and next</text>
+<text x="118" y="672" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">consumer.</text>
+<text x="72" y="826" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16">Conceptual diagram generated from crate role metadata; not a source-code reading map.</text>
 </svg>

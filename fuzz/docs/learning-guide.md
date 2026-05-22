@@ -1,127 +1,76 @@
-# neo-riscv-fuzz Source-Level Learning Guide
+# neo-riscv-fuzz Technical Learning Guide
 
-This guide is generated from the crate's actual `Cargo.toml`, Rust source files, public symbols, and test functions. It is meant to help a reader understand what this crate owns before reading implementation details.
+This guide explains `neo-riscv-fuzz` as a Neo N4 technical unit. It is written for architecture learning: what the unit is responsible for, which assumptions make it correct, how data moves, how state changes, how evidence is checked, and where it plugs into the wider Neo N4 stack.
 
-## What This Crate Is
+## Technical Contract
 
-| Topic | Detail |
+| Aspect | Meaning |
 | --- | --- |
 | Layer | NeoVM2 / RISC-V execution profile |
 | Purpose | Fuzzing support for RISC-V VM execution, ABI codecs, and host/guest boundaries. |
-| Inputs | seed corpus, generated opcodes, mutated stack values |
-| Responsibilities | Generate valid scripts, Exercise codecs, Find host/guest mismatches |
-| Outputs | regression seed, crash case, coverage signal |
-| Consumers | RISC-V host, Neo N4 L2 node, developer tooling |
+| Inputs | seed corpus <br> generated opcodes <br> mutated stack values |
+| Responsibilities | Generate valid scripts <br> Exercise codecs <br> Find host/guest mismatches |
+| Outputs | regression seed <br> crash case <br> coverage signal |
+| Consumers | RISC-V host <br> Neo N4 L2 node <br> developer tooling |
 
-## Visual Reading Order
+## Diagram Set
 
-| Step | Diagram | Use it to learn |
-| ---: | --- | --- |
-| 1 | [Position](figures/position.svg) | Why this crate exists and where it sits in Neo N4. |
-| 2 | [Principles](figures/principles.svg) | The invariants and boundaries this crate must protect. |
-| 3 | [Module map](figures/module-map.svg) | Which files are the best entry points. |
-| 4 | [Public API surface](figures/api-surface.svg) | Which exported symbols form the crate contract. |
-| 5 | [Architecture](figures/architecture.svg) | How inputs, internal components, dependencies, and outputs connect. |
-| 6 | [Workflow](figures/workflow.svg) | The normal execution path. |
-| 7 | [Dataflow](figures/dataflow.svg) | How data is transformed across the crate boundary. |
-| 8 | [Test evidence](figures/test-map.svg) | Which tests protect the behavior. |
-| 9 | [Dependency map](figures/dependency-map.svg) | Which dependencies are runtime, test, or build-only. |
-| 10 | [Implementation atlas](figures/implementation-atlas.svg) | A dense one-page map of purpose, source entrypoints, API, workflow, dataflow, dependencies, tests, and change checks. |
+| # | Diagram | What to learn |
+| --- | --- | --- |
+| 1 | [System Position](figures/position.svg) | where this crate sits in Neo N4. |
+| 2 | [Technical Principles](figures/principles.svg) | the rules that make the design correct. |
+| 3 | [Conceptual Architecture](figures/architecture.svg) | major technical blocks and boundaries. |
+| 4 | [Workflow](figures/workflow.svg) | the ordered runtime process. |
+| 5 | [Data Flow](figures/dataflow.svg) | how information, commitments, and evidence move. |
+| 6 | [State Model](figures/state-model.svg) | state ownership, transitions, and finality. |
+| 7 | [Proof and Evidence Flow](figures/proof-flow.svg) | how claims become verifiable evidence. |
+| 8 | [Trust Boundaries](figures/trust-boundaries.svg) | what is trusted, checked, rejected, or observed. |
+| 9 | [Integration Map](figures/integration-map.svg) | how this unit connects to the wider N4 stack. |
+| 10 | [Runtime Lifecycle](figures/lifecycle.svg) | from configuration through execution, evidence, and operation. |
 
-## Source File Map
+## Architecture Model
 
-| File | Role | Public symbols | Tests |
-| --- | --- | ---: | ---: |
-| `src/lib.rs` | crate root, public exports, and top-level documentation | 8 | 1 |
-| `src/generators/value_gen.rs` | implementation detail or helper module | 4 | 4 |
-| `src/generators/opcode_gen.rs` | opcode metadata, pricing, or canonical decode rules | 3 | 4 |
-| `src/stack_ops_builder.rs` | implementation detail or helper module | 1 | 2 |
-| `src/whole_system_parity.rs` | implementation detail or helper module | 0 | 4 |
-| `src/syscall_fuzz.rs` | fuzzing harness and adversarial input exploration | 0 | 1 |
-| `src/exception_handling.rs` | implementation detail or helper module | 0 | 0 |
-| `src/generators.rs` | implementation detail or helper module | 0 | 0 |
-| `src/mem_op.rs` | implementation detail or helper module | 0 | 0 |
-| `src/opcode_seq.rs` | opcode metadata, pricing, or canonical decode rules | 0 | 0 |
-| `src/stack_ops.rs` | implementation detail or helper module | 0 | 0 |
-| `src/type_convert.rs` | implementation detail or helper module | 0 | 0 |
+`neo-riscv-fuzz` receives seed corpus | generated opcodes | mutated stack values and owns this boundary: Generate valid scripts | Exercise codecs | Find host/guest mismatches. It emits regression seed | crash case | coverage signal, which are consumed by RISC-V host | Neo N4 L2 node | developer tooling.
 
-## Public API Surface
+Layering rule: guest owns contract semantics; host owns resources, syscalls, and chain context.
 
-| Symbol | File |
-| --- | --- |
-| `fn is_valid_opcode` | `src/generators/opcode_gen.rs` |
-| `fn requires_immediate` | `src/generators/opcode_gen.rs` |
-| `fn generate_valid_script` | `src/generators/opcode_gen.rs` |
-| `fn generate_integer` | `src/generators/value_gen.rs` |
-| `fn generate_big_integer` | `src/generators/value_gen.rs` |
-| `fn generate_bytestring` | `src/generators/value_gen.rs` |
-| `fn generate_stack_value` | `src/generators/value_gen.rs` |
-| `fn run_script` | `src/lib.rs` |
-| `fn run_with_stack` | `src/lib.rs` |
-| `fn assert_invariants` | `src/lib.rs` |
-| `struct NoOpSyscall` | `src/lib.rs` |
-| `fn check_stack_values` | `src/lib.rs` |
-| `struct SimpleRng` | `src/lib.rs` |
-| `fn new` | `src/lib.rs` |
-| `fn next` | `src/lib.rs` |
-| `fn build_stack_ops_script` | `src/stack_ops_builder.rs` |
+## Workflow
 
-## Module and Re-Export Signals
+1. Prepare contract/input
+2. Encode ABI
+3. Execute in PolkaVM path
+4. Collect result
+5. Validate evidence
 
-| Signal |
-| --- |
-| `src/generators.rs: mod opcode_gen` |
-| `src/generators.rs: mod value_gen` |
-| `src/generators.rs: pub use opcode_gen::*` |
-| `src/generators.rs: pub use value_gen::*` |
-| `src/lib.rs: mod generators` |
-| `src/lib.rs: mod stack_ops_builder` |
-| `src/stack_ops.rs: mod stack_ops_builder` |
+Failure path: ABI decode fails, host callback rejects, gas is exhausted, or guest faults.
 
-## Test Evidence
+## Data Flow
 
-| Test | File |
-| --- | --- |
-| `test_opcode_ranges` | `src/generators/opcode_gen.rs` |
-| `test_is_valid_opcode` | `src/generators/opcode_gen.rs` |
-| `test_requires_immediate` | `src/generators/opcode_gen.rs` |
-| `test_generate_valid_script` | `src/generators/opcode_gen.rs` |
-| `test_generate_integer` | `src/generators/value_gen.rs` |
-| `test_generate_big_integer` | `src/generators/value_gen.rs` |
-| `test_generate_bytestring` | `src/generators/value_gen.rs` |
-| `test_generate_stack_value` | `src/generators/value_gen.rs` |
-| `test_no_op_syscall` | `src/lib.rs` |
-| `default_stack_ops_script_halts` | `src/stack_ops_builder.rs` |
-| `stack_ops_builder_does_not_inject_non_stack_opcodes` | `src/stack_ops_builder.rs` |
-| `test_syscall_fuzzing` | `src/syscall_fuzz.rs` |
-| `expected_trace` | `src/whole_system_parity.rs` |
-| `expected_result` | `src/whole_system_parity.rs` |
-| `platform_seed_matches_direct_guest_and_host_path` | `src/whole_system_parity.rs` |
-| `storage_seed_matches_direct_guest_and_host_path` | `src/whole_system_parity.rs` |
+1. contract input
+2. neo-riscv-fuzz
+3. host/guest boundary
+4. Neo N4 state transition
 
-## Dependency Boundary
+Commitment signal: ABI digest, execution result, gas report, and syscall trace.
 
-| Dependency | Kind |
-| --- | --- |
-| `libfuzzer-sys` | runtime |
-| `neo-riscv-abi` | runtime |
-| `neo-riscv-guest` | runtime |
-| `neo-riscv-host` | runtime |
-| `serde` | runtime |
-| `serde_json` | runtime |
+## State, Proof, and Trust
 
-## Suggested Reading Path
+- State transition: state changes through ABI, PolkaVM execution, and host syscall boundaries.
+- Finality: host accepts result and includes state change in L2 transition.
+- Trust model: trust VM and host rules, not guest inputs or external callbacks.
+- Validation boundary: ABI, gas, syscall, host context, and execution result must match.
+- Replay and ordering: execution context binds call, state, and gas to prevent cross-context reuse.
 
-1. Read `src/lib.rs`: crate root, public exports, and top-level documentation.
-2. Read `src/generators/value_gen.rs`: implementation detail or helper module.
-3. Read `src/generators/opcode_gen.rs`: opcode metadata, pricing, or canonical decode rules.
-4. Read `src/stack_ops_builder.rs`: implementation detail or helper module.
-5. Read `src/whole_system_parity.rs`: implementation detail or helper module.
-6. Read `src/syscall_fuzz.rs`: fuzzing harness and adversarial input exploration.
+## Integration and Operation
 
-## Change Safety Checklist
+- NeoFS DA: NeoFS stores batch data, witness or trace summaries, and retrievable evidence.
+- Proof system: The proof system compresses L2 execution claims into verifiable evidence.
+- Gateway/API: Gateway handles user routing, queries, submission, and health aggregation.
+- Bridge and heterogeneous chains: Bridge rules unify L1-L2, L2-L2, and heterogeneous-chain messages and assets.
+- Observable evidence: gas, syscalls, host trace, halt/fault, and execution digest.
 
-- Keep the stated responsibility boundary intact: Generate valid scripts, Exercise codecs, Find host/guest mismatches.
-- Update the workflow and dataflow diagrams when adding or removing major execution steps.
-- Add or update tests in the files listed under Test Evidence when public API or state-transition behavior changes.
-- Re-run `python tools/docs/generate_crate_visual_docs.py` from the Neo N4 repository root after source layout changes.
+Regenerate these technical diagrams from the Neo N4 repository root with:
+
+```powershell
+python tools/docs/generate_crate_visual_docs.py
+```

@@ -1,18 +1,12 @@
 flowchart TB
-    N1["1. 架构总览: neo-riscv-guest: 12 个源码文件，9 个公开符号，295 个测试，2 个依赖"]
-    N2["2. 入口契约: 合约字节码 | ABI 栈 | syscall stub"]
-    N3["3. 公开 API 层: 类型 2 | 函数 7 | Trait 0 | 常量 0"]
-    N4["4. 核心实现文件: src/lib.rs (0 API/0 测试) | tests/interpreter.rs (0 API/217 测试) | tests/contracts.rs (0 API/49 测试) | src/contract_rt/mod.rs (9 API/3 测试) | tests/contract_rt_context.rs (0 API/14 测试)"]
-    N5["5. 模块/重导出: src/contract_rt/mod.rs: mod stack_value | src/contract_rt/mod.rs: mod mem_intrinsics | src/contract_rt/mod.rs: pub use stack_value::StackValue | src/contract_rt/stack_value.rs: pub use neo_riscv_abi::{
-    byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, default_value_for_type_tag,
-    new_array_default_value_for_type_tag, normalize_stack_item_type_tag, slice_byte_sequence,
-    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
-    TAG_INTEROP, TAG_ITERATOR, TAG_MAP, TAG_NULL, TAG_POINTER, TAG_STRUCT,
-} | src/lib.rs: mod contract_rt | +2"]
-    N6["6. 依赖边界: neo-riscv-abi | neo-vm-rs"]
-    N7["7. 输出产物: guest 结果 | syscall 请求 | 栈变化"]
-    N8["8. 测试护栏: tests/interpreter.rs（217 个测试） | tests/contracts.rs（49 个测试） | tests/contract_rt_context.rs（14 个测试） | tests/shared_vm_dependency.rs（3 个测试） | tests/rc_compat_test.rs（3 个测试） | +4"]
-    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["1. 入口域: 合约字节码 | ABI 栈 | syscall stub"]
+    N2["2. 规范化层: 把合约意图整理成 ABI、栈值、host call 和 PolkaVM 输入"]
+    N3["3. 核心技术机制: 调用共享 VM runtime | 暴露 no_std 合约 API | 桥接 syscall"]
+    N4["4. 状态与承诺层: ABI 摘要、执行结果、gas 报告和 syscall 轨迹"]
+    N5["5. 证据或结果层: guest 结果 | syscall 请求 | 栈变化"]
+    N6["6. 消费方边界: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N7["7. 失败路径: ABI 解码失败、host callback 拒绝、gas 耗尽或 guest fault"]
+    N8["8. 扩展点: VM profile、host syscall、ABI codec 和合约模板"]
     N1 --> N2
     N1 --> N3
     N1 --> N4
@@ -20,13 +14,10 @@ flowchart TB
     N1 --> N6
     N1 --> N7
     N1 --> N8
-    N1 --> N9
-    N2 -. related .-> N3
-    N3 -. related .-> N4
-    N4 -. related .-> N5
-    N5 -. related .-> N6
-    N6 -. related .-> N7
-    N7 -. related .-> N8
-    N8 -. related .-> N9
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

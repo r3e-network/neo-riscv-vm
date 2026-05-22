@@ -1,0 +1,23 @@
+flowchart TB
+    N1["1. hello-world: Trust boundary shows what must be proven rather than believed."]
+    N2["2. Trusted base: PolkaVM semantics, host syscall rules, gas policy"]
+    N3["3. Untrusted input: developer source | template runtime | test context"]
+    N4["4. Validation boundary: ABI, gas, syscall, host context, and execution result must match"]
+    N5["5. Replay and ordering: execution context binds call, state, and gas to prevent cross-context reuse"]
+    N6["6. Authority: guest cannot mutate chain state directly; host/syscall boundary authorizes effects"]
+    N7["7. External systems: PolkaVM, L2 node, host services, contract tooling"]
+    N8["8. Observed evidence: gas, syscalls, host trace, halt/fault, and execution digest"]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

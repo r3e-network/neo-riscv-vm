@@ -1,0 +1,23 @@
+flowchart TB
+    N1["1. neo-riscv-guest: NeoVM2 / RISC-V 执行 profile"]
+    N2["2. L1/原生验证: L1 只消费可检查的承诺、消息或证明结果。"]
+    N3["3. L2 执行: L2 负责交易执行、状态推进、VM profile 和批次边界。"]
+    N4["4. NeoFS DA: NeoFS 保存批次数据、见证或轨迹摘要以及可取回证据。"]
+    N5["5. 证明系统: 证明系统把 L2 执行声明压缩为可验证证据。"]
+    N6["6. Gateway/API: Gateway 负责用户路由、查询、提交和健康状态聚合。"]
+    N7["7. 桥与异构链: 桥规则统一 L1-L2、L2-L2 和异构链消息与资产。"]
+    N8["8. 开发者入口: SDK、CLI、模板和示例把系统暴露成可使用的开发体验。"]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

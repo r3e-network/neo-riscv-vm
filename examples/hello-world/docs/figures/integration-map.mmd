@@ -1,0 +1,23 @@
+flowchart TB
+    N1["1. hello-world: NeoVM2 / RISC-V execution profile"]
+    N2["2. L1/native verification: L1 consumes only commitments, messages, or proof results that can be checked."]
+    N3["3. L2 execution: L2 owns transaction execution, state advancement, VM profiles, and batch boundaries."]
+    N4["4. NeoFS DA: NeoFS stores batch data, witness or trace summaries, and retrievable evidence."]
+    N5["5. Proof system: The proof system compresses L2 execution claims into verifiable evidence."]
+    N6["6. Gateway/API: Gateway handles user routing, queries, submission, and health aggregation."]
+    N7["7. Bridge and heterogeneous chains: Bridge rules unify L1-L2, L2-L2, and heterogeneous-chain messages and assets."]
+    N8["8. Developer entry: SDKs, CLIs, templates, and examples expose the system as a usable experience."]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

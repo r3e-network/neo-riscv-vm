@@ -1,0 +1,23 @@
+flowchart TB
+    N1["1. hello-world: State model explains what is remembered, committed, verified, or discarded."]
+    N2["2. Input state: developer source | template runtime | test context"]
+    N3["3. Working state: guest memory, stack frame, host callback buffer"]
+    N4["4. Persistent state: contract state, gas report, execution receipt"]
+    N5["5. Transition: state changes through ABI, PolkaVM execution, and host syscall boundaries"]
+    N6["6. Commitment: ABI digest, execution result, gas report, and syscall trace"]
+    N7["7. Finality: host accepts result and includes state change in L2 transition"]
+    N8["8. Rollback or reject: reject ABI, guest fault, or host callback; do not commit state change"]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

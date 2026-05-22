@@ -1,13 +1,12 @@
 flowchart TB
-    N1["1. 架构总览: neo-riscv-abi: 6 个源码文件，0 个公开符号，45 个测试，2 个依赖"]
-    N2["2. 入口契约: 共享 VM 类型 | host/guest 边界 | 序列化栈值"]
-    N3["3. 公开 API 层: 类型 0 | 函数 0 | Trait 0 | 常量 0"]
-    N4["4. 核心实现文件: src/lib.rs (0 API/2 测试) | tests/codec_tests.rs (0 API/41 测试) | tests/shared_vm_codecs.rs (0 API/2 测试) | src/callback_codec.rs (0 API/0 测试) | src/fast_codec.rs (0 API/0 测试)"]
-    N5["5. 模块/重导出: src/callback_codec.rs: pub use neo_vm_rs::callback_codec::* | src/fast_codec.rs: pub use neo_vm_rs::fast_codec::* | src/lib.rs: mod callback_codec | src/lib.rs: mod fast_codec | src/lib.rs: mod result_codec | +3"]
-    N6["6. 依赖边界: neo-vm-rs | sha2"]
-    N7["7. 输出产物: ABI 类型 | codec helper | 运行时常量"]
-    N8["8. 测试护栏: tests/codec_tests.rs（41 个测试） | tests/shared_vm_codecs.rs（2 个测试） | src/lib.rs（2 个测试）"]
-    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["1. 入口域: 共享 VM 类型 | host/guest 边界 | 序列化栈值"]
+    N2["2. 规范化层: 把合约意图整理成 ABI、栈值、host call 和 PolkaVM 输入"]
+    N3["3. 核心技术机制: 定义稳定 ABI | 重导出共享元数据 | 编码/解码栈值"]
+    N4["4. 状态与承诺层: ABI 摘要、执行结果、gas 报告和 syscall 轨迹"]
+    N5["5. 证据或结果层: ABI 类型 | codec helper | 运行时常量"]
+    N6["6. 消费方边界: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N7["7. 失败路径: ABI 解码失败、host callback 拒绝、gas 耗尽或 guest fault"]
+    N8["8. 扩展点: VM profile、host syscall、ABI codec 和合约模板"]
     N1 --> N2
     N1 --> N3
     N1 --> N4
@@ -15,13 +14,10 @@ flowchart TB
     N1 --> N6
     N1 --> N7
     N1 --> N8
-    N1 --> N9
-    N2 -. related .-> N3
-    N3 -. related .-> N4
-    N4 -. related .-> N5
-    N5 -. related .-> N6
-    N6 -. related .-> N7
-    N7 -. related .-> N8
-    N8 -. related .-> N9
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

@@ -1,0 +1,20 @@
+flowchart TB
+    N1["1. devpack-test: 生命周期图说明技术单元如何进入可观测运行。"]
+    N2["2. 配置: VM profile、ABI、host 服务、gas 策略"]
+    N3["3. 输入接收: 开发者源码 | 模板 runtime | 测试上下文"]
+    N4["4. 规范化: 把合约意图整理成 ABI、栈值、host call 和 PolkaVM 输入"]
+    N5["5. 执行或验证: 演示合约模式 | 覆盖工具链 | 提供学习 fixture"]
+    N6["6. 提交或输出: 编译后合约 | 示例结果 | 教程产物"]
+    N7["7. 消费联动: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N8["8. 运维观测: gas、syscall、host trace、halt/fault 和执行摘要"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

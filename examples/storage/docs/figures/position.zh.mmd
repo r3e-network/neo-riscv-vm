@@ -1,30 +1,21 @@
 flowchart TB
     N1["1. Neo N4 层级: NeoVM2 / RISC-V 执行 profile"]
-    N2["2. 上游输入: 开发者源码 | 模板 runtime | 测试上下文"]
+    N2["2. 上游技术域: 开发者源码 | 模板 runtime | 测试上下文"]
     N3["3. storage: 聚焦存储 syscall 行为的合约示例。"]
-    N4["4. 下游使用者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
-    N5["5. 源码规模: 2 个源码文件，3 个公开符号，1 个测试，2 个依赖"]
-    N6["6. 读源码入口: src/lib.rs (2 API/1 测试) | src/main.rs (1 API/0 测试)"]
-    N7["7. 核心 API: dispatch | invoke_entry | invoke"]
-    N8["8. 测试护栏: src/lib.rs（1 个测试）"]
-    N9["9. 直接依赖: neo-riscv-abi | neo-riscv-devpack"]
-    N10["10. 学习重点: 先定位上下游，再阅读源码地图、公开 API、测试证据和依赖边界。"]
-    N3 --> N1
-    N3 --> N2
-    N3 --> N4
-    N3 --> N5
-    N3 --> N6
-    N3 --> N7
-    N3 --> N8
-    N3 --> N9
-    N3 --> N10
-    N2 -. related .-> N3
-    N3 -. related .-> N4
-    N4 -. related .-> N5
-    N5 -. related .-> N6
-    N6 -. related .-> N7
-    N7 -. related .-> N8
-    N8 -. related .-> N9
-    N9 -. related .-> N10
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    N4["4. 下游技术域: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N5["5. 拥有的边界: 演示合约模式 | 覆盖工具链 | 提供学习 fixture"]
+    N6["6. 不拥有的边界: 不负责证明生成、桥托管或 L1 终局"]
+    N7["7. 学习重点: 理解它接受的技术事实、产生的证据、以及下游如何消费。"]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7 support;

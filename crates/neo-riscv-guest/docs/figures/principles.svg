@@ -1,74 +1,61 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-guest Principles">
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-guest Technical Principles">
 <defs>
-<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
-<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#08111f"/><stop offset="100%" stop-color="#111827"/></linearGradient>
+<filter id="shadow" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.42"/></filter>
 </defs>
-<rect x="0" y="0" width="1760" height="870" fill="url(#bg)"/>
-<rect x="34" y="34" width="1692" height="802" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
-<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest Principles</text>
-<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Source-aware Neo N4 crate learning diagram</text>
-<text x="1240" y="82" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo.toml, Rust files, public symbols, tests</text>
-<rect x="92" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="178" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="183" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1</text>
-<text x="114" y="182" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Responsibility boundary</text>
-<text x="114" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Guest-side facade and contract runtime glue for</text>
-<text x="114" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">NeoVM2/RISC-V contracts.</text>
-<rect x="630" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="178" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="183" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2</text>
-<text x="652" y="182" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Core principles</text>
-<text x="652" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Call shared VM runtime</text>
-<text x="652" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Expose no_std contract APIs</text>
-<text x="652" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Bridge syscalls</text>
-<rect x="1168" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<circle cx="1640" cy="178" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
-<text x="1640" y="183" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">3</text>
-<text x="1190" y="182" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Input contract</text>
-<text x="1190" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">contract bytecode</text>
-<text x="1190" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ABI stack</text>
-<text x="1190" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">syscall stubs</text>
-<rect x="92" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="376" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="381" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4</text>
-<text x="114" y="380" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">State and artifacts</text>
-<text x="114" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">guest result</text>
-<text x="114" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">syscall request</text>
-<text x="114" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">stack mutation</text>
-<rect x="630" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="376" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="381" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">5</text>
-<text x="652" y="380" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Source evidence</text>
-<text x="652" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">12 source files, 9 public symbols, 295 tests, 2</text>
-<text x="652" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">deps</text>
-<rect x="1168" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
-<circle cx="1640" cy="376" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
-<text x="1640" y="381" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">6</text>
-<text x="1190" y="380" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Test evidence</text>
-<text x="1190" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/interpreter.rs (217 tests)</text>
-<text x="1190" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/contracts.rs (49 tests)</text>
-<text x="1190" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/contract_rt_context.rs (14 tests)</text>
-<text x="1190" y="476" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/shared_vm_dependency.rs (3 tests)</text>
-<text x="1190" y="496" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/rc_compat_test.rs (3 tests)</text>
-<rect x="92" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="574" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="579" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7</text>
-<text x="114" y="578" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Dependency discipline</text>
-<text x="114" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">runtime 2, test 0, build 0, internal 2, external</text>
-<text x="114" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">runtime 0</text>
-<rect x="630" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="574" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="579" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8</text>
-<text x="652" y="578" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Maintenance rule</text>
-<text x="652" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">Keep the boundary small, deterministic, and</text>
-<text x="652" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">reproducible under tests.</text>
-<line x1="574" y1="234" x2="648" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="234" x2="1186" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="432" x2="648" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="432" x2="1186" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="630" x2="648" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<path d="M1418 306 C1418 358, 342 308, 342 360" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<path d="M1418 504 C1418 556, 342 506, 342 558" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<text x="70" y="832" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated by tools/docs/generate_crate_visual_docs.py. The SVG and Mermaid files are regenerated from source layout, API symbols, tests, dependencies, and Neo N4 architecture roles.</text>
+<rect width="1760" height="100%" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="802" rx="10" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+<text x="72" y="92" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700">neo-riscv-guest: Technical Principles</text>
+<text x="72" y="132" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19">Neo N4 technical learning diagram - the rules that make the design correct</text>
+<rect x="92" y="178" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="131" y="219" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1</text>
+<text x="168" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Technical objective</text>
+<text x="118" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Guest-side facade and contract runtime glue for</text>
+<text x="118" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">NeoVM2/RISC-V contracts.</text>
+<rect x="630" y="178" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="669" y="219" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">2</text>
+<text x="706" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Determinism</text>
+<text x="656" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">same ABI input, guest module, and host callbacks produce</text>
+<text x="656" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">the same result</text>
+<rect x="1168" y="178" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="1207" y="219" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">3</text>
+<text x="1244" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Input constraints</text>
+<text x="1194" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">contract bytecode</text>
+<text x="1194" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">ABI stack</text>
+<text x="1194" y="298" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">syscall stubs</text>
+<rect x="92" y="376" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="131" y="417" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">4</text>
+<text x="168" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Transition rule</text>
+<text x="118" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">state changes through ABI, PolkaVM execution, and host</text>
+<text x="118" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">syscall boundaries</text>
+<rect x="630" y="376" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="669" y="417" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">5</text>
+<text x="706" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Verifiable output</text>
+<text x="656" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">guest result</text>
+<text x="656" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">syscall request</text>
+<text x="656" y="496" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">stack mutation</text>
+<rect x="1168" y="376" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="1207" y="417" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">6</text>
+<text x="1244" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Minimal trust</text>
+<text x="1194" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">trust VM and host rules, not guest inputs or external</text>
+<text x="1194" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">callbacks</text>
+<rect x="92" y="574" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="131" y="615" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">7</text>
+<text x="168" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Layer separation</text>
+<text x="118" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">guest owns contract semantics; host owns resources,</text>
+<text x="118" y="672" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">syscalls, and chain context</text>
+<rect x="630" y="574" width="500" height="168" rx="8" fill="#3a2500" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#f59e0b" stroke-width="1"/>
+<text x="669" y="615" text-anchor="middle" fill="#f59e0b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">8</text>
+<text x="706" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Observable evidence</text>
+<text x="656" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">gas, syscalls, host trace, halt/fault, and execution</text>
+<text x="656" y="672" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">digest</text>
+<text x="72" y="826" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16">Conceptual diagram generated from crate role metadata; not a source-code reading map.</text>
 </svg>

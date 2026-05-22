@@ -1,13 +1,12 @@
 flowchart TB
-    N1["1. neo-contract-template: Data crosses inputs, type models, core functions, outputs, and tests; 1 source files, 0 public symbols, 0 tests, 0 deps"]
-    N2["2. Data 1: contract input"]
-    N3["3. Data 2: neo-contract-template"]
-    N4["4. Data 3: host/guest boundary"]
-    N5["5. Data 4: Neo N4 state transition"]
-    N6["6. Key types: no public symbols scanned"]
-    N7["7. Key functions: no public symbols scanned"]
-    N8["8. Boundary checks: no Rust #[test] scanned"]
-    N9["9. Consumers: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N1["1. neo-contract-template: Dataflow shows information, commitments, evidence, and control signals."]
+    N2["2. Data segment 1: contract input"]
+    N3["3. Data segment 2: neo-contract-template"]
+    N4["4. Data segment 3: host/guest boundary"]
+    N5["5. Data segment 4: Neo N4 state transition"]
+    N6["6. Commitment signal: ABI digest, execution result, gas report, and syscall trace"]
+    N7["7. Control signal: execute, syscall, charge gas, halt, fault"]
+    N8["8. Next consumer: RISC-V host | Neo N4 L2 node | developer tooling"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
@@ -15,6 +14,7 @@ flowchart TB
     N5 --> N6
     N6 --> N7
     N7 --> N8
-    N8 --> N9
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

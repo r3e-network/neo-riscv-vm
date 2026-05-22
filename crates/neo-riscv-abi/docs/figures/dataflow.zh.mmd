@@ -1,13 +1,12 @@
 flowchart TB
-    N1["1. neo-riscv-abi: 数据流跨越输入、类型模型、核心函数、输出和测试；6 个源码文件，0 个公开符号，45 个测试，2 个依赖"]
-    N2["2. 数据 1: 合约输入"]
-    N3["3. 数据 2: neo-riscv-abi"]
-    N4["4. 数据 3: host/guest 边界"]
-    N5["5. 数据 4: Neo N4 状态转换"]
-    N6["6. 关键类型: 未扫描到公开符号"]
-    N7["7. 关键函数: 未扫描到公开符号"]
-    N8["8. 边界校验: tests/codec_tests.rs（41 个测试） | tests/shared_vm_codecs.rs（2 个测试） | src/lib.rs（2 个测试）"]
-    N9["9. 消费者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["1. neo-riscv-abi: 数据流表达信息、承诺、证据和控制信号如何移动。"]
+    N2["2. 数据段 1: 合约输入"]
+    N3["3. 数据段 2: neo-riscv-abi"]
+    N4["4. 数据段 3: host/guest 边界"]
+    N5["5. 数据段 4: Neo N4 状态转换"]
+    N6["6. 承诺信号: ABI 摘要、执行结果、gas 报告和 syscall 轨迹"]
+    N7["7. 控制信号: 执行、syscall、计费、halt、fault"]
+    N8["8. 后续消费方: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
@@ -15,6 +14,7 @@ flowchart TB
     N5 --> N6
     N6 --> N7
     N7 --> N8
-    N8 --> N9
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

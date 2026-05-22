@@ -1,73 +1,56 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-host Workflow">
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-host 工作流图">
 <defs>
-<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
-<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#08111f"/><stop offset="100%" stop-color="#111827"/></linearGradient>
+<filter id="shadow" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.42"/></filter>
 </defs>
-<rect x="0" y="0" width="1760" height="870" fill="url(#bg)"/>
-<rect x="34" y="34" width="1692" height="802" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
-<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-host Workflow</text>
-<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 源码感知学习图</text>
-<text x="1240" y="82" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo.toml, Rust files, public symbols, tests</text>
-<rect x="92" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="178" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="183" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1</text>
-<text x="114" y="182" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-host</text>
-<text x="114" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">工作流由 5 个阶段组成；源码入口优先看 s</text>
-<text x="114" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">rc/lib.rs。</text>
-<rect x="630" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="178" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="183" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2</text>
-<text x="652" y="182" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">阶段 1</text>
-<text x="652" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">准备合约/输入；相关源码：src/lib.r</text>
-<text x="652" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">s (crate 根、公开导出和顶层文档)</text>
-<rect x="1168" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<circle cx="1640" cy="178" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
-<text x="1640" y="183" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">3</text>
-<text x="1190" y="182" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">阶段 2</text>
-<text x="1190" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">编码 ABI；相关源码：tests/runt</text>
-<text x="1190" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ime.rs (外部行为或集成测试)</text>
-<rect x="92" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="376" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="381" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4</text>
-<text x="114" y="380" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">阶段 3</text>
-<text x="114" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">在 PolkaVM 路径执行；相关源码：sr</text>
-<text x="114" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">c/runtime_cache.rs (执行</text>
-<text x="114" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> runtime、状态转换或 gas 行为)</text>
-<rect x="630" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="376" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="381" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">5</text>
-<text x="652" y="380" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">阶段 4</text>
-<text x="652" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">收集结果；相关源码：tests/fuzz_c</text>
-<text x="652" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ompatibility.rs (外部行为或</text>
-<text x="652" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">集成测试)</text>
-<rect x="1168" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
-<circle cx="1640" cy="376" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
-<text x="1640" y="381" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">6</text>
-<text x="1190" y="380" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">阶段 5</text>
-<text x="1190" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">验证证据；相关源码：src/bridge.r</text>
-<text x="1190" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">s (桥消息、relay 或跨链边界逻辑)</text>
-<rect x="92" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<circle cx="564" cy="574" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
-<text x="564" y="579" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7</text>
-<text x="114" y="578" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">验证方式</text>
-<text x="114" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/runtime.rs（156 个</text>
-<text x="114" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">测试） | tests/fuzz_compa</text>
-<text x="114" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tibility.rs（47 个测试） | </text>
-<text x="114" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/parity.rs（39 个测试</text>
-<text x="114" y="694" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">） | src/pricing.rs（12 </text>
-<rect x="630" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<circle cx="1102" cy="574" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
-<text x="1102" y="579" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8</text>
-<text x="652" y="578" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">输出检查</text>
-<text x="652" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">执行结果 | gas 报告 | host 轨</text>
-<text x="652" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">迹</text>
-<line x1="574" y1="234" x2="648" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="234" x2="1186" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="432" x2="648" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="1112" y1="432" x2="1186" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<line x1="574" y1="630" x2="648" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
-<path d="M1418 306 C1418 358, 342 308, 342 360" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<path d="M1418 504 C1418 556, 342 506, 342 558" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
-<text x="70" y="832" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated by tools/docs/generate_crate_visual_docs.py. The SVG and Mermaid files are regenerated from source layout, API symbols, tests, dependencies, and Neo N4 architecture roles.</text>
+<rect width="1760" height="100%" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="802" rx="10" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+<text x="72" y="92" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700">neo-riscv-host: 工作流图</text>
+<text x="72" y="132" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19">Neo N4 技术原理学习图 - 运行时的有序过程</text>
+<rect x="92" y="178" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="131" y="219" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1</text>
+<text x="168" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">neo-riscv-host</text>
+<text x="118" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">工作流表达技术阶段，不表达源码调用栈。</text>
+<rect x="630" y="178" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="669" y="219" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">2</text>
+<text x="706" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">前置条件</text>
+<text x="656" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">PolkaVM 模块 | 执行上下文 | 宿主 syscall provider</text>
+<rect x="1168" y="178" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="1207" y="219" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">3</text>
+<text x="1244" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">阶段 1</text>
+<text x="1194" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">准备合约/输入</text>
+<rect x="92" y="376" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="131" y="417" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">4</text>
+<text x="168" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">阶段 2</text>
+<text x="118" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">编码 ABI</text>
+<rect x="630" y="376" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="669" y="417" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">5</text>
+<text x="706" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">阶段 3</text>
+<text x="656" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">在 PolkaVM 路径执行</text>
+<rect x="1168" y="376" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="1207" y="417" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">6</text>
+<text x="1244" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">阶段 4</text>
+<text x="1194" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">收集结果</text>
+<rect x="92" y="574" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="110" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="131" y="615" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">7</text>
+<text x="168" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">阶段 5</text>
+<text x="118" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">验证证据</text>
+<rect x="630" y="574" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="648" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="669" y="615" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">8</text>
+<text x="706" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">成功条件</text>
+<text x="656" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">执行结果 | gas 报告 | host 轨迹</text>
+<rect x="1168" y="574" width="500" height="168" rx="8" fill="#2e1065" stroke="#a78bfa" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1186" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#a78bfa" stroke-width="1"/>
+<text x="1207" y="615" text-anchor="middle" fill="#a78bfa" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">9</text>
+<text x="1244" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">拒绝条件</text>
+<text x="1194" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">ABI 解码失败、host callback 拒绝、gas 耗尽或 guest fault</text>
+<text x="72" y="826" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16">本图根据 crate 技术角色元数据生成；不是源码阅读图，也不是实现全景图。</text>
 </svg>

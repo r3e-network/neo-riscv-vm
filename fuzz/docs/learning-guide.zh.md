@@ -1,127 +1,76 @@
-# neo-riscv-fuzz 源码级学习指南
+# neo-riscv-fuzz 技术学习指南
 
-这份文档从 crate 的真实 `Cargo.toml`、Rust 源码文件、公开符号和测试函数生成。目标是在读实现细节之前，先弄清楚这个 crate 自己负责什么、边界在哪里、应该从哪些文件开始读。
+这份指南把 `neo-riscv-fuzz` 当作 Neo N4 的一个技术单元来解释。它不是源码阅读图，而是帮助读者理解：这个单元负责什么、哪些技术假设保证它正确、数据如何移动、状态如何变化、证据如何被验证、它如何接入 Neo N4 的整体架构。
 
-## 这个 Crate 是什么
+## 技术契约
 
-| 主题 | 说明 |
+| 维度 | 含义 |
 | --- | --- |
 | 层级 | NeoVM2 / RISC-V 执行 profile |
 | 目的 | 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。 |
-| 输入 | 种子语料、生成 opcode、变异栈值 |
-| 职责 | 生成有效脚本、覆盖 codec、发现 host/guest 不一致 |
-| 输出 | 回归 seed、崩溃案例、覆盖率信号 |
-| 使用者 | RISC-V host、Neo N4 L2 节点、开发者工具 |
+| 输入 | 种子语料 <br> 生成 opcode <br> 变异栈值 |
+| 职责 | 生成有效脚本 <br> 覆盖 codec <br> 发现 host/guest 不一致 |
+| 输出 | 回归 seed <br> 崩溃案例 <br> 覆盖率信号 |
+| 消费方 | RISC-V host <br> Neo N4 L2 节点 <br> 开发者工具 |
 
-## 可视化阅读顺序
+## 图表集合
 
-| 步骤 | 图 | 用它学习什么 |
-| ---: | --- | --- |
-| 1 | [位置图](figures/position.zh.svg) | 这个 crate 为什么存在、在 Neo N4 中处于哪里。 |
-| 2 | [技术原理图](figures/principles.zh.svg) | 这个 crate 必须保护的不变量和职责边界。 |
-| 3 | [模块图](figures/module-map.zh.svg) | 哪些源码文件是最好的入口。 |
-| 4 | [公开 API 图](figures/api-surface.zh.svg) | 哪些导出符号构成 crate 契约。 |
-| 5 | [架构图](figures/architecture.zh.svg) | 输入、内部组件、依赖和输出如何连接。 |
-| 6 | [工作流图](figures/workflow.zh.svg) | 正常执行路径。 |
-| 7 | [数据流图](figures/dataflow.zh.svg) | 数据如何跨越 crate 边界并被转换。 |
-| 8 | [测试证据图](figures/test-map.zh.svg) | 哪些测试保护行为。 |
-| 9 | [依赖图](figures/dependency-map.zh.svg) | 哪些依赖是运行时、测试或构建期依赖。 |
-| 10 | [实现全景图](figures/implementation-atlas.zh.svg) | 用一张高密度图同时理解用途、源码入口、API、工作流、数据流、依赖、测试和修改检查点。 |
+| # | 图 | 学什么 |
+| --- | --- | --- |
+| 1 | [系统位置图](figures/position.zh.svg) | 它在 Neo N4 中的位置。 |
+| 2 | [技术原理图](figures/principles.zh.svg) | 保证设计正确的技术规则。 |
+| 3 | [概念架构图](figures/architecture.zh.svg) | 主要技术块和边界。 |
+| 4 | [工作流图](figures/workflow.zh.svg) | 运行时的有序过程。 |
+| 5 | [数据流图](figures/dataflow.zh.svg) | 信息、承诺和证据如何移动。 |
+| 6 | [状态模型图](figures/state-model.zh.svg) | 状态归属、转换和终局性。 |
+| 7 | [证明与证据流图](figures/proof-flow.zh.svg) | 声明如何变成可验证证据。 |
+| 8 | [信任边界图](figures/trust-boundaries.zh.svg) | 哪些内容被信任、检查、拒绝或观测。 |
+| 9 | [集成关系图](figures/integration-map.zh.svg) | 该单元如何接入更大的 N4 栈。 |
+| 10 | [运行生命周期图](figures/lifecycle.zh.svg) | 从配置到执行、证据和运维的生命周期。 |
 
-## 源码文件地图
+## 架构模型
 
-| 文件 | 作用 | 公开符号 | 测试 |
-| --- | --- | ---: | ---: |
-| `src/lib.rs` | crate 根、公开导出和顶层文档 | 8 | 1 |
-| `src/generators/value_gen.rs` | 实现细节或辅助模块 | 4 | 4 |
-| `src/generators/opcode_gen.rs` | opcode 元数据、定价或标准解码规则 | 3 | 4 |
-| `src/stack_ops_builder.rs` | 实现细节或辅助模块 | 1 | 2 |
-| `src/whole_system_parity.rs` | 实现细节或辅助模块 | 0 | 4 |
-| `src/syscall_fuzz.rs` | fuzz harness 与对抗输入探索 | 0 | 1 |
-| `src/exception_handling.rs` | 实现细节或辅助模块 | 0 | 0 |
-| `src/generators.rs` | 实现细节或辅助模块 | 0 | 0 |
-| `src/mem_op.rs` | 实现细节或辅助模块 | 0 | 0 |
-| `src/opcode_seq.rs` | opcode 元数据、定价或标准解码规则 | 0 | 0 |
-| `src/stack_ops.rs` | 实现细节或辅助模块 | 0 | 0 |
-| `src/type_convert.rs` | 实现细节或辅助模块 | 0 | 0 |
+`neo-riscv-fuzz` 接收 种子语料 | 生成 opcode | 变异栈值，拥有的边界是：生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致。它输出 回归 seed | 崩溃案例 | 覆盖率信号，然后由 RISC-V host | Neo N4 L2 节点 | 开发者工具 消费。
 
-## 公开 API 面
+分层规则：guest 负责合约语义；host 负责资源、syscall 和链上下文。
 
-| 符号 | 文件 |
-| --- | --- |
-| `fn is_valid_opcode` | `src/generators/opcode_gen.rs` |
-| `fn requires_immediate` | `src/generators/opcode_gen.rs` |
-| `fn generate_valid_script` | `src/generators/opcode_gen.rs` |
-| `fn generate_integer` | `src/generators/value_gen.rs` |
-| `fn generate_big_integer` | `src/generators/value_gen.rs` |
-| `fn generate_bytestring` | `src/generators/value_gen.rs` |
-| `fn generate_stack_value` | `src/generators/value_gen.rs` |
-| `fn run_script` | `src/lib.rs` |
-| `fn run_with_stack` | `src/lib.rs` |
-| `fn assert_invariants` | `src/lib.rs` |
-| `struct NoOpSyscall` | `src/lib.rs` |
-| `fn check_stack_values` | `src/lib.rs` |
-| `struct SimpleRng` | `src/lib.rs` |
-| `fn new` | `src/lib.rs` |
-| `fn next` | `src/lib.rs` |
-| `fn build_stack_ops_script` | `src/stack_ops_builder.rs` |
+## 工作流
 
-## 模块与重导出信号
+1. 准备合约/输入
+2. 编码 ABI
+3. 在 PolkaVM 路径执行
+4. 收集结果
+5. 验证证据
 
-| 信号 |
-| --- |
-| `src/generators.rs: mod opcode_gen` |
-| `src/generators.rs: mod value_gen` |
-| `src/generators.rs: pub use opcode_gen::*` |
-| `src/generators.rs: pub use value_gen::*` |
-| `src/lib.rs: mod generators` |
-| `src/lib.rs: mod stack_ops_builder` |
-| `src/stack_ops.rs: mod stack_ops_builder` |
+失败路径：ABI 解码失败、host callback 拒绝、gas 耗尽或 guest fault。
 
-## 测试证据
+## 数据流
 
-| 测试 | 文件 |
-| --- | --- |
-| `test_opcode_ranges` | `src/generators/opcode_gen.rs` |
-| `test_is_valid_opcode` | `src/generators/opcode_gen.rs` |
-| `test_requires_immediate` | `src/generators/opcode_gen.rs` |
-| `test_generate_valid_script` | `src/generators/opcode_gen.rs` |
-| `test_generate_integer` | `src/generators/value_gen.rs` |
-| `test_generate_big_integer` | `src/generators/value_gen.rs` |
-| `test_generate_bytestring` | `src/generators/value_gen.rs` |
-| `test_generate_stack_value` | `src/generators/value_gen.rs` |
-| `test_no_op_syscall` | `src/lib.rs` |
-| `default_stack_ops_script_halts` | `src/stack_ops_builder.rs` |
-| `stack_ops_builder_does_not_inject_non_stack_opcodes` | `src/stack_ops_builder.rs` |
-| `test_syscall_fuzzing` | `src/syscall_fuzz.rs` |
-| `expected_trace` | `src/whole_system_parity.rs` |
-| `expected_result` | `src/whole_system_parity.rs` |
-| `platform_seed_matches_direct_guest_and_host_path` | `src/whole_system_parity.rs` |
-| `storage_seed_matches_direct_guest_and_host_path` | `src/whole_system_parity.rs` |
+1. 合约输入
+2. neo-riscv-fuzz
+3. host/guest 边界
+4. Neo N4 状态转换
 
-## 依赖边界
+承诺信号：ABI 摘要、执行结果、gas 报告和 syscall 轨迹。
 
-| 依赖 | 类型 |
-| --- | --- |
-| `libfuzzer-sys` | 运行时 |
-| `neo-riscv-abi` | 运行时 |
-| `neo-riscv-guest` | 运行时 |
-| `neo-riscv-host` | 运行时 |
-| `serde` | 运行时 |
-| `serde_json` | 运行时 |
+## 状态、证明和信任
 
-## 建议阅读路径
+- 状态转换：状态通过 ABI、PolkaVM 执行和 host syscall 边界变化。
+- 终局条件：host 接受结果并把状态变化纳入 L2 转换。
+- 信任模型：信任 VM 与 host 规则，不信任 guest 输入或外部回调。
+- 验证边界：ABI、gas、syscall、host context 和执行结果必须一致。
+- 重放与顺序：执行上下文绑定调用、状态和 gas，避免跨上下文复用。
 
-1. 读 `src/lib.rs`：crate 根、公开导出和顶层文档。
-2. 读 `src/generators/value_gen.rs`：实现细节或辅助模块。
-3. 读 `src/generators/opcode_gen.rs`：opcode 元数据、定价或标准解码规则。
-4. 读 `src/stack_ops_builder.rs`：实现细节或辅助模块。
-5. 读 `src/whole_system_parity.rs`：实现细节或辅助模块。
-6. 读 `src/syscall_fuzz.rs`：fuzz harness 与对抗输入探索。
+## 集成和运行
 
-## 修改安全清单
+- NeoFS DA：NeoFS 保存批次数据、见证或轨迹摘要以及可取回证据。
+- 证明系统：证明系统把 L2 执行声明压缩为可验证证据。
+- Gateway/API：Gateway 负责用户路由、查询、提交和健康状态聚合。
+- 桥与异构链：桥规则统一 L1-L2、L2-L2 和异构链消息与资产。
+- 可观测证据：gas、syscall、host trace、halt/fault 和执行摘要。
 
-- 保持职责边界不变：生成有效脚本、覆盖 codec、发现 host/guest 不一致。
-- 增加或删除主要执行步骤时，同步更新工作流图和数据流图。
-- 修改公开 API 或状态转换行为时，更新“测试证据”中对应的测试。
-- 源码结构变化后，在 Neo N4 仓库根目录重新运行 `python tools/docs/generate_crate_visual_docs.py`。
+在 Neo N4 仓库根目录重新生成这些技术图：
+
+```powershell
+python tools/docs/generate_crate_visual_docs.py
+```

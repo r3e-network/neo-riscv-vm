@@ -1,12 +1,12 @@
 flowchart TB
-    N1["1. 职责边界: 聚焦存储 syscall 行为的合约示例。"]
-    N2["2. 核心不变量: 演示合约模式 | 覆盖工具链 | 提供学习 fixture"]
-    N3["3. 输入必须被约束: 开发者源码 | 模板 runtime | 测试上下文"]
-    N4["4. 输出必须可验证: 编译后合约 | 示例结果 | 教程产物"]
-    N5["5. 源码证据: 2 个源码文件，3 个公开符号，1 个测试，2 个依赖"]
-    N6["6. 测试证据: src/lib.rs（1 个测试）"]
-    N7["7. 依赖原则: 运行时 2，测试 0，构建 0，内部 2，外部运行时 0"]
-    N8["8. 维护规则: 边界要小，语义要确定，测试要可复现，图和文档要随源码更新。"]
+    N1["1. 技术目标: 聚焦存储 syscall 行为的合约示例。"]
+    N2["2. 确定性: 同一 ABI 输入、guest 模块和 host 回调必须得到同一结果"]
+    N3["3. 输入约束: 开发者源码 | 模板 runtime | 测试上下文"]
+    N4["4. 状态转换规则: 状态通过 ABI、PolkaVM 执行和 host syscall 边界变化"]
+    N5["5. 可验证输出: 编译后合约 | 示例结果 | 教程产物"]
+    N6["6. 最小信任: 信任 VM 与 host 规则，不信任 guest 输入或外部回调"]
+    N7["7. 分层边界: guest 负责合约语义；host 负责资源、syscall 和链上下文"]
+    N8["8. 可观测证据: gas、syscall、host trace、halt/fault 和执行摘要"]
     N1 --> N2
     N1 --> N3
     N1 --> N4
@@ -14,11 +14,10 @@ flowchart TB
     N1 --> N6
     N1 --> N7
     N1 --> N8
-    N2 -. related .-> N3
-    N3 -. related .-> N4
-    N4 -. related .-> N5
-    N5 -. related .-> N6
-    N6 -. related .-> N7
-    N7 -. related .-> N8
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N4 crate
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

@@ -1,0 +1,20 @@
+flowchart TB
+    N1["1. devpack-test: Lifecycle shows how the unit reaches observable runtime operation."]
+    N2["2. Configuration: VM profile, ABI, host services, gas policy"]
+    N3["3. Input intake: developer source | template runtime | test context"]
+    N4["4. Normalization: shape contract intent into ABI, stack values, host calls, and PolkaVM input"]
+    N5["5. Execution or verification: Demonstrate contract pattern | Exercise tooling | Provide learning fixture"]
+    N6["6. Commit or output: compiled contract | example result | tutorial artifact"]
+    N7["7. Consumption: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N8["8. Operation: gas, syscalls, host trace, halt/fault, and execution digest"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

@@ -1,12 +1,13 @@
 flowchart TB
-    N1["1. neo-riscv-devpack: Workflow has 5 stages; start source reading at src/lib.rs."]
-    N2["2. Stage 1: Prepare contract/input; likely source: src/lib.rs (crate root, public exports, and top-level documentation)"]
-    N3["3. Stage 2: Encode ABI; likely source: src/api_ids.rs (implementation detail or helper module)"]
-    N4["4. Stage 3: Execute in PolkaVM path; likely source: src/syscalls.rs (host syscall contract and dispatch boundary)"]
-    N5["5. Stage 4: Collect result; likely source: src/native/std_lib.rs (implementation detail or helper module)"]
-    N6["6. Stage 5: Validate evidence; likely source: src/storage.rs (implementation detail or helper module)"]
-    N7["7. Verification: tests/syscalls_test.rs (9 tests) | tests/native_wrappers_test.rs (9 tests) | tests/syscalls_shape_test.rs (2 tests) | tests/api_ids_test.rs (1 tests) | src/native/mod.rs (1 tests)"]
-    N8["8. Output checks: contract package | manifest | developer diagnostics"]
+    N1["1. neo-riscv-devpack: Workflow shows technical phases, not a source call stack."]
+    N2["2. Precondition: contract source | template config | toolchain settings"]
+    N3["3. Stage 1: Prepare contract/input"]
+    N4["4. Stage 2: Encode ABI"]
+    N5["5. Stage 3: Execute in PolkaVM path"]
+    N6["6. Stage 4: Collect result"]
+    N7["7. Stage 5: Validate evidence"]
+    N8["8. Success: contract package | manifest | developer diagnostics"]
+    N9["9. Reject: ABI decode fails, host callback rejects, gas is exhausted, or guest faults"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
@@ -14,5 +15,8 @@ flowchart TB
     N5 --> N6
     N6 --> N7
     N7 --> N8
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N1 crate
+    N8 --> N9
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8,N9 support;

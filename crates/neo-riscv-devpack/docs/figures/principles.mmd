@@ -1,12 +1,12 @@
 flowchart TB
-    N1["1. Responsibility boundary: Developer packaging utilities for compiling and preparing RISC-V Neo contracts."]
-    N2["2. Core principles: Build artifacts | Validate metadata | Package deployment files"]
-    N3["3. Input contract: contract source | template config | toolchain settings"]
-    N4["4. State and artifacts: contract package | manifest | developer diagnostics"]
-    N5["5. Source evidence: 26 source files, 192 public symbols, 22 tests, 1 deps"]
-    N6["6. Test evidence: tests/syscalls_test.rs (9 tests) | tests/native_wrappers_test.rs (9 tests) | tests/syscalls_shape_test.rs (2 tests) | tests/api_ids_test.rs (1 tests) | src/native/mod.rs (1 tests)"]
-    N7["7. Dependency discipline: runtime 1, test 0, build 0, internal 1, external runtime 0"]
-    N8["8. Maintenance rule: Keep the boundary small, deterministic, and reproducible under tests."]
+    N1["1. Technical objective: Developer packaging utilities for compiling and preparing RISC-V Neo contracts."]
+    N2["2. Determinism: same ABI input, guest module, and host callbacks produce the same result"]
+    N3["3. Input constraints: contract source | template config | toolchain settings"]
+    N4["4. Transition rule: state changes through ABI, PolkaVM execution, and host syscall boundaries"]
+    N5["5. Verifiable output: contract package | manifest | developer diagnostics"]
+    N6["6. Minimal trust: trust VM and host rules, not guest inputs or external callbacks"]
+    N7["7. Layer separation: guest owns contract semantics; host owns resources, syscalls, and chain context"]
+    N8["8. Observable evidence: gas, syscalls, host trace, halt/fault, and execution digest"]
     N1 --> N2
     N1 --> N3
     N1 --> N4
@@ -14,11 +14,10 @@ flowchart TB
     N1 --> N6
     N1 --> N7
     N1 --> N8
-    N2 -. related .-> N3
-    N3 -. related .-> N4
-    N4 -. related .-> N5
-    N5 -. related .-> N6
-    N6 -. related .-> N7
-    N7 -. related .-> N8
-    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N4 crate
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

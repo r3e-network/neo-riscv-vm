@@ -1,0 +1,23 @@
+flowchart TB
+    N1["1. neo-contract-template: 状态模型说明什么会被记住、提交、验证或丢弃。"]
+    N2["2. 输入状态: 开发者源码 | 模板 runtime | 测试上下文"]
+    N3["3. 工作状态: guest memory、stack frame、host callback buffer"]
+    N4["4. 持久状态: 合约状态、gas 报告、执行回执"]
+    N5["5. 状态转换: 状态通过 ABI、PolkaVM 执行和 host syscall 边界变化"]
+    N6["6. 承诺: ABI 摘要、执行结果、gas 报告和 syscall 轨迹"]
+    N7["7. 终局条件: host 接受结果并把状态变化纳入 L2 转换"]
+    N8["8. 回滚或拒绝: 拒绝 ABI、guest fault 或 host callback；不提交状态变化"]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. constrains .-> N4
+    N4 -. produces .-> N5
+    N5 -. consumed by .-> N6
+    classDef core fill:#0f172a,stroke:#38bdf8,color:#e5f2ff,stroke-width:2px;
+    classDef support fill:#111827,stroke:#64748b,color:#f8fafc;
+    class N1 core;
+    class N2,N3,N4,N5,N6,N7,N8 support;

@@ -1,18 +1,20 @@
 use std::fs;
 use std::path::PathBuf;
 
-fn rt_src_path(file_name: &str) -> PathBuf {
+fn contract_rt_src_path(file_name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
+        .join("contract_rt")
         .join(file_name)
 }
 
-fn read_rt_src(file_name: &str) -> String {
-    fs::read_to_string(rt_src_path(file_name)).expect("runtime source is readable")
+fn read_contract_rt_src(file_name: &str) -> String {
+    fs::read_to_string(contract_rt_src_path(file_name))
+        .expect("contract runtime source is readable")
 }
 
 #[test]
-fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
+fn contract_runtime_does_not_reintroduce_opcode_adapters() {
     for retired_module in [
         "arithmetic.rs",
         "comparison.rs",
@@ -22,12 +24,12 @@ fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
         "strings.rs",
     ] {
         assert!(
-            !rt_src_path(retired_module).exists(),
+            !contract_rt_src_path(retired_module).exists(),
             "{retired_module} should not duplicate shared VM runtime semantics"
         );
     }
 
-    let source = read_rt_src("lib.rs");
+    let source = read_contract_rt_src("mod.rs");
 
     assert!(source.contains("VmContext"));
     assert!(!source.contains("pub stack:"));
@@ -65,8 +67,8 @@ fn opcode_adapters_are_consolidated_into_one_shared_vm_bridge() {
 }
 
 #[test]
-fn riscv_runtime_does_not_define_private_byte_opcode_helpers() {
-    let source = read_rt_src("lib.rs");
+fn contract_runtime_does_not_define_private_byte_opcode_helpers() {
+    let source = read_contract_rt_src("mod.rs");
 
     assert!(!source.contains("concat_byte_sequences"));
     assert!(!source.contains("slice_byte_sequence"));

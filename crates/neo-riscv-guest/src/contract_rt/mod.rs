@@ -1,12 +1,8 @@
-//! Neo RISC-V runtime library for C#-compiled smart contracts.
+//! Contract runtime helpers for C#-compiled PolkaVM smart contracts.
 //!
-//! This crate owns the PolkaVM guest boundary: ABI entry setup, syscall
-//! bridging, and RISC-V specific runtime glue. Shared NeoVM state and opcode
-//! semantics live in `neo-vm-rs`.
-
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate alloc;
+//! Common VM state and opcode semantics live in `neo-vm-rs`. This module keeps
+//! only the RISC-V guest boundary: ABI entry setup, syscall bridging, and small
+//! target-specific runtime glue.
 
 use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
@@ -14,9 +10,7 @@ use core::ops::{Deref, DerefMut};
 pub mod memory;
 pub mod stack_value;
 
-// Provide C memory intrinsics for targets where compiler_builtins doesn't
-// export them as #[no_mangle] symbols (e.g. polkavm with ilp32e ABI).
-#[cfg(not(feature = "std"))]
+#[cfg(target_arch = "riscv32")]
 mod mem_intrinsics;
 
 pub use stack_value::StackValue;
@@ -139,6 +133,7 @@ impl RuntimeStack for Context {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     use neo_riscv_abi::{semantics::runtime, VmState};
 
     #[test]

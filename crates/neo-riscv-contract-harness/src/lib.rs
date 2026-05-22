@@ -12,7 +12,7 @@ use alloc::format;
 use alloc::vec::Vec;
 use neo_riscv_abi::callback_codec;
 use neo_riscv_abi::fast_codec;
-use neo_riscv_rt::{Context, StackValue};
+use neo_riscv_guest::contract_rt::{Context, StackValue};
 
 // === PolkaVM host import ===
 // Declared here (not in generated contracts) so bridge_syscall can call it
@@ -206,7 +206,7 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
     use alloc::format;
     use alloc::vec;
     use neo_riscv_abi::{callback_codec, syscall_arg_count};
-    use neo_riscv_rt::stack_value::StackValue;
+    use neo_riscv_guest::contract_rt::stack_value::StackValue;
 
     // Runtime.CheckWitness often appears in auth guards directly before ASSERT.
     // Avoid heap allocations on this path to reduce the chance of guest-memory
@@ -320,7 +320,7 @@ pub fn bridge_syscall(ctx: &mut Context, hash: u32) {
 }
 
 fn try_check_witness_fast_path(ctx: &mut Context, hash: u32) -> bool {
-    use neo_riscv_rt::stack_value::StackValue;
+    use neo_riscv_guest::contract_rt::stack_value::StackValue;
 
     const MAX_WITNESS_BYTES: usize = 64;
     const ENCODED_CAP: usize = 4 + 1 + 4 + MAX_WITNESS_BYTES;
@@ -376,7 +376,7 @@ fn try_check_witness_fast_path(ctx: &mut Context, hash: u32) -> bool {
 }
 
 fn try_decode_small_callback_result(ctx: &mut Context, result_data: &[u8]) -> bool {
-    use neo_riscv_rt::stack_value::StackValue;
+    use neo_riscv_guest::contract_rt::stack_value::StackValue;
 
     match result_data {
         [2] => true,
@@ -445,7 +445,7 @@ mod tests {
     use super::try_decode_small_callback_result;
     use alloc::vec;
     use neo_riscv_abi::VmState;
-    use neo_riscv_rt::Context;
+    use neo_riscv_guest::contract_rt::Context;
 
     #[test]
     fn small_boolean_callback_result_survives_assert_top() {

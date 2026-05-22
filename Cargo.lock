@@ -561,7 +561,7 @@ name = "neo-riscv-contract-harness"
 version = "0.1.0"
 dependencies = [
  "neo-riscv-abi",
- "neo-riscv-rt",
+ "neo-riscv-guest",
  "polkavm-derive",
  "postcard",
 ]
@@ -602,13 +602,6 @@ dependencies = [
  "postcard",
  "proptest",
  "tracing",
-]
-
-[[package]]
-name = "neo-riscv-rt"
-version = "0.1.0"
-dependencies = [
- "neo-riscv-abi",
 ]
 
 [[package]]

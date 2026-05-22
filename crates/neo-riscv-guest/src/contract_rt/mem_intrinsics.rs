@@ -1,6 +1,6 @@
-//! Minimal `memcpy`, `memset`, and `memcmp` implementations for `no_std`
-//! targets (PolkaVM) where `compiler_builtins` does not export these as
-//! `#[no_mangle]` C symbols.
+//! Minimal `memcpy`, `memset`, and `memcmp` implementations for PolkaVM
+//! targets where `compiler_builtins` does not export these as `#[no_mangle]`
+//! C symbols.
 
 #[no_mangle]
 unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
@@ -25,14 +25,12 @@ unsafe extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
 #[no_mangle]
 unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     if src < dest as *const u8 {
-        // Copy backwards to handle overlap
         let mut i = n;
         while i > 0 {
             i -= 1;
             dest.add(i).write(src.add(i).read());
         }
     } else {
-        // Copy forwards
         let mut i = 0;
         while i < n {
             dest.add(i).write(src.add(i).read());

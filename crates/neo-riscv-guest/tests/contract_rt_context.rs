@@ -1,15 +1,9 @@
-use neo_riscv_abi::semantics::runtime;
-use neo_riscv_abi::VmState;
-use neo_riscv_rt::{Context, StackValue};
+use neo_riscv_guest::contract_rt::{Context, StackValue};
+use neo_riscv_guest::{semantics::runtime, VmState};
 
-/// Helper: create an empty context with no initial stack.
 fn empty_ctx() -> Context {
     Context::from_abi_stack(vec![])
 }
-
-// ---------------------------------------------------------------
-// 1. push/pop integer
-// ---------------------------------------------------------------
 
 #[test]
 fn push_pop_integer() {
@@ -20,35 +14,21 @@ fn push_pop_integer() {
     assert!(ctx.stack.is_empty());
 }
 
-// ---------------------------------------------------------------
-// 2. init_slot loads args from stack
-// ---------------------------------------------------------------
-
 #[test]
 fn init_slot_loads_args_from_stack() {
     let mut ctx = empty_ctx();
     ctx.push_int(10);
     ctx.push_int(20);
 
-    // 1 local slot, 2 argument slots
     ctx.init_slot(1, 2);
 
-    // Arguments are reversed from pop order: arg[0]=10, arg[1]=20
     assert_eq!(ctx.args.len(), 2);
     assert_eq!(ctx.args[0], StackValue::Integer(10));
     assert_eq!(ctx.args[1], StackValue::Integer(20));
-
-    // Stack should be empty after popping 2 items
     assert!(ctx.stack.is_empty());
-
-    // Local slot initialized to Null
     assert_eq!(ctx.locals.len(), 1);
     assert_eq!(ctx.locals[0], StackValue::Null);
 }
-
-// ---------------------------------------------------------------
-// 3. add integers
-// ---------------------------------------------------------------
 
 #[test]
 fn add_integers() {
@@ -59,10 +39,6 @@ fn add_integers() {
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
-// ---------------------------------------------------------------
-// 4. sub integers
-// ---------------------------------------------------------------
-
 #[test]
 fn sub_integers() {
     let mut ctx = empty_ctx();
@@ -72,10 +48,6 @@ fn sub_integers() {
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
-// ---------------------------------------------------------------
-// 5. mul integers
-// ---------------------------------------------------------------
-
 #[test]
 fn mul_integers() {
     let mut ctx = empty_ctx();
@@ -84,10 +56,6 @@ fn mul_integers() {
     runtime::arithmetic::mul(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(12));
 }
-
-// ---------------------------------------------------------------
-// 6. equal integers
-// ---------------------------------------------------------------
 
 #[test]
 fn equal_integers() {
@@ -107,14 +75,10 @@ fn not_equal_integers() {
     assert_eq!(ctx.pop(), StackValue::Boolean(false));
 }
 
-// ---------------------------------------------------------------
-// 7. local variable store/load
-// ---------------------------------------------------------------
-
 #[test]
 fn local_variable_store_load() {
     let mut ctx = empty_ctx();
-    ctx.init_slot(2, 0); // 2 locals, 0 args
+    ctx.init_slot(2, 0);
 
     ctx.push_int(99);
     ctx.store_local(0);
@@ -129,30 +93,20 @@ fn local_variable_store_load() {
     assert_eq!(ctx.pop(), StackValue::Integer(100));
 }
 
-// ---------------------------------------------------------------
-// 8. dup and swap
-// ---------------------------------------------------------------
-
 #[test]
 fn dup_and_swap() {
     let mut ctx = empty_ctx();
     ctx.push_int(1);
     ctx.push_int(2);
 
-    // dup should duplicate the top value (2)
     runtime::stack::dup(&mut ctx);
     assert_eq!(ctx.stack.len(), 3);
-    assert_eq!(ctx.pop(), StackValue::Integer(2)); // duplicated top
+    assert_eq!(ctx.pop(), StackValue::Integer(2));
 
-    // stack is now [1, 2]; swap should put 1 on top
     runtime::stack::swap(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(1));
     assert_eq!(ctx.pop(), StackValue::Integer(2));
 }
-
-// ---------------------------------------------------------------
-// 9. push null
-// ---------------------------------------------------------------
 
 #[test]
 fn push_null() {
@@ -161,10 +115,6 @@ fn push_null() {
     let val = ctx.pop();
     assert_eq!(val, StackValue::Null);
 }
-
-// ---------------------------------------------------------------
-// 10. push bool
-// ---------------------------------------------------------------
 
 #[test]
 fn push_bool_true_and_false() {
@@ -175,10 +125,6 @@ fn push_bool_true_and_false() {
     assert_eq!(ctx.pop(), StackValue::Boolean(false));
     assert_eq!(ctx.pop(), StackValue::Boolean(true));
 }
-
-// ---------------------------------------------------------------
-// 11. static fields
-// ---------------------------------------------------------------
 
 #[test]
 fn static_fields_store_load() {
@@ -217,10 +163,6 @@ fn static_fields_reject_uninitialized_or_out_of_range_access() {
     assert_eq!(ctx.state, VmState::Halt);
     assert_eq!(ctx.pop(), StackValue::Null);
 }
-
-// ---------------------------------------------------------------
-// 12. push bytes
-// ---------------------------------------------------------------
 
 #[test]
 fn push_bytes() {

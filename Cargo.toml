@@ -6,7 +6,6 @@ members = [
     "crates/neo-riscv-guest-module",
     "crates/neo-riscv-host",
     "crates/neo-riscv-devpack",
-    "crates/neo-riscv-rt",
     "crates/neo-riscv-contract-harness",
 ]
 exclude = [

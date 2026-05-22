@@ -7,6 +7,11 @@
 
 #![no_std]
 
+extern crate alloc;
+
+pub mod contract_rt;
+
+pub use neo_riscv_abi::semantics;
 pub use neo_vm_rs::{
     fast_codec, interpret, interpret_with_stack_and_syscalls, interpret_with_stack_and_syscalls_at,
     interpret_with_stack_and_syscalls_at_with_initializer,

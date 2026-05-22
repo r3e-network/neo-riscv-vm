@@ -7,7 +7,6 @@
 use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
 
-pub mod memory;
 pub mod stack_value;
 
 #[cfg(target_arch = "riscv32")]

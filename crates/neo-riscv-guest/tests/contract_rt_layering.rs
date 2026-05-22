@@ -78,3 +78,17 @@ fn contract_runtime_does_not_define_private_byte_opcode_helpers() {
     assert!(!source.contains("index + count"));
     assert!(!source.contains("di + count"));
 }
+
+#[test]
+fn contract_runtime_does_not_keep_empty_future_memory_placeholders() {
+    let source = read_contract_rt_src("mod.rs");
+
+    assert!(
+        !source.contains("pub mod memory"),
+        "contract_rt should only expose implemented runtime modules"
+    );
+    assert!(
+        !contract_rt_src_path("memory.rs").exists(),
+        "memory management belongs in the final PolkaVM guest binary unless contract_rt exposes a real allocator API"
+    );
+}

@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Responsibility boundary: Host runtime that executes PolkaVM guest modules, accounts gas, and bridges syscalls."]
+    N2["Core principles: Instantiate module | Charge opcodes | Marshal stack values | Return VM result"]
+    N3["Input contract: PolkaVM module | execution context | host syscall provider"]
+    N4["State and artifacts: execution result | gas report | host trace"]
+    N5["Integration contract: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N6["Maintenance rule: Keep the boundary small, deterministic, and reproducible under tests."]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

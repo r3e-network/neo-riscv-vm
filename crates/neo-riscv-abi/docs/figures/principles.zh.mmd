@@ -1,0 +1,14 @@
+flowchart LR
+    N1["职责边界: RISC-V 执行路径共享的 ABI、栈值、codec tag 与 opcode 元数据重导出。"]
+    N2["核心原则: 定义稳定 ABI | 重导出共享元数据 | 编码/解码栈值"]
+    N3["输入契约: 共享 VM 类型 | host/guest 边界 | 序列化栈值"]
+    N4["状态与产物: ABI 类型 | codec helper | 运行时常量"]
+    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

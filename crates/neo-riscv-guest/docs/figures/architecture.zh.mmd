@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
-    N2["Inputs: 合约字节码 | ABI 栈 | syscall stub"]
-    N3["neo-riscv-guest: NeoVM2/RISC-V 合约的 guest 侧外观层与合约运行时胶水。"]
-    N4["Responsibilities: 调用共享 VM runtime | 暴露 no_std 合约 API | 桥接 syscall"]
-    N5["Outputs: guest 结果 | syscall 请求 | 栈变化"]
-    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["公开入口: 合约字节码 | ABI 栈 | syscall stub"]
+    N2["neo-riscv-guest: NeoVM2/RISC-V 合约的 guest 侧外观层与合约运行时胶水。"]
+    N3["内部组件: 调用共享 VM runtime | 暴露 no_std 合约 API | 桥接 syscall"]
+    N4["依赖边界: neo-riscv-abi | neo-vm-rs"]
+    N5["输出产物: guest 结果 | syscall 请求 | 栈变化"]
+    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

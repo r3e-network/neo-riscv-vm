@@ -1,0 +1,14 @@
+flowchart LR
+    N1["职责边界: 用于编译和准备 RISC-V Neo 合约的开发者打包工具。"]
+    N2["核心原则: 构建产物 | 校验元数据 | 打包部署文件"]
+    N3["输入契约: 合约源码 | 模板配置 | 工具链设置"]
+    N4["状态与产物: 合约包 | manifest | 开发诊断"]
+    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

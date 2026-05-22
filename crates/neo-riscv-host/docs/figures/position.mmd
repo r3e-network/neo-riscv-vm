@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Neo N4 layer: NeoVM2 / RISC-V execution profile"]
+    N2["Upstream inputs: PolkaVM module | execution context | host syscall provider"]
+    N3["neo-riscv-host: Host runtime that executes PolkaVM guest modules, accounts gas, and bridges syscalls."]
+    N4["Direct dependencies: criterion | neo-riscv-abi | neo-riscv-guest | polkavm | postcard"]
+    N5["Downstream users: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N6["Learning focus: Locate upstream and downstream first, then read this crate boundary, core data structures, and tests."]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

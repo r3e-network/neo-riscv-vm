@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V execution profile"]
-    N2["Inputs: PolkaVM module | execution context | host syscall provider"]
-    N3["neo-riscv-host: Host runtime that executes PolkaVM guest modules, accounts gas, and bridges syscalls."]
-    N4["Responsibilities: Instantiate module | Charge opcodes | Marshal stack values | Return VM result"]
-    N5["Outputs: execution result | gas report | host trace"]
-    N6["Consumers: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N1["Public entrypoints: PolkaVM module | execution context | host syscall provider"]
+    N2["neo-riscv-host: Host runtime that executes PolkaVM guest modules, accounts gas, and bridges syscalls."]
+    N3["Internal components: Instantiate module | Charge opcodes | Marshal stack values | Return VM result"]
+    N4["Dependency boundary: criterion | neo-riscv-abi | neo-riscv-guest | polkavm | postcard"]
+    N5["Output artifacts: execution result | gas report | host trace"]
+    N6["System position: NeoVM2 / RISC-V execution profile -> RISC-V host | Neo N4 L2 node | developer tooling"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

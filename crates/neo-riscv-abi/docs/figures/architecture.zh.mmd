@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
-    N2["Inputs: 共享 VM 类型 | host/guest 边界 | 序列化栈值"]
-    N3["neo-riscv-abi: RISC-V 执行路径共享的 ABI、栈值、codec tag 与 opcode 元数据重导出。"]
-    N4["Responsibilities: 定义稳定 ABI | 重导出共享元数据 | 编码/解码栈值"]
-    N5["Outputs: ABI 类型 | codec helper | 运行时常量"]
-    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["公开入口: 共享 VM 类型 | host/guest 边界 | 序列化栈值"]
+    N2["neo-riscv-abi: RISC-V 执行路径共享的 ABI、栈值、codec tag 与 opcode 元数据重导出。"]
+    N3["内部组件: 定义稳定 ABI | 重导出共享元数据 | 编码/解码栈值"]
+    N4["依赖边界: neo-vm-rs | sha2"]
+    N5["输出产物: ABI 类型 | codec helper | 运行时常量"]
+    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

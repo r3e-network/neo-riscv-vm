@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Neo N4 layer: NeoVM2 / RISC-V execution profile"]
+    N2["Upstream inputs: shared VM types | host/guest boundary | serialized stack values"]
+    N3["neo-riscv-abi: Shared ABI, stack values, codec tags, and opcode metadata re-exports for RISC-V execution."]
+    N4["Direct dependencies: neo-vm-rs | sha2"]
+    N5["Downstream users: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N6["Learning focus: Locate upstream and downstream first, then read this crate boundary, core data structures, and tests."]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

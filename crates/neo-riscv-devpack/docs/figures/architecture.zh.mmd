@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
-    N2["Inputs: 合约源码 | 模板配置 | 工具链设置"]
-    N3["neo-riscv-devpack: 用于编译和准备 RISC-V Neo 合约的开发者打包工具。"]
-    N4["Responsibilities: 构建产物 | 校验元数据 | 打包部署文件"]
-    N5["Outputs: 合约包 | manifest | 开发诊断"]
-    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["公开入口: 合约源码 | 模板配置 | 工具链设置"]
+    N2["neo-riscv-devpack: 用于编译和准备 RISC-V Neo 合约的开发者打包工具。"]
+    N3["内部组件: 构建产物 | 校验元数据 | 打包部署文件"]
+    N4["依赖边界: neo-riscv-abi"]
+    N5["输出产物: 合约包 | manifest | 开发诊断"]
+    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

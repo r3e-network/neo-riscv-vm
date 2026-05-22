@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
-    N2["Inputs: 种子语料 | 生成 opcode | 变异栈值"]
-    N3["neo-riscv-fuzz: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
-    N4["Responsibilities: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
-    N5["Outputs: 回归 seed | 崩溃案例 | 覆盖率信号"]
-    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["公开入口: 种子语料 | 生成 opcode | 变异栈值"]
+    N2["neo-riscv-fuzz: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
+    N3["内部组件: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
+    N4["依赖边界: libfuzzer-sys | neo-riscv-abi | neo-riscv-guest | neo-riscv-host | serde"]
+    N5["输出产物: 回归 seed | 崩溃案例 | 覆盖率信号"]
+    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

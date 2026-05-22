@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V 执行 profile"]
-    N2["Inputs: PolkaVM import | guest runtime | 编码执行输入"]
-    N3["neo-riscv-guest-module: PolkaVM guest 模块入口，将 guest runtime 打包成可执行 RISC-V 代码。"]
-    N4["Responsibilities: 暴露 export | 调用 guest runtime | 返回编码输出"]
-    N5["Outputs: guest.polkavm | 编码输出 | host callback 调用"]
-    N6["Consumers: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N1["公开入口: PolkaVM import | guest runtime | 编码执行输入"]
+    N2["neo-riscv-guest-module: PolkaVM guest 模块入口，将 guest runtime 打包成可执行 RISC-V 代码。"]
+    N3["内部组件: 暴露 export | 调用 guest runtime | 返回编码输出"]
+    N4["依赖边界: neo-riscv-abi | neo-riscv-guest | polkavm-derive | postcard"]
+    N5["输出产物: guest.polkavm | 编码输出 | host callback 调用"]
+    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

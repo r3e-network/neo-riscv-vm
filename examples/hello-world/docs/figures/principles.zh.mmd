@@ -1,0 +1,14 @@
+flowchart LR
+    N1["职责边界: 用于 RISC-V 工具链的 hello-world 合约示例。"]
+    N2["核心原则: 演示合约模式 | 覆盖工具链 | 提供学习 fixture"]
+    N3["输入契约: 开发者源码 | 模板 runtime | 测试上下文"]
+    N4["状态与产物: 编译后合约 | 示例结果 | 教程产物"]
+    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

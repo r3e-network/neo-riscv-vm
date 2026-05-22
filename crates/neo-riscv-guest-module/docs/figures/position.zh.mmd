@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Neo N4 层级: NeoVM2 / RISC-V 执行 profile"]
+    N2["上游输入: PolkaVM import | guest runtime | 编码执行输入"]
+    N3["neo-riscv-guest-module: PolkaVM guest 模块入口，将 guest runtime 打包成可执行 RISC-V 代码。"]
+    N4["直接依赖: neo-riscv-abi | neo-riscv-guest | polkavm-derive | postcard"]
+    N5["下游使用者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N6["学习重点: 先定位上下游，再阅读本 crate 的边界、核心数据结构和测试。"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

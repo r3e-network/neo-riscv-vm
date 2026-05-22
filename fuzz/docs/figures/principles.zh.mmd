@@ -1,0 +1,14 @@
+flowchart LR
+    N1["职责边界: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
+    N2["核心原则: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
+    N3["输入契约: 种子语料 | 生成 opcode | 变异栈值"]
+    N4["状态与产物: 回归 seed | 崩溃案例 | 覆盖率信号"]
+    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

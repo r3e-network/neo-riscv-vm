@@ -1,0 +1,14 @@
+flowchart LR
+    N1["Responsibility boundary: Shared ABI, stack values, codec tags, and opcode metadata re-exports for RISC-V execution."]
+    N2["Core principles: Define stable ABI | Re-export shared metadata | Encode/decode stack values"]
+    N3["Input contract: shared VM types | host/guest boundary | serialized stack values"]
+    N4["State and artifacts: ABI types | codec helpers | runtime constants"]
+    N5["Integration contract: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N6["Maintenance rule: Keep the boundary small, deterministic, and reproducible under tests."]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N3 crate

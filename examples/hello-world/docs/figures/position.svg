@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="hello-world Position">
+<defs>
+<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
+<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+</defs>
+<rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
+<rect x="34" y="34" width="1212" height="692" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
+<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">hello-world Position</text>
+<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate visual learning guide</text>
+<rect x="104" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<text x="126" y="189" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Neo N4 layer</text>
+<text x="126" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">NeoVM2 / RISC-V execution profile</text>
+<rect x="470" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<text x="492" y="189" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Upstream inputs</text>
+<text x="492" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">developer source</text>
+<text x="492" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">template runtime</text>
+<text x="492" y="265" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test context</text>
+<line x1="452" y1="220" x2="462" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="836" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<text x="858" y="189" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">hello-world</text>
+<text x="858" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">Small hello-world contract example</text>
+<text x="858" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">for the RISC-V toolchain.</text>
+<line x1="818" y1="220" x2="828" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="104" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<text x="126" y="449" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Direct dependencies</text>
+<text x="126" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo-riscv-abi</text>
+<text x="126" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo-riscv-devpack</text>
+<rect x="470" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<text x="492" y="449" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Downstream users</text>
+<text x="492" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">RISC-V host</text>
+<text x="492" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">Neo N4 L2 node</text>
+<text x="492" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">developer tooling</text>
+<line x1="452" y1="480" x2="462" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="836" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<text x="858" y="449" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Learning focus</text>
+<text x="858" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">Locate upstream and downstream</text>
+<text x="858" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">first, then read this crate</text>
+<text x="858" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">boundary, core data structures,</text>
+<text x="858" y="547" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">and tests.</text>
+<line x1="818" y1="480" x2="828" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<path d="M640 300 C640 350 640 370 640 412" stroke="#52a6ff" stroke-width="2.5" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+<text x="70" y="704" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo package metadata and Neo N4 architecture roles. Edit the companion .mmd source or rerun tools/docs/generate_crate_visual_docs.py.</text>
+</svg>

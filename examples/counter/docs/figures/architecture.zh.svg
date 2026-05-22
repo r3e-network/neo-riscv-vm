@@ -9,30 +9,31 @@
 <text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">counter Architecture</text>
 <text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 可视化学习图</text>
 <rect x="104" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<text x="126" y="189" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Project layer</text>
-<text x="126" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">NeoVM2 / RISC-V 执行 pro</text>
-<text x="126" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">file</text>
+<text x="126" y="189" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">公开入口</text>
+<text x="126" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">开发者源码 | 模板 runtime | 测</text>
+<text x="126" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">试上下文</text>
 <rect x="470" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<text x="492" y="189" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Inputs</text>
-<text x="492" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">开发者源码 | 模板 runtime | 测</text>
-<text x="492" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">试上下文</text>
+<text x="492" y="189" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">counter</text>
+<text x="492" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">最小状态变更 counter 合约示例。</text>
 <line x1="452" y1="220" x2="462" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
 <rect x="836" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<text x="858" y="189" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">counter</text>
-<text x="858" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">最小状态变更 counter 合约示例。</text>
+<text x="858" y="189" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">内部组件</text>
+<text x="858" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">演示合约模式 | 覆盖工具链 | 提供学习 </text>
+<text x="858" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">fixture</text>
 <line x1="818" y1="220" x2="828" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
 <rect x="104" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<text x="126" y="449" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Responsibilities</text>
-<text x="126" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">演示合约模式 | 覆盖工具链 | 提供学习 </text>
-<text x="126" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">fixture</text>
+<text x="126" y="449" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">依赖边界</text>
+<text x="126" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo-riscv-abi</text>
+<text x="126" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo-riscv-devpack</text>
 <rect x="470" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<text x="492" y="449" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Outputs</text>
+<text x="492" y="449" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">输出产物</text>
 <text x="492" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">编译后合约 | 示例结果 | 教程产物</text>
 <line x1="452" y1="480" x2="462" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
 <rect x="836" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<text x="858" y="449" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Consumers</text>
-<text x="858" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">RISC-V host | Neo N4 L</text>
-<text x="858" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">2 节点 | 开发者工具</text>
+<text x="858" y="449" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">系统位置</text>
+<text x="858" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">NeoVM2 / RISC-V 执行 pro</text>
+<text x="858" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">file -&gt; RISC-V host | </text>
+<text x="858" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">Neo N4 L2 节点 | 开发者工具</text>
 <line x1="818" y1="480" x2="828" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
 <path d="M640 300 C640 350 640 370 640 412" stroke="#52a6ff" stroke-width="2.5" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
 <text x="70" y="704" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo package metadata and Neo N4 architecture roles. Edit the companion .mmd source or rerun tools/docs/generate_crate_visual_docs.py.</text>

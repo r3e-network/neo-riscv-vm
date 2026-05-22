@@ -1,14 +1,14 @@
 flowchart LR
-    N1["Project layer: NeoVM2 / RISC-V execution profile"]
-    N2["Inputs: contract bytecode | ABI stack | syscall stubs"]
-    N3["neo-riscv-guest: Guest-side facade and contract runtime glue for NeoVM2/RISC-V contracts."]
-    N4["Responsibilities: Call shared VM runtime | Expose no_std contract APIs | Bridge syscalls"]
-    N5["Outputs: guest result | syscall request | stack mutation"]
-    N6["Consumers: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N1["Public entrypoints: contract bytecode | ABI stack | syscall stubs"]
+    N2["neo-riscv-guest: Guest-side facade and contract runtime glue for NeoVM2/RISC-V contracts."]
+    N3["Internal components: Call shared VM runtime | Expose no_std contract APIs | Bridge syscalls"]
+    N4["Dependency boundary: neo-riscv-abi | neo-vm-rs"]
+    N5["Output artifacts: guest result | syscall request | stack mutation"]
+    N6["System position: NeoVM2 / RISC-V execution profile -> RISC-V host | Neo N4 L2 node | developer tooling"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
     N5 --> N6
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N2 crate

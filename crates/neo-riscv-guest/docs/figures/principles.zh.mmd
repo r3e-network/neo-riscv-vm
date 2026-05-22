@@ -1,14 +1,24 @@
-flowchart LR
-    N1["职责边界: NeoVM2/RISC-V 合约的 guest 侧外观层与合约运行时胶水。"]
-    N2["核心原则: 调用共享 VM runtime | 暴露 no_std 合约 API | 桥接 syscall"]
-    N3["输入契约: 合约字节码 | ABI 栈 | syscall stub"]
-    N4["状态与产物: guest 结果 | syscall 请求 | 栈变化"]
-    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
-    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+flowchart TB
+    N1["1. 职责边界: NeoVM2/RISC-V 合约的 guest 侧外观层与合约运行时胶水。"]
+    N2["2. 核心不变量: 调用共享 VM runtime | 暴露 no_std 合约 API | 桥接 syscall"]
+    N3["3. 输入必须被约束: 合约字节码 | ABI 栈 | syscall stub"]
+    N4["4. 输出必须可验证: guest 结果 | syscall 请求 | 栈变化"]
+    N5["5. 源码证据: 12 个源码文件，9 个公开符号，295 个测试，2 个依赖"]
+    N6["6. 测试证据: tests/interpreter.rs（217 个测试） | tests/contracts.rs（49 个测试） | tests/contract_rt_context.rs（14 个测试） | tests/shared_vm_dependency.rs（3 个测试） | tests/rc_compat_test.rs（3 个测试） | +4"]
+    N7["7. 依赖原则: 运行时 2，测试 0，构建 0，内部 2，外部运行时 0"]
+    N8["8. 维护规则: 边界要小，语义要确定，测试要可复现，图和文档要随源码更新。"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N4 crate

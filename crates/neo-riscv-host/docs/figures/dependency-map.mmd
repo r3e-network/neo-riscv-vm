@@ -1,14 +1,24 @@
-flowchart LR
-    N1["neo-riscv-host: Cargo.toml dependency boundary"]
-    N2["Runtime deps: neo-riscv-abi | neo-riscv-guest | polkavm | postcard | tracing"]
-    N3["Test deps: criterion | proptest"]
-    N4["Build deps: no build deps"]
-    N5["Neo internal deps: neo-riscv-abi | neo-riscv-guest"]
-    N6["Boundary check: fewer dependencies make the crate easier to understand and test"]
+flowchart TB
+    N1["1. neo-riscv-host: Cargo.toml dependency boundary"]
+    N2["2. Runtime deps: neo-riscv-abi | neo-riscv-guest | polkavm | postcard | tracing"]
+    N3["3. Test deps: criterion | proptest"]
+    N4["4. Build deps: no build deps"]
+    N5["5. Neo internal deps: neo-riscv-abi | neo-riscv-guest"]
+    N6["6. External deps: polkavm | postcard | tracing | criterion | proptest"]
+    N7["7. Risk check: runtime 5, test 2, build 0, internal 2, external runtime 3"]
+    N8["8. Boundary check: Fewer dependencies make the crate easier to understand, audit, and test. New deps must justify runtime necessity."]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

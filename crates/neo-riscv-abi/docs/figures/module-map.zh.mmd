@@ -1,14 +1,39 @@
-flowchart LR
-    N1["neo-riscv-abi: 源码文件 6 个，公开符号 0 个"]
-    N2["src/lib.rs: crate 根、公开导出和顶层文档"]
-    N3["tests/codec_tests.rs: 外部行为或集成测试"]
-    N4["tests/shared_vm_codecs.rs: 外部行为或集成测试"]
-    N5["src/callback_codec.rs: 实现细节或辅助模块"]
-    N6["src/fast_codec.rs: 实现细节或辅助模块"]
+flowchart TB
+    N1["1. neo-riscv-abi: 6 个源码文件，0 个公开符号，45 个测试，2 个依赖"]
+    N2["2. src/lib.rs: crate 根、公开导出和顶层文档；公开符号 0；测试 2"]
+    N3["3. tests/codec_tests.rs: 外部行为或集成测试；公开符号 0；测试 41"]
+    N4["4. tests/shared_vm_codecs.rs: 外部行为或集成测试；公开符号 0；测试 2"]
+    N5["5. src/callback_codec.rs: 实现细节或辅助模块；公开符号 0；测试 0"]
+    N6["6. src/fast_codec.rs: 实现细节或辅助模块；公开符号 0；测试 0"]
+    N7["7. src/result_codec.rs: 实现细节或辅助模块；公开符号 0；测试 0"]
+    N8["8. 模块信号: src/callback_codec.rs: pub use neo_vm_rs::callback_codec::* | src/fast_codec.rs: pub use neo_vm_rs::fast_codec::* | src/lib.rs: mod callback_codec | src/lib.rs: mod fast_codec | src/lib.rs: mod result_codec | +3"]
+    N9["9. API 集中度: 未扫描到公开 API 定义文件"]
+    N10["10. 测试集中度: tests/codec_tests.rs（41 个测试） | tests/shared_vm_codecs.rs（2 个测试） | src/lib.rs（2 个测试）"]
+    N11["11. 依赖上下文: 运行时 1，测试 1，构建 0，内部 1，外部运行时 0"]
+    N12["12. 阅读路径: src/lib.rs (0 API/2 测试) | tests/codec_tests.rs (0 API/41 测试) | tests/shared_vm_codecs.rs (0 API/2 测试) | src/callback_codec.rs (0 API/0 测试)"]
+    N13["13. 修改热点: 优先审查 src/lib.rs；它有 0 个公开符号、2 个测试。"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N1 --> N10
+    N1 --> N11
+    N1 --> N12
+    N1 --> N13
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
+    N10 -. related .-> N11
+    N11 -. related .-> N12
+    N12 -. related .-> N13
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

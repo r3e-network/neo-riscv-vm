@@ -1,14 +1,24 @@
-flowchart LR
-    N1["职责边界: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
-    N2["核心原则: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
-    N3["输入契约: 种子语料 | 生成 opcode | 变异栈值"]
-    N4["状态与产物: 回归 seed | 崩溃案例 | 覆盖率信号"]
-    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
-    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+flowchart TB
+    N1["1. 职责边界: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
+    N2["2. 核心不变量: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
+    N3["3. 输入必须被约束: 种子语料 | 生成 opcode | 变异栈值"]
+    N4["4. 输出必须可验证: 回归 seed | 崩溃案例 | 覆盖率信号"]
+    N5["5. 源码证据: 12 个源码文件，16 个公开符号，16 个测试，6 个依赖"]
+    N6["6. 测试证据: src/whole_system_parity.rs（4 个测试） | src/generators/value_gen.rs（4 个测试） | src/generators/opcode_gen.rs（4 个测试） | src/stack_ops_builder.rs（2 个测试） | src/syscall_fuzz.rs（1 个测试） | +1"]
+    N7["7. 依赖原则: 运行时 6，测试 0，构建 0，内部 3，外部运行时 3"]
+    N8["8. 维护规则: 边界要小，语义要确定，测试要可复现，图和文档要随源码更新。"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N4 crate

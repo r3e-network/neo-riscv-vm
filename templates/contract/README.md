@@ -19,6 +19,7 @@ For the full source-level explanation, read [docs/learning-guide.md](docs/learni
 | Public API surface | ![Public API surface](docs/figures/api-surface.svg) | [Mermaid](docs/figures/api-surface.mmd) |
 | Test evidence | ![Test evidence](docs/figures/test-map.svg) | [Mermaid](docs/figures/test-map.mmd) |
 | Dependency map | ![Dependency map](docs/figures/dependency-map.svg) | [Mermaid](docs/figures/dependency-map.mmd) |
+| Implementation atlas | ![Implementation atlas](docs/figures/implementation-atlas.svg) | [Mermaid](docs/figures/implementation-atlas.mmd) |
 
 ### Role in Neo N4
 
@@ -59,5 +60,6 @@ For the full source-level explanation, read [docs/learning-guide.md](docs/learni
 2. Read the technical principles diagram to identify the invariants and responsibility boundary.
 3. Use the module map and API surface to identify the files and symbols to read first.
 4. Follow the workflow, dataflow, test, and dependency diagrams before changing code.
+5. Use the implementation atlas as the compact source-reading map when you want one dense view instead of separate technical views.
 
 <!-- N4-CRATE-VISUAL-GUIDE:END -->

@@ -19,6 +19,7 @@
 | 公开 API 图 | ![公开 API 图](docs/figures/api-surface.zh.svg) | [Mermaid](docs/figures/api-surface.zh.mmd) |
 | 测试证据图 | ![测试证据图](docs/figures/test-map.zh.svg) | [Mermaid](docs/figures/test-map.zh.mmd) |
 | 依赖图 | ![依赖图](docs/figures/dependency-map.zh.svg) | [Mermaid](docs/figures/dependency-map.zh.mmd) |
+| 实现全景图 | ![实现全景图](docs/figures/implementation-atlas.zh.svg) | [Mermaid](docs/figures/implementation-atlas.zh.mmd) |
 
 ### 在 Neo N4 中的作用
 
@@ -64,5 +65,6 @@
 2. 再看技术原理图，理解它的核心不变量、职责边界和维护规则。
 3. 然后看模块图和 API 图，确定先读哪些文件、哪些符号。
 4. 最后看工作流、数据流、测试证据图和依赖图，再进入源码会更容易理解。
+5. 如果希望一张图看完整体，就看实现全景图；它把源码入口、API、数据流、测试、依赖和修改检查点放在一起。
 
 <!-- N4-CRATE-VISUAL-GUIDE-ZH:END -->

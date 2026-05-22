@@ -1,14 +1,27 @@
-flowchart LR
-    N1["公开入口: PolkaVM 模块 | 执行上下文 | 宿主 syscall provider"]
-    N2["neo-riscv-host: 执行 PolkaVM guest 模块、计费 gas 并桥接 syscall 的 host runtime。"]
-    N3["内部组件: 实例化模块 | 按 opcode 计费 | 编组栈值 | 返回 VM 结果"]
-    N4["依赖边界: criterion | neo-riscv-abi | neo-riscv-guest | polkavm | postcard"]
-    N5["输出产物: 执行结果 | gas 报告 | host 轨迹"]
-    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+flowchart TB
+    N1["1. 架构总览: neo-riscv-host: 31 个源码文件，80 个公开符号，303 个测试，7 个依赖"]
+    N2["2. 入口契约: PolkaVM 模块 | 执行上下文 | 宿主 syscall provider"]
+    N3["3. 公开 API 层: 类型 14 | 函数 65 | Trait 0 | 常量 1"]
+    N4["4. 核心实现文件: src/lib.rs (29 API/0 测试) | tests/runtime.rs (0 API/156 测试) | src/runtime_cache.rs (15 API/3 测试) | tests/fuzz_compatibility.rs (0 API/47 测试) | src/bridge.rs (11 API/8 测试)"]
+    N5["5. 模块/重导出: benches/benchmark_harness.rs: mod benchmarks | benches/benchmarks/mod.rs: mod arithmetic | benches/benchmarks/mod.rs: mod codec | benches/benchmarks/mod.rs: mod control_flow | benches/benchmarks/mod.rs: mod overhead | +16"]
+    N6["6. 依赖边界: criterion | neo-riscv-abi | neo-riscv-guest | polkavm | postcard"]
+    N7["7. 输出产物: 执行结果 | gas 报告 | host 轨迹"]
+    N8["8. 测试护栏: tests/runtime.rs（156 个测试） | tests/fuzz_compatibility.rs（47 个测试） | tests/parity.rs（39 个测试） | src/pricing.rs（12 个测试） | src/bridge.rs（8 个测试） | +14"]
+    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

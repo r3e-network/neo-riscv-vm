@@ -1,10 +1,20 @@
-flowchart LR
-    N1["Data 1: contract input"]
-    N2["Data 2: nep17-token"]
-    N3["Data 3: host/guest boundary"]
-    N4["Data 4: Neo N4 state transition"]
+flowchart TB
+    N1["1. nep17-token: Data crosses inputs, type models, core functions, outputs, and tests; 2 source files, 3 public symbols, 3 tests, 2 deps"]
+    N2["2. Data 1: contract input"]
+    N3["3. Data 2: nep17-token"]
+    N4["4. Data 3: host/guest boundary"]
+    N5["5. Data 4: Neo N4 state transition"]
+    N6["6. Key types: no public symbols scanned"]
+    N7["7. Key functions: dispatch | invoke_entry | invoke"]
+    N8["8. Boundary checks: src/lib.rs (3 tests)"]
+    N9["9. Consumers: RISC-V host | Neo N4 L2 node | developer tooling"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    N8 --> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

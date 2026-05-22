@@ -1,14 +1,45 @@
-flowchart LR
-    N1["neo-riscv-host: 测试函数 303 个，测试文件 19 个"]
-    N2["tests/runtime.rs: creates_interpreter_backed_polkavm_runtime | executes_push1_ret_through_host_runtime | helper_append_mutates_consumed_caller_array_alias_through_host_runtime | size_matches_neovm_for_integer_and_boolean_values_through_host_runtime +152"]
-    N3["tests/fuzz_compatibility.rs: fuzz_fast_codec_single_value | fuzz_fast_codec_multi_value | fuzz_fast_codec_decode_never_panics | fuzz_callback_codec_ok_roundtrip +43"]
-    N4["tests/parity.rs: parity_assignment | parity_binary_expression | parity_big_integer_pow | parity_big_integer_sqrt +35"]
-    N5["src/pricing.rs: opcode_price_push_opcodes | opcode_price_flow_control | opcode_price_expensive_opcodes | opcode_price_unknown_defaults_to_max +8"]
-    N6["src/bridge.rs: get | small_entry_round_trip_stays_in_small_cache | small_inline_slots_can_hold_multiple_entries | large_entry_falls_back_without_breaking_small_entries +4"]
+flowchart TB
+    N1["1. neo-riscv-host: 测试函数 303 个，测试文件 19 个"]
+    N2["2. tests/runtime.rs: 156 个测试；creates_interpreter_backed_polkavm_runtime | executes_push1_ret_through_host_runtime | helper_append_mutates_consumed_caller_array_alias_through_host_runtime | size_matches_neovm_for_integer_and_boolean_values_through_host_runtime +152"]
+    N3["3. tests/fuzz_compatibility.rs: 47 个测试；fuzz_fast_codec_single_value | fuzz_fast_codec_multi_value | fuzz_fast_codec_decode_never_panics | fuzz_callback_codec_ok_roundtrip +43"]
+    N4["4. tests/parity.rs: 39 个测试；parity_assignment | parity_binary_expression | parity_big_integer_pow | parity_big_integer_sqrt +35"]
+    N5["5. src/pricing.rs: 12 个测试；opcode_price_push_opcodes | opcode_price_flow_control | opcode_price_expensive_opcodes | opcode_price_unknown_defaults_to_max +8"]
+    N6["6. src/bridge.rs: 8 个测试；get | small_entry_round_trip_stays_in_small_cache | small_inline_slots_can_hold_multiple_entries | large_entry_falls_back_without_breaking_small_entries +4"]
+    N7["7. tests/opcode_matrix/types.rs: 7 个测试；convert_int_to_bool_true | convert_int_to_bool_false | istype_integer | istype_boolean_false +3"]
+    N8["8. tests/opcode_matrix/stack.rs: 6 个测试；drop_empty_stack_faults | dup_empty_stack_faults | dup_basic | swap_basic +2"]
+    N9["9. tests/opcode_matrix/arithmetic.rs: 6 个测试；add_basic | sub_basic | mul_basic | div_basic +2"]
+    N10["10. 被测源码: src/lib.rs (29 API/0 测试) | tests/runtime.rs (0 API/156 测试) | src/runtime_cache.rs (15 API/3 测试) | tests/fuzz_compatibility.rs (0 API/47 测试)"]
+    N11["11. 被测 API 面: 类型 14 | 函数 65 | Trait 0 | 常量 1"]
+    N12["12. 覆盖缺口: 公开符号 80，测试 303；继续保持测试和 API 同步。"]
+    N13["13. 依赖测试范围: 运行时 5，测试 2，构建 0，内部 2，外部运行时 3"]
+    N14["14. 学习方式: 先读测试名理解行为，再回到对应源码文件和公开 API。"]
+    N15["15. 验证命令: cargo test --workspace --locked；外部子仓库分别 cargo test --locked"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N1 --> N10
+    N1 --> N11
+    N1 --> N12
+    N1 --> N13
+    N1 --> N14
+    N1 --> N15
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
+    N10 -. related .-> N11
+    N11 -. related .-> N12
+    N12 -. related .-> N13
+    N13 -. related .-> N14
+    N14 -. related .-> N15
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

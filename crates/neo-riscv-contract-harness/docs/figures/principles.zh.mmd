@@ -1,14 +1,24 @@
-flowchart LR
-    N1["职责边界: 用于合约级 RISC-V 执行和 syscall 模拟的测试 harness。"]
-    N2["核心原则: 初始化测试上下文 | 运行合约 export | 断言状态/栈"]
-    N3["输入契约: 合约模块 | mock 上下文 | 期望栈"]
-    N4["状态与产物: 测试结果 | 轨迹 | 失败诊断"]
-    N5["集成方式: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
-    N6["维护规则: 保持边界小、语义确定、测试可复现。"]
+flowchart TB
+    N1["1. 职责边界: 用于合约级 RISC-V 执行和 syscall 模拟的测试 harness。"]
+    N2["2. 核心不变量: 初始化测试上下文 | 运行合约 export | 断言状态/栈"]
+    N3["3. 输入必须被约束: 合约模块 | mock 上下文 | 期望栈"]
+    N4["4. 输出必须可验证: 测试结果 | 轨迹 | 失败诊断"]
+    N5["5. 源码证据: 1 个源码文件，8 个公开符号，1 个测试，4 个依赖"]
+    N6["6. 测试证据: src/lib.rs（1 个测试）"]
+    N7["7. 依赖原则: 运行时 4，测试 0，构建 0，内部 2，外部运行时 2"]
+    N8["8. 维护规则: 边界要小，语义要确定，测试要可复现，图和文档要随源码更新。"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N4 crate

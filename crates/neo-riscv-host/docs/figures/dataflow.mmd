@@ -1,10 +1,20 @@
-flowchart LR
-    N1["Data 1: contract input"]
-    N2["Data 2: neo-riscv-host"]
-    N3["Data 3: host/guest boundary"]
-    N4["Data 4: Neo N4 state transition"]
+flowchart TB
+    N1["1. neo-riscv-host: Data crosses inputs, type models, core functions, outputs, and tests; 31 source files, 80 public symbols, 303 tests, 7 deps"]
+    N2["2. Data 1: contract input"]
+    N3["3. Data 2: neo-riscv-host"]
+    N4["4. Data 3: host/guest boundary"]
+    N5["5. Data 4: Neo N4 state transition"]
+    N6["6. Key types: GuestTrace | ClosureHost | NativeHostResult | NativeHostCallback +10"]
+    N7["7. Key functions: bench | register_host_functions | new | new_builtin +54"]
+    N8["8. Boundary checks: tests/runtime.rs (156 tests) | tests/fuzz_compatibility.rs (47 tests) | tests/parity.rs (39 tests) | src/pricing.rs (12 tests) | src/bridge.rs (8 tests) | +14"]
+    N9["9. Consumers: RISC-V host | Neo N4 L2 node | developer tooling"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    N8 --> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

@@ -1,14 +1,24 @@
-flowchart LR
-    N1["Responsibility boundary: Small hello-world contract example for the RISC-V toolchain."]
-    N2["Core principles: Demonstrate contract pattern | Exercise tooling | Provide learning fixture"]
-    N3["Input contract: developer source | template runtime | test context"]
-    N4["State and artifacts: compiled contract | example result | tutorial artifact"]
-    N5["Integration contract: RISC-V host | Neo N4 L2 node | developer tooling"]
-    N6["Maintenance rule: Keep the boundary small, deterministic, and reproducible under tests."]
+flowchart TB
+    N1["1. Responsibility boundary: Small hello-world contract example for the RISC-V toolchain."]
+    N2["2. Core principles: Demonstrate contract pattern | Exercise tooling | Provide learning fixture"]
+    N3["3. Input contract: developer source | template runtime | test context"]
+    N4["4. State and artifacts: compiled contract | example result | tutorial artifact"]
+    N5["5. Source evidence: 2 source files, 3 public symbols, 2 tests, 2 deps"]
+    N6["6. Test evidence: src/lib.rs (2 tests)"]
+    N7["7. Dependency discipline: runtime 2, test 0, build 0, internal 2, external runtime 0"]
+    N8["8. Maintenance rule: Keep the boundary small, deterministic, and reproducible under tests."]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

@@ -1,14 +1,30 @@
-flowchart LR
-    N1["Neo N4 layer: NeoVM2 / RISC-V execution profile"]
-    N2["Upstream inputs: PolkaVM imports | guest runtime | encoded execution input"]
-    N3["neo-riscv-guest-module: PolkaVM guest module entrypoint that packages the guest runtime into executable RISC-V code."]
-    N4["Direct dependencies: neo-riscv-abi | neo-riscv-guest | polkavm-derive | postcard"]
-    N5["Downstream users: RISC-V host | Neo N4 L2 node | developer tooling"]
-    N6["Learning focus: Locate upstream and downstream first, then read this crate boundary, core data structures, and tests."]
-    N1 --> N2
-    N2 --> N3
+flowchart TB
+    N1["1. Neo N4 layer: NeoVM2 / RISC-V execution profile"]
+    N2["2. Upstream inputs: PolkaVM imports | guest runtime | encoded execution input"]
+    N3["3. neo-riscv-guest-module: PolkaVM guest module entrypoint that packages the guest runtime into executable RISC-V code."]
+    N4["4. Downstream users: RISC-V host | Neo N4 L2 node | developer tooling"]
+    N5["5. Source scale: 2 source files, 26 public symbols, 3 tests, 4 deps"]
+    N6["6. Source entrypoints: src/main.rs (26 API/3 tests) | src/mem_intrinsics.rs (0 API/0 tests)"]
+    N7["7. Core API: _start | main | alloc | get_result_ptr +22"]
+    N8["8. Test guardrails: src/main.rs (3 tests)"]
+    N9["9. Direct dependencies: neo-riscv-abi | neo-riscv-guest | polkavm-derive | postcard"]
+    N10["10. Learning focus: Locate upstream and downstream first, then read this crate boundary, core data structures, and tests."]
+    N3 --> N1
+    N3 --> N2
     N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N3 --> N5
+    N3 --> N6
+    N3 --> N7
+    N3 --> N8
+    N3 --> N9
+    N3 --> N10
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N3 crate

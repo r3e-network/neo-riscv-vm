@@ -1,10 +1,20 @@
-flowchart LR
-    N1["Data 1: 合约输入"]
-    N2["Data 2: devpack-test"]
-    N3["Data 3: host/guest 边界"]
-    N4["Data 4: Neo N4 状态转换"]
+flowchart TB
+    N1["1. devpack-test: 数据流跨越输入、类型模型、核心函数、输出和测试；2 个源码文件，2 个公开符号，0 个测试，2 个依赖"]
+    N2["2. 数据 1: 合约输入"]
+    N3["3. 数据 2: devpack-test"]
+    N4["4. 数据 3: host/guest 边界"]
+    N5["5. 数据 4: Neo N4 状态转换"]
+    N6["6. 关键类型: 未扫描到公开符号"]
+    N7["7. 关键函数: invoke_entry | invoke"]
+    N8["8. 边界校验: 未扫描到 Rust #[test]"]
+    N9["9. 消费者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
+    N8 --> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

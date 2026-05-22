@@ -1,14 +1,30 @@
-flowchart LR
-    N1["Neo N4 层级: NeoVM2 / RISC-V 执行 profile"]
-    N2["上游输入: 种子语料 | 生成 opcode | 变异栈值"]
-    N3["neo-riscv-fuzz: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
-    N4["直接依赖: libfuzzer-sys | neo-riscv-abi | neo-riscv-guest | neo-riscv-host | serde"]
-    N5["下游使用者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
-    N6["学习重点: 先定位上下游，再阅读本 crate 的边界、核心数据结构和测试。"]
-    N1 --> N2
-    N2 --> N3
+flowchart TB
+    N1["1. Neo N4 层级: NeoVM2 / RISC-V 执行 profile"]
+    N2["2. 上游输入: 种子语料 | 生成 opcode | 变异栈值"]
+    N3["3. neo-riscv-fuzz: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
+    N4["4. 下游使用者: RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+    N5["5. 源码规模: 12 个源码文件，16 个公开符号，16 个测试，6 个依赖"]
+    N6["6. 读源码入口: src/lib.rs (8 API/1 测试) | src/generators/value_gen.rs (4 API/4 测试) | src/generators/opcode_gen.rs (3 API/4 测试)"]
+    N7["7. 核心 API: is_valid_opcode | requires_immediate | generate_valid_script | generate_integer +10"]
+    N8["8. 测试护栏: src/whole_system_parity.rs（4 个测试） | src/generators/value_gen.rs（4 个测试） | src/generators/opcode_gen.rs（4 个测试） | src/stack_ops_builder.rs（2 个测试） | src/syscall_fuzz.rs（1 个测试） | +1"]
+    N9["9. 直接依赖: libfuzzer-sys | neo-riscv-abi | neo-riscv-guest | neo-riscv-host | serde"]
+    N10["10. 学习重点: 先定位上下游，再阅读源码地图、公开 API、测试证据和依赖边界。"]
+    N3 --> N1
+    N3 --> N2
     N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N3 --> N5
+    N3 --> N6
+    N3 --> N7
+    N3 --> N8
+    N3 --> N9
+    N3 --> N10
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N3 crate

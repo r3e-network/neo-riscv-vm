@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1068" viewBox="0 0 1760 1068" role="img" aria-label="neo-riscv-abi Implementation-Atlas">
+<defs>
+<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
+<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+</defs>
+<rect x="0" y="0" width="1760" height="1068" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="1000" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
+<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-abi Implementation-Atlas</text>
+<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 源码感知学习图</text>
+<text x="1240" y="82" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo.toml, Rust files, public symbols, tests</text>
+<rect x="92" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="178" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="183" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1</text>
+<text x="114" y="182" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-abi</text>
+<text x="114" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">NeoVM2 / RISC-V 执行 pro</text>
+<text x="114" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">file；6 个源码文件，0 个公开符号，4</text>
+<text x="114" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">5 个测试，2 个依赖</text>
+<rect x="630" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="178" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="183" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2</text>
+<text x="652" y="182" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">为什么存在</text>
+<text x="652" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">RISC-V 执行路径共享的 ABI、栈值、</text>
+<text x="652" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">codec tag 与 opcode 元数据</text>
+<text x="652" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">重导出。</text>
+<rect x="1168" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<circle cx="1640" cy="178" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
+<text x="1640" y="183" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">3</text>
+<text x="1190" y="182" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">读源码入口</text>
+<text x="1190" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/lib.rs (0 API/2 测试</text>
+<text x="1190" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">) | tests/codec_tests.</text>
+<text x="1190" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">rs (0 API/41 测试) | tes</text>
+<text x="1190" y="278" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ts/shared_vm_codecs.rs</text>
+<text x="1190" y="298" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> (0 API/2 测试) | src/ca</text>
+<rect x="92" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="376" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="381" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4</text>
+<text x="114" y="380" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">核心类型</text>
+<text x="114" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">未扫描到公开符号</text>
+<rect x="630" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="376" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="381" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">5</text>
+<text x="652" y="380" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">核心函数</text>
+<text x="652" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">未扫描到公开符号</text>
+<rect x="1168" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
+<circle cx="1640" cy="376" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
+<text x="1640" y="381" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">6</text>
+<text x="1190" y="380" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">模块/导出</text>
+<text x="1190" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/callback_codec.rs: pub use</text>
+<text x="1190" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">neo_vm_rs::callback_codec::*</text>
+<text x="1190" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/fast_codec.rs: pub use</text>
+<text x="1190" y="476" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">neo_vm_rs::fast_codec::*</text>
+<text x="1190" y="496" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/lib.rs: mod callback_codec</text>
+<rect x="92" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="574" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="579" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7</text>
+<text x="114" y="578" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">运行路径</text>
+<text x="114" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">准备合约/输入 | 编码 ABI | 在 P</text>
+<text x="114" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">olkaVM 路径执行 | 收集结果 | 验</text>
+<text x="114" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">证证据</text>
+<rect x="630" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="574" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="579" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8</text>
+<text x="652" y="578" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">数据路径</text>
+<text x="652" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">合约输入 | neo-riscv-abi |</text>
+<text x="652" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> host/guest 边界 | Neo N</text>
+<text x="652" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">4 状态转换</text>
+<rect x="1168" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<circle cx="1640" cy="574" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
+<text x="1640" y="579" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">9</text>
+<text x="1190" y="578" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">依赖边界</text>
+<text x="1190" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">运行时 1，测试 1，构建 0，内部 1，外</text>
+<text x="1190" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">部运行时 0</text>
+<rect x="92" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="772" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="777" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">10</text>
+<text x="114" y="776" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">测试证据</text>
+<text x="114" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tests/codec_tests.rs（4</text>
+<text x="114" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">1 个测试） | tests/shared_</text>
+<text x="114" y="852" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">vm_codecs.rs（2 个测试） | </text>
+<text x="114" y="872" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/lib.rs（2 个测试）</text>
+<rect x="630" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="772" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="777" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">11</text>
+<text x="652" y="776" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">输出/消费者</text>
+<text x="652" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ABI 类型 | codec helper </text>
+<text x="652" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">| 运行时常量 -&gt; RISC-V host</text>
+<text x="652" y="852" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> | Neo N4 L2 节点 | 开发者工</text>
+<text x="652" y="872" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">具</text>
+<rect x="1168" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
+<circle cx="1640" cy="772" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
+<text x="1640" y="777" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12</text>
+<text x="1190" y="776" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">修改前检查</text>
+<text x="1190" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">API 表、测试表、依赖表、工作流/数据流图</text>
+<text x="1190" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">必须和源码一起更新。</text>
+<line x1="574" y1="234" x2="648" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="234" x2="1186" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="432" x2="648" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="432" x2="1186" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="630" x2="648" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="630" x2="1186" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="828" x2="648" y2="828" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="828" x2="1186" y2="828" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<path d="M1418 306 C1418 358, 342 308, 342 360" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<path d="M1418 504 C1418 556, 342 506, 342 558" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<path d="M1418 702 C1418 754, 342 704, 342 756" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<text x="70" y="1030" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated by tools/docs/generate_crate_visual_docs.py. The SVG and Mermaid files are regenerated from source layout, API symbols, tests, dependencies, and Neo N4 architecture roles.</text>
+</svg>

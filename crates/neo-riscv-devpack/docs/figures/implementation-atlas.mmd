@@ -1,0 +1,36 @@
+flowchart TB
+    N1["1. neo-riscv-devpack: NeoVM2 / RISC-V execution profile; 26 source files, 192 public symbols, 22 tests, 1 deps"]
+    N2["2. Why it exists: Developer packaging utilities for compiling and preparing RISC-V Neo contracts."]
+    N3["3. Source entrypoints: src/lib.rs (0 API/0 tests) | src/api_ids.rs (43 API/0 tests) | src/syscalls.rs (34 API/0 tests) | src/native/std_lib.rs (13 API/0 tests)"]
+    N4["4. Core types: Hash160 | Hash256 | PublicKey"]
+    N5["5. Core functions: encode_string_params | encode_int_params | decode_string_result | decode_int_result +121"]
+    N6["6. Modules/exports: src/lib.rs: mod api_ids | src/lib.rs: mod codec | src/lib.rs: mod events | src/lib.rs: mod ffi | src/lib.rs: mod native | +22"]
+    N7["7. Runtime path: Prepare contract/input | Encode ABI | Execute in PolkaVM path | Collect result | Validate evidence"]
+    N8["8. Data path: contract input | neo-riscv-devpack | host/guest boundary | Neo N4 state transition"]
+    N9["9. Dependency boundary: runtime 1, test 0, build 0, internal 1, external runtime 0"]
+    N10["10. Test evidence: tests/syscalls_test.rs (9 tests) | tests/native_wrappers_test.rs (9 tests) | tests/syscalls_shape_test.rs (2 tests) | tests/api_ids_test.rs (1 tests) | src/native/mod.rs (1 tests)"]
+    N11["11. Outputs/consumers: contract package | manifest | developer diagnostics -> RISC-V host | Neo N4 L2 node | developer tooling"]
+    N12["12. Before changing it: Keep the API table, test table, dependency table, workflow, and dataflow diagrams aligned with source."]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N1 --> N10
+    N1 --> N11
+    N1 --> N12
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
+    N10 -. related .-> N11
+    N11 -. related .-> N12
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

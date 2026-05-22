@@ -1,0 +1,36 @@
+flowchart TB
+    N1["1. neo-riscv-contract-harness: NeoVM2 / RISC-V execution profile; 1 source files, 8 public symbols, 1 tests, 4 deps"]
+    N2["2. Why it exists: Test harness for contract-level RISC-V execution and syscall simulation."]
+    N3["3. Source entrypoints: src/lib.rs (8 API/1 tests)"]
+    N4["4. Core types: EntryResult"]
+    N5["5. Core functions: decode_entry | decode_context | encode_result | get_debug_ptr +3"]
+    N6["6. Modules/exports: no mod/pub use declarations scanned"]
+    N7["7. Runtime path: Prepare contract/input | Encode ABI | Execute in PolkaVM path | Collect result | Validate evidence"]
+    N8["8. Data path: contract input | neo-riscv-contract-harness | host/guest boundary | Neo N4 state transition"]
+    N9["9. Dependency boundary: runtime 4, test 0, build 0, internal 2, external runtime 2"]
+    N10["10. Test evidence: src/lib.rs (1 tests)"]
+    N11["11. Outputs/consumers: test result | trace | failure diagnostics -> RISC-V host | Neo N4 L2 node | developer tooling"]
+    N12["12. Before changing it: Keep the API table, test table, dependency table, workflow, and dataflow diagrams aligned with source."]
+    N1 --> N2
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N1 --> N10
+    N1 --> N11
+    N1 --> N12
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
+    N10 -. related .-> N11
+    N11 -. related .-> N12
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

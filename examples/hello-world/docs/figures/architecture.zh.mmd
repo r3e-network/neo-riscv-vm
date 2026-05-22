@@ -1,14 +1,27 @@
-flowchart LR
-    N1["公开入口: 开发者源码 | 模板 runtime | 测试上下文"]
-    N2["hello-world: 用于 RISC-V 工具链的 hello-world 合约示例。"]
-    N3["内部组件: 演示合约模式 | 覆盖工具链 | 提供学习 fixture"]
-    N4["依赖边界: neo-riscv-abi | neo-riscv-devpack"]
-    N5["输出产物: 编译后合约 | 示例结果 | 教程产物"]
-    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+flowchart TB
+    N1["1. 架构总览: hello-world: 2 个源码文件，3 个公开符号，2 个测试，2 个依赖"]
+    N2["2. 入口契约: 开发者源码 | 模板 runtime | 测试上下文"]
+    N3["3. 公开 API 层: 类型 0 | 函数 3 | Trait 0 | 常量 0"]
+    N4["4. 核心实现文件: src/lib.rs (2 API/2 测试) | src/main.rs (1 API/0 测试)"]
+    N5["5. 模块/重导出: src/lib.rs: mod allocator"]
+    N6["6. 依赖边界: neo-riscv-abi | neo-riscv-devpack"]
+    N7["7. 输出产物: 编译后合约 | 示例结果 | 教程产物"]
+    N8["8. 测试护栏: src/lib.rs（2 个测试）"]
+    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

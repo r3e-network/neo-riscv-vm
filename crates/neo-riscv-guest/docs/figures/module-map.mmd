@@ -1,14 +1,56 @@
-flowchart LR
-    N1["neo-riscv-guest: 12 source files, 9 public symbols"]
-    N2["src/lib.rs: crate root, public exports, and top-level documentation"]
-    N3["tests/interpreter.rs: external behavior or integration test"]
-    N4["tests/contracts.rs: external behavior or integration test"]
-    N5["src/contract_rt/mod.rs: implementation detail or helper module"]
-    N6["tests/contract_rt_context.rs: external behavior or integration test"]
+flowchart TB
+    N1["1. neo-riscv-guest: 12 source files, 9 public symbols, 295 tests, 2 deps"]
+    N2["2. src/lib.rs: crate root, public exports, and top-level documentation; 0 public symbols; 0 tests"]
+    N3["3. tests/interpreter.rs: external behavior or integration test; 0 public symbols; 217 tests"]
+    N4["4. tests/contracts.rs: external behavior or integration test; 0 public symbols; 49 tests"]
+    N5["5. src/contract_rt/mod.rs: implementation detail or helper module; 9 public symbols; 3 tests"]
+    N6["6. tests/contract_rt_context.rs: external behavior or integration test; 0 public symbols; 14 tests"]
+    N7["7. tests/contract_rt_layering.rs: external behavior or integration test; 0 public symbols; 3 tests"]
+    N8["8. tests/rc_compat_test.rs: external behavior or integration test; 0 public symbols; 3 tests"]
+    N9["9. tests/shared_vm_dependency.rs: external behavior or integration test; 0 public symbols; 3 tests"]
+    N10["10. tests/contract_rt.rs: external behavior or integration test; 0 public symbols; 2 tests"]
+    N11["11. Other source: 3 more files are fully listed in learning-guide.md"]
+    N12["12. Module signals: src/contract_rt/mod.rs: mod stack_value | src/contract_rt/mod.rs: mod mem_intrinsics | src/contract_rt/mod.rs: pub use stack_value::StackValue | src/contract_rt/stack_value.rs: pub use neo_riscv_abi::{
+    byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, default_value_for_type_tag,
+    new_array_default_value_for_type_tag, normalize_stack_item_type_tag, slice_byte_sequence,
+    StackValue, TAG_ARRAY, TAG_BIG_INTEGER, TAG_BOOLEAN, TAG_BUFFER, TAG_BYTESTRING, TAG_INTEGER,
+    TAG_INTEROP, TAG_ITERATOR, TAG_MAP, TAG_NULL, TAG_POINTER, TAG_STRUCT,
+} | src/lib.rs: mod contract_rt | +2"]
+    N13["13. API concentration: src/contract_rt/mod.rs (9)"]
+    N14["14. Test concentration: tests/interpreter.rs (217 tests) | tests/contracts.rs (49 tests) | tests/contract_rt_context.rs (14 tests) | tests/shared_vm_dependency.rs (3 tests) | tests/rc_compat_test.rs (3 tests) | +4"]
+    N15["15. Dependency context: runtime 2, test 0, build 0, internal 2, external runtime 0"]
+    N16["16. Reading path: src/lib.rs (0 API/0 tests) | tests/interpreter.rs (0 API/217 tests) | tests/contracts.rs (0 API/49 tests) | src/contract_rt/mod.rs (9 API/3 tests)"]
+    N17["17. Change hotspot: Review src/lib.rs first; it owns 0 public symbols and 0 tests."]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N1 --> N10
+    N1 --> N11
+    N1 --> N12
+    N1 --> N13
+    N1 --> N14
+    N1 --> N15
+    N1 --> N16
+    N1 --> N17
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
+    N9 -. related .-> N10
+    N10 -. related .-> N11
+    N11 -. related .-> N12
+    N12 -. related .-> N13
+    N13 -. related .-> N14
+    N14 -. related .-> N15
+    N15 -. related .-> N16
+    N16 -. related .-> N17
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

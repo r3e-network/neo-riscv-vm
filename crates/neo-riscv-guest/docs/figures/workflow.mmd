@@ -1,12 +1,18 @@
-flowchart LR
-    N1["Step 1: Prepare contract/input"]
-    N2["Step 2: Encode ABI"]
-    N3["Step 3: Execute in PolkaVM path"]
-    N4["Step 4: Collect result"]
-    N5["Step 5: Validate evidence"]
+flowchart TB
+    N1["1. neo-riscv-guest: Workflow has 5 stages; start source reading at src/lib.rs."]
+    N2["2. Stage 1: Prepare contract/input; likely source: src/lib.rs (crate root, public exports, and top-level documentation)"]
+    N3["3. Stage 2: Encode ABI; likely source: tests/interpreter.rs (external behavior or integration test)"]
+    N4["4. Stage 3: Execute in PolkaVM path; likely source: tests/contracts.rs (external behavior or integration test)"]
+    N5["5. Stage 4: Collect result; likely source: src/contract_rt/mod.rs (implementation detail or helper module)"]
+    N6["6. Stage 5: Validate evidence; likely source: tests/contract_rt_context.rs (external behavior or integration test)"]
+    N7["7. Verification: tests/interpreter.rs (217 tests) | tests/contracts.rs (49 tests) | tests/contract_rt_context.rs (14 tests) | tests/shared_vm_dependency.rs (3 tests) | tests/rc_compat_test.rs (3 tests) | +4"]
+    N8["8. Output checks: guest result | syscall request | stack mutation"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N1 crate

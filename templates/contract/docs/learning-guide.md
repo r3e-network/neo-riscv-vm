@@ -26,6 +26,7 @@ This guide is generated from the crate's actual `Cargo.toml`, Rust source files,
 | 7 | [Dataflow](figures/dataflow.svg) | How data is transformed across the crate boundary. |
 | 8 | [Test evidence](figures/test-map.svg) | Which tests protect the behavior. |
 | 9 | [Dependency map](figures/dependency-map.svg) | Which dependencies are runtime, test, or build-only. |
+| 10 | [Implementation atlas](figures/implementation-atlas.svg) | A dense one-page map of purpose, source entrypoints, API, workflow, dataflow, dependencies, tests, and change checks. |
 
 ## Source File Map
 

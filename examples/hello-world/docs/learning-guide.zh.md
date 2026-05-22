@@ -26,6 +26,7 @@
 | 7 | [数据流图](figures/dataflow.zh.svg) | 数据如何跨越 crate 边界并被转换。 |
 | 8 | [测试证据图](figures/test-map.zh.svg) | 哪些测试保护行为。 |
 | 9 | [依赖图](figures/dependency-map.zh.svg) | 哪些依赖是运行时、测试或构建期依赖。 |
+| 10 | [实现全景图](figures/implementation-atlas.zh.svg) | 用一张高密度图同时理解用途、源码入口、API、工作流、数据流、依赖、测试和修改检查点。 |
 
 ## 源码文件地图
 

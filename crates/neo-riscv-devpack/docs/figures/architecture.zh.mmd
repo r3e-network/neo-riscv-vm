@@ -1,14 +1,27 @@
-flowchart LR
-    N1["公开入口: 合约源码 | 模板配置 | 工具链设置"]
-    N2["neo-riscv-devpack: 用于编译和准备 RISC-V Neo 合约的开发者打包工具。"]
-    N3["内部组件: 构建产物 | 校验元数据 | 打包部署文件"]
-    N4["依赖边界: neo-riscv-abi"]
-    N5["输出产物: 合约包 | manifest | 开发诊断"]
-    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+flowchart TB
+    N1["1. 架构总览: neo-riscv-devpack: 26 个源码文件，192 个公开符号，22 个测试，1 个依赖"]
+    N2["2. 入口契约: 合约源码 | 模板配置 | 工具链设置"]
+    N3["3. 公开 API 层: 类型 3 | 函数 133 | Trait 0 | 常量 56"]
+    N4["4. 核心实现文件: src/lib.rs (0 API/0 测试) | src/api_ids.rs (43 API/0 测试) | src/syscalls.rs (34 API/0 测试) | src/native/std_lib.rs (13 API/0 测试) | src/storage.rs (11 API/0 测试)"]
+    N5["5. 模块/重导出: src/lib.rs: mod api_ids | src/lib.rs: mod codec | src/lib.rs: mod events | src/lib.rs: mod ffi | src/lib.rs: mod native | +22"]
+    N6["6. 依赖边界: neo-riscv-abi"]
+    N7["7. 输出产物: 合约包 | manifest | 开发诊断"]
+    N8["8. 测试护栏: tests/syscalls_test.rs（9 个测试） | tests/native_wrappers_test.rs（9 个测试） | tests/syscalls_shape_test.rs（2 个测试） | tests/api_ids_test.rs（1 个测试） | src/native/mod.rs（1 个测试）"]
+    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

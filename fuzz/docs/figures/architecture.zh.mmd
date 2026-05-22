@@ -1,14 +1,27 @@
-flowchart LR
-    N1["公开入口: 种子语料 | 生成 opcode | 变异栈值"]
-    N2["neo-riscv-fuzz: 面向 RISC-V VM 执行、ABI codec、host/guest 边界的 fuzz 支撑。"]
-    N3["内部组件: 生成有效脚本 | 覆盖 codec | 发现 host/guest 不一致"]
-    N4["依赖边界: libfuzzer-sys | neo-riscv-abi | neo-riscv-guest | neo-riscv-host | serde"]
-    N5["输出产物: 回归 seed | 崩溃案例 | 覆盖率信号"]
-    N6["系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
+flowchart TB
+    N1["1. 架构总览: neo-riscv-fuzz: 12 个源码文件，16 个公开符号，16 个测试，6 个依赖"]
+    N2["2. 入口契约: 种子语料 | 生成 opcode | 变异栈值"]
+    N3["3. 公开 API 层: 类型 2 | 函数 14 | Trait 0 | 常量 0"]
+    N4["4. 核心实现文件: src/lib.rs (8 API/1 测试) | src/generators/value_gen.rs (4 API/4 测试) | src/generators/opcode_gen.rs (3 API/4 测试) | src/stack_ops_builder.rs (1 API/2 测试) | src/whole_system_parity.rs (0 API/4 测试)"]
+    N5["5. 模块/重导出: src/generators.rs: mod opcode_gen | src/generators.rs: mod value_gen | src/generators.rs: pub use opcode_gen::* | src/generators.rs: pub use value_gen::* | src/lib.rs: mod generators | +2"]
+    N6["6. 依赖边界: libfuzzer-sys | neo-riscv-abi | neo-riscv-guest | neo-riscv-host | serde"]
+    N7["7. 输出产物: 回归 seed | 崩溃案例 | 覆盖率信号"]
+    N8["8. 测试护栏: src/whole_system_parity.rs（4 个测试） | src/generators/value_gen.rs（4 个测试） | src/generators/opcode_gen.rs（4 个测试） | src/stack_ops_builder.rs（2 个测试） | src/syscall_fuzz.rs（1 个测试） | +1"]
+    N9["9. 系统位置: NeoVM2 / RISC-V 执行 profile -> RISC-V host | Neo N4 L2 节点 | 开发者工具"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N1 --> N9
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
+    N8 -. related .-> N9
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N2 crate
+    class N1 crate

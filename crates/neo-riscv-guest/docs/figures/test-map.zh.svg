@@ -1,49 +1,142 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="neo-riscv-guest Test-Map">
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1266" viewBox="0 0 1760 1266" role="img" aria-label="neo-riscv-guest Test-Map">
 <defs>
 <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
 <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
 </defs>
-<rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
-<rect x="34" y="34" width="1212" height="692" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
+<rect x="0" y="0" width="1760" height="1266" fill="url(#bg)"/>
+<rect x="34" y="34" width="1692" height="1198" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
 <text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest Test-Map</text>
-<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 可视化学习图</text>
-<rect x="104" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<text x="126" y="189" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest</text>
-<text x="126" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">测试函数 295 个，测试文件 9 个</text>
-<rect x="470" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<text x="492" y="189" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/interpreter.rs</text>
-<text x="492" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_push1_ret_script</text>
-<text x="492" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_integer_addition_script</text>
-<text x="492" y="265" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_platform_syscall_with_hos</text>
-<text x="492" y="287" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">t_provider</text>
-<line x1="452" y1="220" x2="462" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
-<rect x="836" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<text x="858" y="189" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contracts.rs</text>
-<text x="858" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_subtraction</text>
-<text x="858" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_addition</text>
-<text x="858" y="265" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_transfer_full_sequence</text>
-<text x="858" y="287" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_negative_underflow</text>
-<line x1="818" y1="220" x2="828" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
-<rect x="104" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
-<text x="126" y="449" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contract_rt_context.rs</text>
-<text x="126" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">push_pop_integer</text>
-<text x="126" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">init_slot_loads_args_from_stack</text>
-<text x="126" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">add_integers</text>
-<text x="126" y="547" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">sub_integers +10</text>
-<rect x="470" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
-<text x="492" y="449" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/shared_vm_dependency.rs</text>
-<text x="492" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">guest_stack_value_is_the_shared_ne</text>
-<text x="492" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">o_vm_rs_type</text>
-<text x="492" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">guest_interpreter_is_exposed_from_</text>
-<text x="492" y="547" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo_vm_rs</text>
-<line x1="452" y1="480" x2="462" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
-<rect x="836" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
-<text x="858" y="449" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/rc_compat_test.rs</text>
-<text x="858" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_basic</text>
-<text x="858" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_nested</text>
-<text x="858" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_drop</text>
-<line x1="818" y1="480" x2="828" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
-<path d="M640 300 C640 350 640 370 640 412" stroke="#52a6ff" stroke-width="2.5" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
-<text x="70" y="704" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo package metadata and Neo N4 architecture roles. Edit the companion .mmd source or rerun tools/docs/generate_crate_visual_docs.py.</text>
+<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 源码感知学习图</text>
+<text x="1240" y="82" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo.toml, Rust files, public symbols, tests</text>
+<rect x="92" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="178" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="183" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1</text>
+<text x="114" y="182" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest</text>
+<text x="114" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">测试函数 295 个，测试文件 9 个</text>
+<rect x="630" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="178" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="183" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2</text>
+<text x="652" y="182" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/interpreter.rs</text>
+<text x="652" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">217 个测试；executes_push1</text>
+<text x="652" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_ret_script | executes</text>
+<text x="652" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_integer_addition_scri</text>
+<text x="652" y="278" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">pt | executes_platform</text>
+<text x="652" y="298" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_syscall_with_host_pro</text>
+<rect x="1168" y="150" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<circle cx="1640" cy="178" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
+<text x="1640" y="183" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">3</text>
+<text x="1190" y="182" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contracts.rs</text>
+<text x="1190" y="218" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">49 个测试；token_balance_s</text>
+<text x="1190" y="238" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ubtraction | token_bal</text>
+<text x="1190" y="258" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ance_addition | token_</text>
+<text x="1190" y="278" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">transfer_full_sequence</text>
+<text x="1190" y="298" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> | token_balance_negat</text>
+<rect x="92" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="376" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="381" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4</text>
+<text x="114" y="380" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contract_rt_context.rs</text>
+<text x="114" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">14 个测试；push_pop_intege</text>
+<text x="114" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">r | init_slot_loads_ar</text>
+<text x="114" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">gs_from_stack | add_in</text>
+<text x="114" y="476" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">tegers | sub_integers </text>
+<text x="114" y="496" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">+10</text>
+<rect x="630" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="376" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="381" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">5</text>
+<text x="652" y="380" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/shared_vm_dependency.rs</text>
+<text x="652" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">3 个测试；guest_stack_valu</text>
+<text x="652" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">e_is_the_shared_neo_vm</text>
+<text x="652" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_rs_type | guest_inter</text>
+<text x="652" y="476" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">preter_is_exposed_from</text>
+<text x="652" y="496" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_neo_vm_rs | guest_cra</text>
+<rect x="1168" y="348" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
+<circle cx="1640" cy="376" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
+<text x="1640" y="381" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">6</text>
+<text x="1190" y="380" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/rc_compat_test.rs</text>
+<text x="1190" y="416" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">3 个测试；test_rc_basic | </text>
+<text x="1190" y="436" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">test_rc_nested | test_</text>
+<text x="1190" y="456" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">rc_drop</text>
+<rect x="92" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="574" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="579" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7</text>
+<text x="114" y="578" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contract_rt_layering.rs</text>
+<text x="114" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">3 个测试；contract_runtime</text>
+<text x="114" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_does_not_reintroduce_</text>
+<text x="114" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">opcode_adapters | cont</text>
+<text x="114" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ract_runtime_does_not_</text>
+<text x="114" y="694" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">define_private_byte_op</text>
+<rect x="630" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="574" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="579" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8</text>
+<text x="652" y="578" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">src/contract_rt/mod.rs</text>
+<text x="652" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">3 个测试；from_abi_stack_r</text>
+<text x="652" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">oundtrip | shared_runt</text>
+<text x="652" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ime_ops_execute_agains</text>
+<text x="652" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">t_riscv_context | risc</text>
+<text x="652" y="694" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">v_syscall_stubs_fault_</text>
+<rect x="1168" y="546" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<circle cx="1640" cy="574" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
+<text x="1640" y="579" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">9</text>
+<text x="1190" y="578" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contract_rt.rs</text>
+<text x="1190" y="614" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">2 个测试；contract_runtime</text>
+<text x="1190" y="634" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_context_executes_shar</text>
+<text x="1190" y="654" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ed_vm_runtime_ops | co</text>
+<text x="1190" y="674" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">ntract_runtime_syscall</text>
+<text x="1190" y="694" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">_stubs_fault_through_s</text>
+<rect x="92" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="772" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="777" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">10</text>
+<text x="114" y="776" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">被测源码</text>
+<text x="114" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">src/lib.rs (0 API/0 测试</text>
+<text x="114" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">) | tests/interpreter.</text>
+<text x="114" y="852" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">rs (0 API/217 测试) | te</text>
+<text x="114" y="872" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">sts/contracts.rs (0 AP</text>
+<text x="114" y="892" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">I/49 测试) | src/contrac</text>
+<rect x="630" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="772" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="777" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">11</text>
+<text x="652" y="776" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">被测 API 面</text>
+<text x="652" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">类型 2 | 函数 7 | Trait 0 </text>
+<text x="652" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">| 常量 0</text>
+<rect x="1168" y="744" width="500" height="168" rx="10" fill="#101f2d" stroke="#a855f7" stroke-width="2"/>
+<circle cx="1640" cy="772" r="13" fill="#0c1722" stroke="#a855f7" stroke-width="1.5"/>
+<text x="1640" y="777" text-anchor="middle" fill="#a855f7" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12</text>
+<text x="1190" y="776" fill="#a855f7" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">覆盖缺口</text>
+<text x="1190" y="812" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">公开符号 9，测试 295；继续保持测试和 </text>
+<text x="1190" y="832" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">API 同步。</text>
+<rect x="92" y="942" width="500" height="168" rx="10" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<circle cx="564" cy="970" r="13" fill="#0c1722" stroke="#38d978" stroke-width="1.5"/>
+<text x="564" y="975" text-anchor="middle" fill="#38d978" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13</text>
+<text x="114" y="974" fill="#38d978" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">依赖测试范围</text>
+<text x="114" y="1010" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">运行时 2，测试 0，构建 0，内部 2，外</text>
+<text x="114" y="1030" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">部运行时 0</text>
+<rect x="630" y="942" width="500" height="168" rx="10" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<circle cx="1102" cy="970" r="13" fill="#0c1722" stroke="#52a6ff" stroke-width="1.5"/>
+<text x="1102" y="975" text-anchor="middle" fill="#52a6ff" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14</text>
+<text x="652" y="974" fill="#52a6ff" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">学习方式</text>
+<text x="652" y="1010" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">先读测试名理解行为，再回到对应源码文件和公开</text>
+<text x="652" y="1030" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> API。</text>
+<rect x="1168" y="942" width="500" height="168" rx="10" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<circle cx="1640" cy="970" r="13" fill="#0c1722" stroke="#ffca3a" stroke-width="1.5"/>
+<text x="1640" y="975" text-anchor="middle" fill="#ffca3a" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">15</text>
+<text x="1190" y="974" fill="#ffca3a" font-size="17" font-family="Segoe UI, Arial, sans-serif" font-weight="700">验证命令</text>
+<text x="1190" y="1010" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">cargo test --workspace</text>
+<text x="1190" y="1030" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif"> --locked；外部子仓库分别 carg</text>
+<text x="1190" y="1050" fill="#d9e6f2" font-size="14" font-family="Segoe UI, Arial, sans-serif">o test --locked</text>
+<line x1="574" y1="234" x2="648" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="234" x2="1186" y2="234" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="432" x2="648" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="432" x2="1186" y2="432" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="630" x2="648" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="630" x2="1186" y2="630" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="828" x2="648" y2="828" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="828" x2="1186" y2="828" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="574" y1="1026" x2="648" y2="1026" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<line x1="1112" y1="1026" x2="1186" y2="1026" stroke="#38d978" stroke-width="2.2" marker-end="url(#arrow)" opacity="0.75"/>
+<path d="M1418 306 C1418 358, 342 308, 342 360" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<path d="M1418 504 C1418 556, 342 506, 342 558" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<path d="M1418 702 C1418 754, 342 704, 342 756" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<path d="M1418 900 C1418 952, 342 902, 342 954" stroke="#52a6ff" stroke-width="2.1" fill="none" marker-end="url(#arrow)" opacity="0.7"/>
+<text x="70" y="1228" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated by tools/docs/generate_crate_visual_docs.py. The SVG and Mermaid files are regenerated from source layout, API symbols, tests, dependencies, and Neo N4 architecture roles.</text>
 </svg>

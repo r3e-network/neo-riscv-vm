@@ -1,12 +1,18 @@
-flowchart LR
-    N1["Step 1: Prepare contract/input"]
-    N2["Step 2: Encode ABI"]
-    N3["Step 3: Execute in PolkaVM path"]
-    N4["Step 4: Collect result"]
-    N5["Step 5: Validate evidence"]
+flowchart TB
+    N1["1. devpack-test: Workflow has 5 stages; start source reading at src/lib.rs."]
+    N2["2. Stage 1: Prepare contract/input; likely source: src/lib.rs (crate root, public exports, and top-level documentation)"]
+    N3["3. Stage 2: Encode ABI; likely source: src/main.rs (binary or CLI entrypoint)"]
+    N4["4. Stage 3: Execute in PolkaVM path; likely source: src/main.rs (binary or CLI entrypoint)"]
+    N5["5. Stage 4: Collect result; likely source: src/main.rs (binary or CLI entrypoint)"]
+    N6["6. Stage 5: Validate evidence; likely source: src/main.rs (binary or CLI entrypoint)"]
+    N7["7. Verification: no Rust #[test] scanned"]
+    N8["8. Output checks: compiled contract | example result | tutorial artifact"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N1 crate

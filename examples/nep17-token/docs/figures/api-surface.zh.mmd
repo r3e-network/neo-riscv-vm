@@ -1,14 +1,24 @@
-flowchart LR
-    N1["nep17-token: 公开 API 面由源码扫描生成"]
-    N2["类型: 未扫描到公开符号"]
-    N3["函数: dispatch | invoke_entry | invoke"]
-    N4["Trait: 未扫描到公开符号"]
-    N5["常量: 未扫描到公开符号"]
-    N6["详细列表: 见 docs/learning-guide.zh.md 的 API 表"]
+flowchart TB
+    N1["1. nep17-token: 公开 API 面由源码扫描生成；3 个符号"]
+    N2["2. 类型: 未扫描到公开符号"]
+    N3["3. 函数: dispatch | invoke_entry | invoke"]
+    N4["4. Trait: 未扫描到公开符号"]
+    N5["5. 常量: 未扫描到公开符号"]
+    N6["6. 主要定义文件: src/lib.rs（2 个） | src/main.rs（1 个）"]
+    N7["7. 使用方式: 先读类型，再读构造/解析函数，再读执行/验证函数，最后读测试向量。"]
+    N8["8. 详细列表: 见 docs/learning-guide.zh.md 的 API 表"]
     N1 --> N2
-    N2 --> N3
-    N3 --> N4
-    N4 --> N5
-    N5 --> N6
+    N1 --> N3
+    N1 --> N4
+    N1 --> N5
+    N1 --> N6
+    N1 --> N7
+    N1 --> N8
+    N2 -. related .-> N3
+    N3 -. related .-> N4
+    N4 -. related .-> N5
+    N5 -. related .-> N6
+    N6 -. related .-> N7
+    N7 -. related .-> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
     class N1 crate

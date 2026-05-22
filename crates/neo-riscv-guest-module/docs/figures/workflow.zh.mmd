@@ -1,12 +1,18 @@
-flowchart LR
-    N1["Step 1: 准备合约/输入"]
-    N2["Step 2: 编码 ABI"]
-    N3["Step 3: 在 PolkaVM 路径执行"]
-    N4["Step 4: 收集结果"]
-    N5["Step 5: 验证证据"]
+flowchart TB
+    N1["1. neo-riscv-guest-module: 工作流由 5 个阶段组成；源码入口优先看 src/main.rs。"]
+    N2["2. 阶段 1: 准备合约/输入；相关源码：src/main.rs (二进制或 CLI 入口)"]
+    N3["3. 阶段 2: 编码 ABI；相关源码：src/mem_intrinsics.rs (实现细节或辅助模块)"]
+    N4["4. 阶段 3: 在 PolkaVM 路径执行；相关源码：src/mem_intrinsics.rs (实现细节或辅助模块)"]
+    N5["5. 阶段 4: 收集结果；相关源码：src/mem_intrinsics.rs (实现细节或辅助模块)"]
+    N6["6. 阶段 5: 验证证据；相关源码：src/mem_intrinsics.rs (实现细节或辅助模块)"]
+    N7["7. 验证方式: src/main.rs（3 个测试）"]
+    N8["8. 输出检查: guest.polkavm | 编码输出 | host callback 调用"]
     N1 --> N2
     N2 --> N3
     N3 --> N4
     N4 --> N5
+    N5 --> N6
+    N6 --> N7
+    N7 --> N8
     classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
-    class N3 crate
+    class N1 crate

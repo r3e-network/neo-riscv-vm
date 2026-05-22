@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-host: 测试函数 303 个，测试文件 19 个"]
+    N2["tests/runtime.rs: creates_interpreter_backed_polkavm_runtime | executes_push1_ret_through_host_runtime | helper_append_mutates_consumed_caller_array_alias_through_host_runtime | size_matches_neovm_for_integer_and_boolean_values_through_host_runtime +152"]
+    N3["tests/fuzz_compatibility.rs: fuzz_fast_codec_single_value | fuzz_fast_codec_multi_value | fuzz_fast_codec_decode_never_panics | fuzz_callback_codec_ok_roundtrip +43"]
+    N4["tests/parity.rs: parity_assignment | parity_binary_expression | parity_big_integer_pow | parity_big_integer_sqrt +35"]
+    N5["src/pricing.rs: opcode_price_push_opcodes | opcode_price_flow_control | opcode_price_expensive_opcodes | opcode_price_unknown_defaults_to_max +8"]
+    N6["src/bridge.rs: get | small_entry_round_trip_stays_in_small_cache | small_inline_slots_can_hold_multiple_entries | large_entry_falls_back_without_breaking_small_entries +4"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

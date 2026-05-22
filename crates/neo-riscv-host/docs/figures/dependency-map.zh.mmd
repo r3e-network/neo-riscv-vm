@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-host: Cargo.toml 依赖边界"]
+    N2["运行时依赖: neo-riscv-abi | neo-riscv-guest | polkavm | postcard | tracing"]
+    N3["测试依赖: criterion | proptest"]
+    N4["构建依赖: 无构建依赖"]
+    N5["Neo 内部依赖: neo-riscv-abi | neo-riscv-guest"]
+    N6["边界检查: 依赖越少，crate 越容易独立理解和测试"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

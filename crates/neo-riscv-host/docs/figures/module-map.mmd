@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-host: 31 source files, 80 public symbols"]
+    N2["src/lib.rs: crate root, public exports, and top-level documentation"]
+    N3["tests/runtime.rs: external behavior or integration test"]
+    N4["src/runtime_cache.rs: execution runtime, state transition, or gas behavior"]
+    N5["tests/fuzz_compatibility.rs: external behavior or integration test"]
+    N6["src/bridge.rs: bridge message, relay, or cross-chain boundary logic"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

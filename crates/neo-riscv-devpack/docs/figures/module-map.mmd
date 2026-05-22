@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-devpack: 26 source files, 192 public symbols"]
+    N2["src/lib.rs: crate root, public exports, and top-level documentation"]
+    N3["src/api_ids.rs: implementation detail or helper module"]
+    N4["src/syscalls.rs: host syscall contract and dispatch boundary"]
+    N5["src/native/std_lib.rs: implementation detail or helper module"]
+    N6["src/storage.rs: implementation detail or helper module"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

@@ -1,0 +1,8 @@
+flowchart LR
+    N1["storage: 2 source files, 3 public symbols"]
+    N2["src/lib.rs: crate root, public exports, and top-level documentation"]
+    N3["src/main.rs: binary or CLI entrypoint"]
+    N1 --> N2
+    N2 --> N3
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

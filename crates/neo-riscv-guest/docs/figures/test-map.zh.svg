@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="neo-riscv-guest Test-Map">
+<defs>
+<linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071018"/><stop offset="1" stop-color="#102033"/></linearGradient>
+<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#38d978"/></marker>
+</defs>
+<rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
+<rect x="34" y="34" width="1212" height="692" rx="18" fill="#0c1722" stroke="#1e3a4d" stroke-width="2"/>
+<text x="70" y="82" fill="#f6fbff" font-size="30" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest Test-Map</text>
+<text x="70" y="114" fill="#aebdcc" font-size="17" font-family="Segoe UI, Arial, sans-serif">Neo N4 crate 可视化学习图</text>
+<rect x="104" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<text x="126" y="189" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">neo-riscv-guest</text>
+<text x="126" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">测试函数 295 个，测试文件 9 个</text>
+<rect x="470" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<text x="492" y="189" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/interpreter.rs</text>
+<text x="492" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_push1_ret_script</text>
+<text x="492" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_integer_addition_script</text>
+<text x="492" y="265" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">executes_platform_syscall_with_hos</text>
+<text x="492" y="287" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">t_provider</text>
+<line x1="452" y1="220" x2="462" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="836" y="155" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<text x="858" y="189" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contracts.rs</text>
+<text x="858" y="221" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_subtraction</text>
+<text x="858" y="243" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_addition</text>
+<text x="858" y="265" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_transfer_full_sequence</text>
+<text x="858" y="287" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">token_balance_negative_underflow</text>
+<line x1="818" y1="220" x2="828" y2="220" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="104" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#52a6ff" stroke-width="2"/>
+<text x="126" y="449" fill="#52a6ff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/contract_rt_context.rs</text>
+<text x="126" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">push_pop_integer</text>
+<text x="126" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">init_slot_loads_args_from_stack</text>
+<text x="126" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">add_integers</text>
+<text x="126" y="547" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">sub_integers +10</text>
+<rect x="470" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#ffca3a" stroke-width="2"/>
+<text x="492" y="449" fill="#ffca3a" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/shared_vm_dependency.rs</text>
+<text x="492" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">guest_stack_value_is_the_shared_ne</text>
+<text x="492" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">o_vm_rs_type</text>
+<text x="492" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">guest_interpreter_is_exposed_from_</text>
+<text x="492" y="547" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">neo_vm_rs</text>
+<line x1="452" y1="480" x2="462" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<rect x="836" y="415" width="340" height="130" rx="12" fill="#101f2d" stroke="#38d978" stroke-width="2"/>
+<text x="858" y="449" fill="#38d978" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">tests/rc_compat_test.rs</text>
+<text x="858" y="481" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_basic</text>
+<text x="858" y="503" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_nested</text>
+<text x="858" y="525" fill="#d9e6f2" font-size="15" font-family="Segoe UI, Arial, sans-serif">test_rc_drop</text>
+<line x1="818" y1="480" x2="828" y2="480" stroke="#38d978" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9"/>
+<path d="M640 300 C640 350 640 370 640 412" stroke="#52a6ff" stroke-width="2.5" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+<text x="70" y="704" fill="#6f8194" font-size="14" font-family="Segoe UI, Arial, sans-serif">Generated from Cargo package metadata and Neo N4 architecture roles. Edit the companion .mmd source or rerun tools/docs/generate_crate_visual_docs.py.</text>
+</svg>

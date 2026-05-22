@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-fuzz: 16 test functions across 6 test files"]
+    N2["src/whole_system_parity.rs: expected_trace | expected_result | platform_seed_matches_direct_guest_and_host_path | storage_seed_matches_direct_guest_and_host_path"]
+    N3["src/generators/value_gen.rs: test_generate_integer | test_generate_big_integer | test_generate_bytestring | test_generate_stack_value"]
+    N4["src/generators/opcode_gen.rs: test_opcode_ranges | test_is_valid_opcode | test_requires_immediate | test_generate_valid_script"]
+    N5["src/stack_ops_builder.rs: default_stack_ops_script_halts | stack_ops_builder_does_not_inject_non_stack_opcodes"]
+    N6["src/syscall_fuzz.rs: test_syscall_fuzzing"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

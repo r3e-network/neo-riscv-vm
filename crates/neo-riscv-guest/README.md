@@ -6,6 +6,8 @@
 
 These diagrams are local to this crate. They explain `neo-riscv-guest` as an independent unit: where it sits in the Neo N4 stack, which boundary it owns, how its internal workflow runs, and how data moves through it.
 
+For the full source-level explanation, read [docs/learning-guide.md](docs/learning-guide.md).
+
 | View | Diagram | Source |
 | --- | --- | --- |
 | Position in Neo N4 | ![Position](docs/figures/position.svg) | [Mermaid](docs/figures/position.mmd) |
@@ -13,6 +15,10 @@ These diagrams are local to this crate. They explain `neo-riscv-guest` as an ind
 | Architecture | ![Architecture](docs/figures/architecture.svg) | [Mermaid](docs/figures/architecture.mmd) |
 | Workflow | ![Workflow](docs/figures/workflow.svg) | [Mermaid](docs/figures/workflow.mmd) |
 | Dataflow | ![Dataflow](docs/figures/dataflow.svg) | [Mermaid](docs/figures/dataflow.mmd) |
+| Module map | ![Module map](docs/figures/module-map.svg) | [Mermaid](docs/figures/module-map.mmd) |
+| Public API surface | ![Public API surface](docs/figures/api-surface.svg) | [Mermaid](docs/figures/api-surface.mmd) |
+| Test evidence | ![Test evidence](docs/figures/test-map.svg) | [Mermaid](docs/figures/test-map.mmd) |
+| Dependency map | ![Dependency map](docs/figures/dependency-map.svg) | [Mermaid](docs/figures/dependency-map.mmd) |
 
 ### Role in Neo N4
 
@@ -21,6 +27,9 @@ These diagrams are local to this crate. They explain `neo-riscv-guest` as an ind
 - **Primary inputs:** contract bytecode, ABI stack, syscall stubs
 - **Primary outputs:** guest result, syscall request, stack mutation
 - **Downstream consumers:** RISC-V host, Neo N4 L2 node, developer tooling
+- **Source files scanned:** 12
+- **Public symbols scanned:** 9
+- **Rust tests scanned:** 295
 
 ### Boundary and Responsibilities
 
@@ -29,11 +38,33 @@ These diagrams are local to this crate. They explain `neo-riscv-guest` as an ind
 - **Produces:** guest result, syscall request, stack mutation
 - **Used by:** RISC-V host, Neo N4 L2 node, developer tooling
 
+### Source Map Snapshot
+
+| File | Why it matters | Public API | Tests |
+| --- | --- | ---: | ---: |
+| `src/lib.rs` | crate root, public exports, and top-level documentation | 0 | 0 |
+| `tests/interpreter.rs` | external behavior or integration test | 0 | 217 |
+| `tests/contracts.rs` | external behavior or integration test | 0 | 49 |
+| `src/contract_rt/mod.rs` | implementation detail or helper module | 9 | 3 |
+| `tests/contract_rt_context.rs` | external behavior or integration test | 0 | 14 |
+| `tests/contract_rt_layering.rs` | external behavior or integration test | 0 | 3 |
+| `tests/rc_compat_test.rs` | external behavior or integration test | 0 | 3 |
+| `tests/shared_vm_dependency.rs` | external behavior or integration test | 0 | 3 |
+
+### API Snapshot
+
+| Kind | Representative symbols |
+| --- | --- |
+| Types | SyscallBridgeFn <br> Context |
+| Functions | set_syscall_bridge <br> from_abi_stack <br> into_vm_context <br> to_execution_result +3 |
+| Trait | no public symbols scanned |
+| Constants | no public symbols scanned |
+
 ### Learning Path
 
 1. Start with the position diagram to understand why this crate exists and who calls it.
 2. Read the technical principles diagram to identify the invariants and responsibility boundary.
-3. Use the architecture diagram to connect public inputs, internal components, dependencies, and outputs.
-4. Follow the workflow and dataflow diagrams before reading source files or tests.
+3. Use the module map and API surface to identify the files and symbols to read first.
+4. Follow the workflow, dataflow, test, and dependency diagrams before changing code.
 
 <!-- N4-CRATE-VISUAL-GUIDE:END -->

@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-guest: public API surface generated from source scan"]
+    N2["Types: SyscallBridgeFn | Context"]
+    N3["Functions: set_syscall_bridge | from_abi_stack | into_vm_context | to_execution_result +3"]
+    N4["Traits: no public symbols scanned"]
+    N5["Constants: no public symbols scanned"]
+    N6["Detailed list: see docs/learning-guide.md API table"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

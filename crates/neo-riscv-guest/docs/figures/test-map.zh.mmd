@@ -1,0 +1,14 @@
+flowchart LR
+    N1["neo-riscv-guest: 测试函数 295 个，测试文件 9 个"]
+    N2["tests/interpreter.rs: executes_push1_ret_script | executes_integer_addition_script | executes_platform_syscall_with_host_provider | executes_pushdata1_bytestring_script +213"]
+    N3["tests/contracts.rs: token_balance_subtraction | token_balance_addition | token_transfer_full_sequence | token_balance_negative_underflow +45"]
+    N4["tests/contract_rt_context.rs: push_pop_integer | init_slot_loads_args_from_stack | add_integers | sub_integers +10"]
+    N5["tests/shared_vm_dependency.rs: guest_stack_value_is_the_shared_neo_vm_rs_type | guest_interpreter_is_exposed_from_neo_vm_rs | guest_crate_is_a_facade_not_a_private_interpreter"]
+    N6["tests/rc_compat_test.rs: test_rc_basic | test_rc_nested | test_rc_drop"]
+    N1 --> N2
+    N2 --> N3
+    N3 --> N4
+    N4 --> N5
+    N5 --> N6
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

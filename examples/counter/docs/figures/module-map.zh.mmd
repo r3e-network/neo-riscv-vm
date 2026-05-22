@@ -1,0 +1,8 @@
+flowchart LR
+    N1["counter: 源码文件 2 个，公开符号 3 个"]
+    N2["src/lib.rs: crate 根、公开导出和顶层文档"]
+    N3["src/main.rs: 二进制或 CLI 入口"]
+    N1 --> N2
+    N2 --> N3
+    classDef crate fill:#101f2d,stroke:#38d978,color:#f6fbff
+    class N1 crate

@@ -1,58 +1,205 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="870" viewBox="0 0 1760 870" role="img" aria-label="neo-riscv-contract-harness Integration Map">
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1180" viewBox="0 0 1920 1180" role="img" aria-label="neo-riscv-contract-harness Integration Map">
 <defs>
-<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#08111f"/><stop offset="100%" stop-color="#111827"/></linearGradient>
-<filter id="shadow" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.42"/></filter>
+<marker id="arrow" viewBox="0 0 10 10" refX="9.4" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+<marker id="arrowAccent" viewBox="0 0 10 10" refX="9.4" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#047857"/></marker>
+<marker id="arrowFault" viewBox="0 0 10 10" refX="9.4" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#dc2626"/></marker>
+<filter id="paperShadow" x="-3%" y="-4%" width="106%" height="108%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+<style>
+.bg{fill:#f8fafc}.panel{fill:#ffffff;stroke:#cbd5e1;stroke-width:1.5;filter:url(#paperShadow)}
+.panelTitle{font:700 22px 'Inter','Segoe UI',Arial,sans-serif;fill:#0f172a}.panelSub{font:500 15px 'Inter','Segoe UI',Arial,sans-serif;fill:#475569}
+.title{font:800 36px 'Inter','Segoe UI',Arial,sans-serif;fill:#0f172a}.subtitle{font:500 17px 'Inter','Segoe UI',Arial,sans-serif;fill:#475569}
+.small{font:500 13px 'Inter','Segoe UI',Arial,sans-serif;fill:#475569}.body{font:500 15px 'Inter','Segoe UI',Arial,sans-serif;fill:#334155}
+.bodyStrong{font:750 15px 'Inter','Segoe UI',Arial,sans-serif;fill:#0f172a}.mono{font:650 14px 'Cascadia Mono','SFMono-Regular',Consolas,monospace;fill:#0f172a}
+.label{font:800 14px 'Inter','Segoe UI',Arial,sans-serif;fill:#ffffff}.caption{font:500 13px 'Inter','Segoe UI',Arial,sans-serif;fill:#64748b}
+.arrow{stroke:#475569;stroke-width:2.2;fill:none;marker-end:url(#arrow)}.arrowAccent{stroke:#047857;stroke-width:2.6;fill:none;marker-end:url(#arrowAccent)}.arrowDash{stroke:#64748b;stroke-width:2;fill:none;stroke-dasharray:7 6;marker-end:url(#arrow)}.arrowFault{stroke:#dc2626;stroke-width:2.2;fill:none;stroke-dasharray:5 5;marker-end:url(#arrowFault)}
+</style>
 </defs>
-<rect width="1760" height="100%" fill="url(#bg)"/>
-<rect x="34" y="34" width="1692" height="802" rx="10" fill="#0f172a" stroke="#334155" stroke-width="2"/>
-<text x="72" y="92" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700">neo-riscv-contract-harness: Integration Map</text>
-<text x="72" y="132" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19">Neo N4 technical learning diagram - how this unit connects to the wider N4 stack</text>
-<rect x="92" y="178" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="110" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="131" y="219" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1</text>
-<text x="168" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">neo-riscv-contract-harness</text>
-<text x="118" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">NeoVM2 / RISC-V execution profile</text>
-<rect x="630" y="178" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="648" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="669" y="219" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">2</text>
-<text x="706" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">L1/native verification</text>
-<text x="656" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">L1 consumes only commitments, messages, or proof results</text>
-<text x="656" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">that can be checked.</text>
-<rect x="1168" y="178" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="1186" y="196" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="1207" y="219" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">3</text>
-<text x="1244" y="212" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">L2 execution</text>
-<text x="1194" y="254" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">L2 owns transaction execution, state advancement, VM</text>
-<text x="1194" y="276" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">profiles, and batch boundaries.</text>
-<rect x="92" y="376" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="110" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="131" y="417" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">4</text>
-<text x="168" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">NeoFS DA</text>
-<text x="118" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">NeoFS stores batch data, witness or trace summaries, and</text>
-<text x="118" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">retrievable evidence.</text>
-<rect x="630" y="376" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="648" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="669" y="417" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">5</text>
-<text x="706" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Proof system</text>
-<text x="656" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">The proof system compresses L2 execution claims into</text>
-<text x="656" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">verifiable evidence.</text>
-<rect x="1168" y="376" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="1186" y="394" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="1207" y="417" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">6</text>
-<text x="1244" y="410" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Gateway/API</text>
-<text x="1194" y="452" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Gateway handles user routing, queries, submission, and</text>
-<text x="1194" y="474" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">health aggregation.</text>
-<rect x="92" y="574" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="110" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="131" y="615" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">7</text>
-<text x="168" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Bridge and heterogeneous chains</text>
-<text x="118" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Bridge rules unify L1-L2, L2-L2, and heterogeneous-chain</text>
-<text x="118" y="672" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">messages and assets.</text>
-<rect x="630" y="574" width="500" height="168" rx="8" fill="#052e2b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
-<rect x="648" y="592" width="42" height="32" rx="6" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="669" y="615" text-anchor="middle" fill="#34d399" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">8</text>
-<text x="706" y="608" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Developer entry</text>
-<text x="656" y="650" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">SDKs, CLIs, templates, and examples expose the system as a</text>
-<text x="656" y="672" fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">usable experience.</text>
-<text x="72" y="826" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16">Conceptual diagram generated from crate role metadata; not a source-code reading map.</text>
+<rect class="bg" width="1920" height="1180"/>
+<text x="56" y="66" class="title">neo-riscv-contract-harness: Integration Map</text>
+<text x="56" y="98" class="subtitle">Neo N4 paper-style technical figure - how this unit connects to the wider N4 stack</text>
+<rect x="56" y="118" width="1808" height="38" rx="6" fill="#ecfdf3" stroke="#047857" stroke-width="1.2"/>
+<text x="76" y="143" class="small">Read as: <tspan class="bodyStrong">technical-principle figure, not implementation inventory</tspan> · Boundary: guest cannot mutate chain state directly; host/syscall boundary authorizes effects · Out of scope: does not own proof generation, bridge custody, or L1 finality</text>
+<rect x="56" y="178" width="870" height="390" rx="10" class="panel"/>
+<rect x="56" y="178" width="870" height="54" rx="10" fill="#ecfdf3" stroke="#cbd5e1" stroke-width="0"/>
+<circle cx="86" cy="206" r="16" fill="#047857"/>
+<text x="86" y="211" text-anchor="middle" class="label">a</text>
+<text x="114" y="210" class="panelTitle">Boundary Model</text>
+<text x="114" y="230" class="panelSub">who may input, who is trusted, and who consumes the result</text>
+<rect x="966" y="178" width="898" height="390" rx="10" class="panel"/>
+<rect x="966" y="178" width="898" height="54" rx="10" fill="#ecfdf3" stroke="#cbd5e1" stroke-width="0"/>
+<circle cx="996" cy="206" r="16" fill="#047857"/>
+<text x="996" y="211" text-anchor="middle" class="label">b</text>
+<text x="1024" y="210" class="panelTitle">Formal Technical Model</text>
+<text x="1024" y="230" class="panelSub">treat the component as a verifiable state transition</text>
+<rect x="56" y="606" width="1240" height="494" rx="10" class="panel"/>
+<rect x="56" y="606" width="1240" height="54" rx="10" fill="#ecfdf3" stroke="#cbd5e1" stroke-width="0"/>
+<circle cx="86" cy="634" r="16" fill="#047857"/>
+<text x="86" y="639" text-anchor="middle" class="label">c</text>
+<text x="114" y="638" class="panelTitle">Protocol / Data / Proof Path</text>
+<text x="114" y="658" class="panelSub">how objects cross execution, commitment, proof, and consumption boundaries</text>
+<rect x="1334" y="606" width="530" height="494" rx="10" class="panel"/>
+<rect x="1334" y="606" width="530" height="54" rx="10" fill="#ecfdf3" stroke="#cbd5e1" stroke-width="0"/>
+<circle cx="1364" cy="634" r="16" fill="#047857"/>
+<text x="1364" y="639" text-anchor="middle" class="label">d</text>
+<text x="1392" y="638" class="panelTitle">Correctness and Operations Checklist</text>
+<text x="1392" y="658" class="panelSub">conditions a reader should verify while reading the figure</text>
+<rect x="92" y="276" width="220" height="190" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="106" y="302" class="bodyStrong">Input domain</text>
+<text x="106" y="324" class="small">neo-riscv-contract-harness</text>
+<text x="106" y="352" class="body">NeoVM2 / RISC-V execution</text>
+<text x="106" y="371" class="body">profile</text>
+<line x1="354" y1="232" x2="354" y2="530" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="7 7"/>
+<text x="354" y="252" class="small" text-anchor="middle" transform="rotate(-90 354 252)">trust boundary</text>
+<rect x="392" y="246" width="292" height="250" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<text x="406" y="272" class="bodyStrong">neo-riscv-contract-harness</text>
+<text x="406" y="294" class="small">L2 execution</text>
+<text x="406" y="322" class="body">L2 owns transaction</text>
+<text x="406" y="341" class="body">execution, state</text>
+<text x="406" y="360" class="body">advancement, VM profiles,</text>
+<text x="406" y="379" class="body">and batch boundaries.</text>
+<line x1="728" y1="232" x2="728" y2="530" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="7 7"/>
+<text x="728" y="252" class="small" text-anchor="middle" transform="rotate(-90 728 252)">commitment boundary</text>
+<rect x="764" y="276" width="132" height="190" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="778" y="302" class="bodyStrong">Consumers</text>
+<text x="778" y="324" class="small">Gateway/API</text>
+<text x="778" y="352" class="body">Gateway handles</text>
+<text x="778" y="371" class="body">user routing,</text>
+<text x="778" y="390" class="body">queries,</text>
+<text x="778" y="409" class="body">submission, and</text>
+<text x="778" y="428" class="body">health</text>
+<path class="arrowAccent" d="M312 371 C338 371 358 371 392 371"/>
+<path class="arrowAccent" d="M684 371 C706 371 730 371 764 371"/>
+<text x="392" y="516" class="caption">The center accepts canonical input and emits independently checkable</text>
+<text x="392" y="533" class="caption">commitments or evidence.</text>
+<rect x="1000" y="246" width="828" height="68" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<text x="1020" y="288" class="mono">δ(S, I, W) → (S′, E, R)</text>
+<rect x="1012" y="340" width="610" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+<circle cx="1037" cy="366" r="15" fill="#047857"/>
+<text x="1037" y="371" text-anchor="middle" class="label">1</text>
+<text x="1062" y="362" class="bodyStrong">L1/native verification</text>
+<text x="1062" y="382" class="small">L1 consumes only commitments, messages, or proof results</text>
+<path class="arrowAccent" d="M1318 392 L1318 410"/>
+<rect x="1012" y="410" width="610" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+<circle cx="1037" cy="436" r="15" fill="#047857"/>
+<text x="1037" y="441" text-anchor="middle" class="label">2</text>
+<text x="1062" y="432" class="bodyStrong">L2 execution</text>
+<text x="1062" y="452" class="small">L2 owns transaction execution, state advancement, VM</text>
+<path class="arrowAccent" d="M1318 462 L1318 480"/>
+<rect x="1012" y="480" width="610" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+<circle cx="1037" cy="506" r="15" fill="#047857"/>
+<text x="1037" y="511" text-anchor="middle" class="label">3</text>
+<text x="1062" y="502" class="bodyStrong">NeoFS DA</text>
+<text x="1062" y="522" class="small">NeoFS stores batch data, witness or trace summaries, and</text>
+<rect x="1660" y="340" width="150" height="190" rx="8" fill="#ffffff" stroke="#047857" stroke-width="1.5"/>
+<text x="1674" y="366" class="bodyStrong">Evidence</text>
+<text x="1674" y="388" class="small">Proof system</text>
+<text x="1674" y="416" class="body">H(batch) ||</text>
+<text x="1674" y="435" class="body">stateRoot&#x27; ||</text>
+<text x="1674" y="454" class="body">proof(E)</text>
+<path class="arrowDash" d="M1622 436 C1642 436 1648 436 1660 436"/>
+<text x="1012" y="555" class="mono">accept ⇔ deterministic ∧ authorized ∧ verifiable</text>
+<rect x="92" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="102" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="117" y="757" text-anchor="middle" class="label">1</text>
+<text x="140" y="758" class="bodyStrong">neo-riscv-contract-harness</text>
+<text x="104" y="788" class="small">NeoVM2 / RISC-V</text>
+<text x="104" y="805" class="small">execution profile</text>
+<path class="arrowAccent" d="M242 790 L290 790"/>
+<text x="266" y="778" class="small">step 1</text>
+<rect x="290" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="300" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="315" y="757" text-anchor="middle" class="label">2</text>
+<text x="338" y="758" class="bodyStrong">L1/native</text>
+<text x="302" y="788" class="small">L1 consumes only</text>
+<text x="302" y="805" class="small">commitments,</text>
+<text x="302" y="822" class="small">messages, or</text>
+<text x="302" y="839" class="small">proof results</text>
+<path class="arrowAccent" d="M440 790 L488 790"/>
+<text x="464" y="778" class="small">step 2</text>
+<rect x="488" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="498" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="513" y="757" text-anchor="middle" class="label">3</text>
+<text x="536" y="758" class="bodyStrong">L2 execution</text>
+<text x="500" y="788" class="small">L2 owns</text>
+<text x="500" y="805" class="small">transaction</text>
+<text x="500" y="822" class="small">execution, state</text>
+<text x="500" y="839" class="small">advancement, VM</text>
+<path class="arrowAccent" d="M638 790 L686 790"/>
+<text x="662" y="778" class="small">step 3</text>
+<rect x="686" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="696" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="711" y="757" text-anchor="middle" class="label">4</text>
+<text x="734" y="758" class="bodyStrong">NeoFS DA</text>
+<text x="698" y="788" class="small">NeoFS stores</text>
+<text x="698" y="805" class="small">batch data,</text>
+<text x="698" y="822" class="small">witness or trace</text>
+<text x="698" y="839" class="small">summaries, and</text>
+<path class="arrowAccent" d="M836 790 L884 790"/>
+<text x="860" y="778" class="small">step 4</text>
+<rect x="884" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="894" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="909" y="757" text-anchor="middle" class="label">5</text>
+<text x="932" y="758" class="bodyStrong">Proof system</text>
+<text x="896" y="788" class="small">The proof system</text>
+<text x="896" y="805" class="small">compresses L2</text>
+<text x="896" y="822" class="small">execution claims</text>
+<text x="896" y="839" class="small">into verifiable</text>
+<path class="arrowAccent" d="M1034 790 L1082 790"/>
+<text x="1058" y="778" class="small">step 5</text>
+<rect x="1082" y="730" width="150" height="120" rx="8" fill="#ecfdf3" stroke="#047857" stroke-width="1.5"/>
+<rect x="1092" y="740" width="30" height="24" rx="5" fill="#047857"/>
+<text x="1107" y="757" text-anchor="middle" class="label">6</text>
+<text x="1130" y="758" class="bodyStrong">Gateway/API</text>
+<text x="1094" y="788" class="small">Gateway handles</text>
+<text x="1094" y="805" class="small">user routing,</text>
+<text x="1094" y="822" class="small">queries,</text>
+<text x="1094" y="839" class="small">submission, and</text>
+<path class="arrowDash" d="M182 896 C372 964 832 964 1116 896"/>
+<rect x="488" y="904" width="190" height="128" rx="8" fill="#fff1f2" stroke="#dc2626" stroke-width="1.5"/>
+<rect x="498" y="914" width="30" height="24" rx="5" fill="#dc2626"/>
+<text x="513" y="931" text-anchor="middle" class="label">R</text>
+<text x="536" y="932" class="bodyStrong">Bridge and</text>
+<text x="500" y="962" class="small">Bridge rules</text>
+<text x="500" y="979" class="small">unify L1-L2,</text>
+<text x="500" y="996" class="small">L2-L2, and</text>
+<text x="500" y="1013" class="small">heterogeneous-chain</text>
+<path class="arrowFault" d="M560 850 L560 908"/>
+<rect x="880" y="904" width="300" height="128" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="894" y="930" class="bodyStrong">Extension point</text>
+<text x="894" y="952" class="small">Developer entry</text>
+<text x="894" y="980" class="body">SDKs, CLIs, templates, and</text>
+<text x="894" y="999" class="body">examples expose the system as a</text>
+<text x="894" y="1018" class="body">usable experience.</text>
+<text x="92" y="1060" class="caption">Dashed path denotes proof, witness, audit, or observable evidence: ABI digest, execution result, gas report, and</text>
+<text x="92" y="1078" class="caption">syscall trace</text>
+<rect x="1368" y="708" width="462" height="310" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+<rect x="1378" y="718" width="442" height="48" rx="6" fill="#ecfdf3"/>
+<text x="1390" y="738" class="bodyStrong">Determinism</text>
+<text x="1518" y="736" class="small">same ABI input, guest module, and host</text>
+<text x="1518" y="753" class="small">callbacks produce the same result</text>
+<rect x="1378" y="776" width="442" height="48" rx="6" fill="#ffffff"/>
+<text x="1390" y="796" class="bodyStrong">Authorization</text>
+<text x="1518" y="794" class="small">guest cannot mutate chain state directly;</text>
+<text x="1518" y="811" class="small">host/syscall boundary authorizes effects</text>
+<rect x="1378" y="834" width="442" height="48" rx="6" fill="#ecfdf3"/>
+<text x="1390" y="854" class="bodyStrong">Evidence</text>
+<text x="1518" y="852" class="small">ABI digest, execution result, gas report,</text>
+<text x="1518" y="869" class="small">and syscall trace</text>
+<rect x="1378" y="892" width="442" height="48" rx="6" fill="#ffffff"/>
+<text x="1390" y="912" class="bodyStrong">Rejection path</text>
+<text x="1518" y="910" class="small">Bridge rules unify L1-L2, L2-L2, and</text>
+<text x="1518" y="927" class="small">heterogeneous-chain messages and assets.</text>
+<rect x="1378" y="950" width="442" height="48" rx="6" fill="#ecfdf3"/>
+<text x="1390" y="970" class="bodyStrong">Observability</text>
+<text x="1518" y="968" class="small">gas, syscalls, host trace, halt/fault, and</text>
+<text x="1518" y="985" class="small">execution digest</text>
+<line x1="1504" y1="722" x2="1504" y2="998" stroke="#047857" stroke-width="1.2" stroke-dasharray="4 5"/>
+<rect x="1368" y="1012" width="462" height="58" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<line x1="1386" y1="1030" x2="1432" y2="1030" stroke="#047857" stroke-width="2.6" marker-end="url(#arrowAccent)"/>
+<text x="1446" y="1034" class="small">solid: data / state transition</text>
+<line x1="1386" y1="1052" x2="1432" y2="1052" stroke="#64748b" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<text x="1446" y="1056" class="small">dashed: proof / observation</text>
+<line x1="1660" y1="1052" x2="1704" y2="1052" stroke="#dc2626" stroke-width="2.2" stroke-dasharray="5 5" marker-end="url(#arrowFault)"/>
+<text x="1718" y="1056" class="small">red: rejection / fault</text>
+<text x="56" y="1146" class="caption">Figure style: panelized architecture, formal transition model, protocol path, and correctness checklist; no source-file or API inventory.</text>
 </svg>

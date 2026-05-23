@@ -550,15 +550,24 @@ fn write_ok_result(
     // yet surface fault_ip, but the guest captures it (see ExecutionResult in the ABI
     // crate) for downstream use once the C# integration is wired up.
     let _ = result.fault_ip;
+    let state = match result.state {
+        neo_riscv_abi::VmState::Halt => 0,
+        neo_riscv_abi::VmState::Fault => 1,
+        state => {
+            write_err_result(
+                format!("interpreter returned non-final VM state {state:?}"),
+                fee_consumed_pico,
+                output,
+            );
+            return;
+        }
+    };
     let (stack_ptr, stack_len) = serialize_stack_items(&result.stack);
 
     unsafe {
         *output = NativeExecutionResult {
             fee_consumed_pico,
-            state: match result.state {
-                neo_riscv_abi::VmState::Halt => 0,
-                neo_riscv_abi::VmState::Fault => 1,
-            },
+            state,
             stack_ptr,
             stack_len,
             error_ptr: ptr::null_mut(),

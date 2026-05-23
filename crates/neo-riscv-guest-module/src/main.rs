@@ -365,13 +365,7 @@ fn store_result(mut result: Result<ExecutionResult, alloc::string::String>, resu
     }
 
     unsafe {
-        // Serialize result; if serialization fails (e.g., allocator exhaustion),
-        // store a serialized error so the host gets a meaningful fault message.
-        let bytes = postcard::to_allocvec(&result).unwrap_or_else(|_| {
-            let err: Result<neo_riscv_abi::ExecutionResult, alloc::string::String> =
-                Err(alloc::string::String::from("result serialization failed"));
-            postcard::to_allocvec(&err).unwrap_or_default()
-        });
+        let bytes = neo_riscv_abi::result_codec::encode_execution_result(&result);
         let state = runtime_state();
         state.result_ptr = if bytes.is_empty() {
             0

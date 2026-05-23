@@ -15,7 +15,8 @@ use bridge::{
     read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic, read_guest_result_diag,
     read_guest_trace, ClosureHost, GuestTrace,
 };
-use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, VmState};
+use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, StackValue, VmState};
+use serde::Deserialize;
 use std::cell::Cell;
 
 thread_local! {
@@ -93,6 +94,56 @@ pub(crate) fn read_last_fault_locals(out_ptr: *mut u8, out_capacity: usize) -> u
 
 /// Maximum allowed result size from guest (16 MB).
 const MAX_RESULT_SIZE: u32 = 16 * 1024 * 1024;
+
+#[derive(Deserialize)]
+enum LegacyPostcardVmState {
+    Halt,
+    Fault,
+}
+
+#[derive(Deserialize)]
+struct LegacyPostcardExecutionResult {
+    fee_consumed_pico: i64,
+    state: LegacyPostcardVmState,
+    stack: Vec<StackValue>,
+    #[serde(default)]
+    fault_message: Option<String>,
+    #[serde(default)]
+    fault_ip: Option<u32>,
+    #[serde(default)]
+    fault_locals: Option<Vec<u8>>,
+}
+
+impl From<LegacyPostcardExecutionResult> for ExecutionResult {
+    fn from(result: LegacyPostcardExecutionResult) -> Self {
+        Self {
+            fee_consumed_pico: result.fee_consumed_pico,
+            state: match result.state {
+                LegacyPostcardVmState::Halt => VmState::Halt,
+                LegacyPostcardVmState::Fault => VmState::Fault,
+            },
+            stack: result.stack,
+            fault_message: result.fault_message,
+            fault_ip: result.fault_ip,
+            fault_locals: result.fault_locals,
+        }
+    }
+}
+
+fn decode_guest_execution_result(bytes: &[u8]) -> Result<Result<ExecutionResult, String>, String> {
+    match neo_riscv_abi::result_codec::decode_execution_result(bytes) {
+        Ok(result) => Ok(result),
+        Err(shared_error) => {
+            postcard::from_bytes::<Result<LegacyPostcardExecutionResult, String>>(bytes)
+                .map(|result| result.map(Into::into))
+                .map_err(|legacy_error| {
+                    format!(
+                        "Failed to decode result: shared codec: {shared_error}; legacy postcard: {legacy_error}"
+                    )
+                })
+        }
+    }
+}
 
 pub use ffi::{
     neo_riscv_execute_native_contract, neo_riscv_execute_native_contract_builtin,
@@ -295,8 +346,7 @@ where
         .map_err(|e| format!("guest read_memory failed: {e:?}"))?;
     // Debug: uncomment to trace RESULT_BYTES
     // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
-    let mut result: Result<ExecutionResult, String> =
-        postcard::from_bytes(&res_bytes).map_err(|_| "Failed to decode result".to_string())?;
+    let mut result = decode_guest_execution_result(&res_bytes)?;
     set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 
     if let Ok(ref mut r) = result {
@@ -595,8 +645,7 @@ where
         .map_err(|e| format!("guest read_memory failed: {e:?}"))?;
     // Debug: uncomment to trace RESULT_BYTES
     // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
-    let mut result: Result<ExecutionResult, String> =
-        postcard::from_bytes(&res_bytes).map_err(|_| "Failed to decode result".to_string())?;
+    let mut result = decode_guest_execution_result(&res_bytes)?;
     set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 
     if let Ok(ref mut r) = result {

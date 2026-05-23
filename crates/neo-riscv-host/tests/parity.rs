@@ -103,6 +103,12 @@ fn assert_halts_timed(
             );
             None
         }
+        Ok((state, _)) => {
+            panic!(
+                "{}.{}: interpreter returned non-final VM state {state:?}",
+                name, method
+            );
+        }
         Err(e) if is_known_limitation(&e) => {
             eprintln!("SKIP  {}.{}: {}", name, method, e);
             None

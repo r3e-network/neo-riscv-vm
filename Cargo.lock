@@ -601,13 +601,14 @@ dependencies = [
  "polkavm",
  "postcard",
  "proptest",
+ "serde",
  "tracing",
 ]
 
 [[package]]
 name = "neo-vm-rs"
 version = "0.1.0"
-source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=6cdb02557a8b1379ce3fcb377349a56cd89b09fa#6cdb02557a8b1379ce3fcb377349a56cd89b09fa"
+source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=7e47299c0f1583770db17f4453fafe54ec0744ec#7e47299c0f1583770db17f4453fafe54ec0744ec"
 dependencies = [
  "num-bigint",
  "num-traits",

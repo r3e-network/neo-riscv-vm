@@ -91,10 +91,10 @@ pub fn decode_context(stack_data: &[u8]) -> Context {
     }
 }
 
-/// Encode the execution context as a postcard-serialized `Result<ExecutionResult, String>`.
+/// Encode the execution context with the shared `neo-vm-rs` execution-result codec.
 ///
-/// The host expects `postcard::from_bytes::<Result<ExecutionResult, String>>()`,
-/// so we must wrap the `ExecutionResult` in `Ok(...)` before serializing.
+/// The host decodes this through `neo_riscv_abi::result_codec`, so we must wrap
+/// the `ExecutionResult` in `Ok(...)` before serializing.
 ///
 /// Returns the serialized bytes suitable for writing into the result buffer
 /// that the host reads via `get_result_ptr` / `get_result_len`.

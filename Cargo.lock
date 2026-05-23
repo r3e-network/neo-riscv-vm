@@ -608,7 +608,7 @@ dependencies = [
 [[package]]
 name = "neo-vm-rs"
 version = "0.1.0"
-source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=7e47299c0f1583770db17f4453fafe54ec0744ec#7e47299c0f1583770db17f4453fafe54ec0744ec"
+source = "git+https://github.com/r3e-network/neo-vm-rs.git?rev=e95512c6a0260b2412a1207831d0d47b06d1dd1f#e95512c6a0260b2412a1207831d0d47b06d1dd1f"
 dependencies = [
  "num-bigint",
  "num-traits",

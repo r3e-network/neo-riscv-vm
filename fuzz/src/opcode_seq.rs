@@ -27,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
 
     if let Some(result) = result {
         match result.state {
-            VmState::Halt | VmState::Fault => {}
+            VmState::Halt | VmState::Fault | VmState::None | VmState::Break => {}
         }
     }
 });

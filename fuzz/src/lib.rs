@@ -40,6 +40,12 @@ pub fn assert_invariants(result: &ExecutionResult) {
                 "Fault state should have either fault_message, stack content, or gas consumed"
             );
         }
+        VmState::None | VmState::Break => {
+            assert!(
+                result.fault_message.is_none(),
+                "Non-final states must not carry a fault_message"
+            );
+        }
     }
 
     check_stack_values(&result.stack);
@@ -111,5 +117,21 @@ mod tests {
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.state, VmState::Halt);
+    }
+
+    #[test]
+    fn invariants_accept_shared_non_final_vm_states() {
+        for state in [VmState::None, VmState::Break] {
+            let result = ExecutionResult {
+                fee_consumed_pico: 0,
+                state,
+                stack: Vec::new(),
+                fault_message: None,
+                fault_ip: None,
+                fault_locals: None,
+            };
+
+            assert_invariants(&result);
+        }
     }
 }

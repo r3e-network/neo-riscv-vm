@@ -30,7 +30,7 @@ fuzz_target!(|data: &[u8]| {
                     "Halt state should not have fault_message"
                 );
             }
-            VmState::Fault => {}
+            VmState::Fault | VmState::None | VmState::Break => {}
         }
     }
 });

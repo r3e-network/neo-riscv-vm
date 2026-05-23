@@ -1,4 +1,4 @@
-use neo_riscv_abi::{StackValue, VmState};
+use neo_riscv_abi::{OpCode, StackValue, VmState};
 use neo_riscv_host::{execute_script_with_context, PolkaVmRuntime, RuntimeContext};
 
 #[test]
@@ -8,8 +8,9 @@ fn runtime_initializes_for_gas_validation() {
 
 #[test]
 fn opcode_fee_consumption_matches_configured_exec_fee_factor() {
+    let script = [OpCode::PUSH1.byte(), OpCode::RET.byte()];
     let result = execute_script_with_context(
-        &[0x11, 0x40], // PUSH1, RET
+        &script,
         RuntimeContext {
             trigger: 0x40,
             network: 0,

@@ -109,10 +109,11 @@ fn check_single_value(value: &StackValue) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use neo_riscv_abi::OpCode;
 
     #[test]
     fn test_no_op_syscall() {
-        let script = [0x11, 0x40];
+        let script = [OpCode::PUSH1.byte(), OpCode::RET.byte()];
         let result = run_script(&script);
         assert!(result.is_some());
         let result = result.unwrap();

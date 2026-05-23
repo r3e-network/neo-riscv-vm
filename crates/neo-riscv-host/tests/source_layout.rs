@@ -61,6 +61,25 @@ fn opcode_matrix_names_use_shared_opcode_enum() {
 }
 
 #[test]
+fn host_smoke_tests_and_fuzz_harness_use_shared_opcode_enum() {
+    for relative_path in [
+        "crates/neo-riscv-host/tests/gas_validation.rs",
+        "fuzz/src/lib.rs",
+    ] {
+        let source = read_workspace_source(relative_path);
+
+        assert!(
+            source.contains("OpCode::") && source.contains(".byte()"),
+            "{relative_path} should build executable NeoVM scripts through shared OpCode metadata"
+        );
+        assert!(
+            !source.contains("[0x11, 0x40]"),
+            "{relative_path} must not duplicate PUSH1/RET opcode bytes"
+        );
+    }
+}
+
+#[test]
 fn fuzz_targets_use_shared_opcode_enum() {
     for relative_path in [
         "fuzz/src/mem_op.rs",

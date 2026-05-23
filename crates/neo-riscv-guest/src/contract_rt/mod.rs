@@ -49,7 +49,7 @@ impl Context {
     #[must_use]
     pub fn from_abi_stack(stack: Vec<StackValue>) -> Self {
         Self {
-            vm: VmContext::from_abi_stack(stack),
+            vm: VmContext::from_stack(stack),
         }
     }
 

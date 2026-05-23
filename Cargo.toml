@@ -27,7 +27,7 @@ version = "0.1.0"
 license = "MIT"
 
 [workspace.dependencies]
-neo-vm-rs = { git = "https://github.com/r3e-network/neo-vm-rs.git", rev = "7a5a585d0055f4c60b2d67af25c1e43eabe4824d", default-features = false }
+neo-vm-rs = { git = "https://github.com/r3e-network/neo-vm-rs.git", rev = "6acb6439004a2fb22ee4df5ce8e07c20c41e12ec", default-features = false }
 polkavm = "0.33.1"
 polkavm-derive = "0.33.0"
 postcard = { version = "1.1.3", features = ["alloc"] }

@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use neo_riscv_abi::OpCode;
 
 pub(crate) fn build_stack_ops_script(_seed: u64, context: &[u8]) -> Vec<u8> {
     let mut script = Vec::new();
@@ -19,12 +20,12 @@ pub(crate) fn build_stack_ops_script(_seed: u64, context: &[u8]) -> Vec<u8> {
     }
 
     if script.is_empty() {
-        script.push(0x11);
-        script.push(0x11);
-        script.push(0x4a);
-        script.push(0x40);
+        script.push(OpCode::PUSH1.byte());
+        script.push(OpCode::PUSH1.byte());
+        script.push(OpCode::DUP.byte());
+        script.push(OpCode::RET.byte());
     } else {
-        script.push(0x40);
+        script.push(OpCode::RET.byte());
     }
 
     script
@@ -50,7 +51,15 @@ mod tests {
 
         let script = build_stack_ops_script(seed, &context);
 
-        assert_eq!(script, vec![0x43, 0x55, 0x55, 0x40]);
+        assert_eq!(
+            script,
+            vec![
+                OpCode::DEPTH.byte(),
+                OpCode::REVERSEN.byte(),
+                OpCode::REVERSEN.byte(),
+                OpCode::RET.byte(),
+            ]
+        );
         assert!(!script.contains(&0x37), "stack_ops script should not inject CALLT");
     }
 }

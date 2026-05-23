@@ -11,7 +11,7 @@ mod trace_entry;
 
 use deterministic_model::DeterministicModel;
 use guest_parity_provider::GuestParityProvider;
-use neo_riscv_abi::{interop_hash, StackValue};
+use neo_riscv_abi::{interop_hash, OpCode, StackValue};
 use neo_riscv_fuzz::SimpleRng;
 use neo_riscv_guest::interpret_with_stack_and_syscalls;
 use neo_riscv_host::{execute_script_with_host_and_stack, HostCallbackResult, RuntimeContext};
@@ -102,31 +102,31 @@ fn default_context() -> RuntimeContext {
 
 fn build_runtime_platform_script() -> Vec<u8> {
     let mut script = Vec::new();
-    script.push(0x41);
+    script.push(OpCode::SYSCALL.byte());
     script.extend_from_slice(&runtime_platform_api().to_le_bytes());
-    script.push(0x40);
+    script.push(OpCode::RET.byte());
     script
 }
 
 fn build_storage_round_trip_script(key: &[u8], value: &[u8]) -> Vec<u8> {
     let mut script = Vec::new();
-    script.push(0x41);
+    script.push(OpCode::SYSCALL.byte());
     script.extend_from_slice(&storage_get_context_api().to_le_bytes());
-    script.push(0x4a);
+    script.push(OpCode::DUP.byte());
     push_data(&mut script, key);
     push_data(&mut script, value);
-    script.push(0x41);
+    script.push(OpCode::SYSCALL.byte());
     script.extend_from_slice(&storage_put_api().to_le_bytes());
     push_data(&mut script, key);
-    script.push(0x41);
+    script.push(OpCode::SYSCALL.byte());
     script.extend_from_slice(&storage_get_api().to_le_bytes());
-    script.push(0x40);
+    script.push(OpCode::RET.byte());
     script
 }
 
 fn push_data(script: &mut Vec<u8>, bytes: &[u8]) {
     assert!(bytes.len() <= u8::MAX as usize, "PUSHDATA1 payload too large");
-    script.push(0x0c);
+    script.push(OpCode::PUSHDATA1.byte());
     script.push(bytes.len() as u8);
     script.extend_from_slice(bytes);
 }

@@ -5,6 +5,7 @@ extern crate libfuzzer_sys;
 
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
+use neo_riscv_abi::OpCode;
 use neo_riscv_fuzz::{check_stack_values, run_with_stack, SimpleRng};
 
 fuzz_target!(|data: &[u8]| {
@@ -30,7 +31,14 @@ fn build_type_conv_script(seed: u64, context: &[u8]) -> Vec<u8> {
     let _rng = SimpleRng::new(seed);
     let mut script = Vec::new();
 
-    let ops = [0xd9, 0xdb, 0xca, 0xcb, 0xcc, 0xcd];
+    let ops = [
+        OpCode::ISTYPE.byte(),
+        OpCode::CONVERT.byte(),
+        OpCode::SIZE.byte(),
+        OpCode::HASKEY.byte(),
+        OpCode::KEYS.byte(),
+        OpCode::VALUES.byte(),
+    ];
 
     for (i, &byte) in context.iter().enumerate() {
         if ops.contains(&byte) {
@@ -45,12 +53,12 @@ fn build_type_conv_script(seed: u64, context: &[u8]) -> Vec<u8> {
     }
 
     if script.is_empty() {
-        script.push(0x11);
-        script.push(0xd9);
-        script.push(0x10);
-        script.push(0x40);
+        script.push(OpCode::PUSH1.byte());
+        script.push(OpCode::ISTYPE.byte());
+        script.push(OpCode::PUSH0.byte());
+        script.push(OpCode::RET.byte());
     } else {
-        script.push(0x40);
+        script.push(OpCode::RET.byte());
     }
 
     script

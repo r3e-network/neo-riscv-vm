@@ -62,7 +62,15 @@ fn opcode_matrix_names_use_shared_opcode_enum() {
 
 #[test]
 fn fuzz_targets_use_shared_opcode_enum() {
-    for relative_path in ["fuzz/src/mem_op.rs", "fuzz/src/exception_handling.rs"] {
+    for relative_path in [
+        "fuzz/src/mem_op.rs",
+        "fuzz/src/exception_handling.rs",
+        "fuzz/src/syscall_fuzz.rs",
+        "fuzz/src/whole_system_parity.rs",
+        "fuzz/src/type_convert.rs",
+        "fuzz/src/stack_ops_builder.rs",
+        "crates/neo-riscv-guest/tests/shared_vm_dependency.rs",
+    ] {
         let source = read_workspace_source(relative_path);
 
         assert!(
@@ -75,6 +83,22 @@ fn fuzz_targets_use_shared_opcode_enum() {
                 && !source.contains("byte == 0x11 || byte == 0x12 || byte == 0x4a"),
             "{relative_path} must not duplicate opcode bytes in fuzz control logic"
         );
+        for duplicate in [
+            "script.push(0x41)",
+            "script.push(0x40)",
+            "script.push(0x4a)",
+            "script.push(0x0c)",
+            "interpret(&[0x12, 0x13, 0x9e, 0x40])",
+            "script.push(0x11)",
+            "script.push(0xd9)",
+            "script.push(0x10)",
+            "vec![0x43, 0x55, 0x55, 0x40]",
+        ] {
+            assert!(
+                !source.contains(duplicate),
+                "{relative_path} must not duplicate NeoVM opcode bytes: {duplicate}"
+            );
+        }
     }
 }
 

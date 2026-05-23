@@ -1,4 +1,5 @@
 use neo_riscv_guest::{interpret, StackValue, VmState};
+use neo_vm_rs::OpCode;
 
 #[test]
 fn guest_stack_value_is_the_shared_neo_vm_rs_type() {
@@ -10,7 +11,13 @@ fn guest_stack_value_is_the_shared_neo_vm_rs_type() {
 
 #[test]
 fn guest_interpreter_is_exposed_from_neo_vm_rs() {
-    let result = interpret(&[0x12, 0x13, 0x9e, 0x40]).expect("script should execute");
+    let result = interpret(&[
+        OpCode::PUSH2.byte(),
+        OpCode::PUSH3.byte(),
+        OpCode::ADD.byte(),
+        OpCode::RET.byte(),
+    ])
+    .expect("script should execute");
 
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::Integer(5)]);

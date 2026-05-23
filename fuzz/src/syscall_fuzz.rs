@@ -5,7 +5,7 @@ extern crate libfuzzer_sys;
 
 use alloc::vec::Vec;
 use libfuzzer_sys::fuzz_target;
-use neo_riscv_abi::StackValue;
+use neo_riscv_abi::{OpCode, StackValue};
 use neo_riscv_fuzz::{check_stack_values, SimpleRng};
 
 struct FuzzingSyscall {
@@ -96,7 +96,16 @@ fn build_syscall_script(api: u32, seed: u64, context: &[u8]) -> Vec<u8> {
     let mut rng = SimpleRng::new(seed);
     let mut script = Vec::new();
 
-    let push_ops = [0x11, 0x12, 0x13, 0x14, 0x15, 0x0b, 0x09, 0x08];
+    let push_ops = [
+        OpCode::PUSH1,
+        OpCode::PUSH2,
+        OpCode::PUSH3,
+        OpCode::PUSH4,
+        OpCode::PUSH5,
+        OpCode::PUSHNULL,
+        OpCode::PUSHF,
+        OpCode::PUSHT,
+    ];
 
     let prep_count = if context.is_empty() {
         3
@@ -106,13 +115,13 @@ fn build_syscall_script(api: u32, seed: u64, context: &[u8]) -> Vec<u8> {
 
     for i in 0..prep_count {
         let push_op = push_ops[(rng.next() as usize + i) % push_ops.len()];
-        script.push(push_op);
+        script.push(push_op.byte());
     }
 
-    script.push(0x41);
+    script.push(OpCode::SYSCALL.byte());
     script.extend_from_slice(&api.to_le_bytes());
 
-    script.push(0x40);
+    script.push(OpCode::RET.byte());
 
     script
 }

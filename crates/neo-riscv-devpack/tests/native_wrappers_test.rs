@@ -7,16 +7,15 @@ use neo_riscv_devpack::native::{
     std_lib,
 };
 
+#[path = "native_wrappers_test/host_state.rs"]
+mod host_state;
+
+use host_state::HostState;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Invocation {
     api: u32,
     stack: Vec<StackValue>,
-}
-
-#[derive(Default)]
-struct HostState {
-    invocations: Vec<Invocation>,
-    response: Vec<u8>,
 }
 
 fn host_state() -> &'static Mutex<HostState> {

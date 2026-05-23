@@ -13,6 +13,14 @@ use neo_riscv_host::{
 };
 use std::{ffi::c_void, ptr, slice};
 
+#[path = "runtime/ffi_states/mod.rs"]
+mod ffi_states;
+
+use ffi_states::{
+    FfiAttributeState, FfiInitializerStorageGetThenCallState, FfiInitializerStoragePutState,
+    FfiInitializerWitnessState, FfiMixedState, FfiOracleSuccessState, FfiStorageContextState,
+};
+
 fn build_native_stack_items(stack: &[StackValue]) -> (*mut neo_riscv_host::NativeStackItem, usize) {
     if stack.is_empty() {
         return (ptr::null_mut(), 0);
@@ -4825,29 +4833,6 @@ unsafe extern "C" fn ffi_error_free_callback(
     }
 }
 
-#[repr(C)]
-struct FfiMixedState {
-    call_count: u32,
-}
-
-struct FfiStorageContextState {
-    calls: Vec<(u32, Vec<StackValue>)>,
-    token: Vec<u8>,
-}
-
-struct FfiOracleSuccessState {
-    stored: Option<Vec<StackValue>>,
-}
-
-struct FfiAttributeState {
-    observed_checkwitness: Option<Vec<StackValue>>,
-}
-
-struct FfiInitializerWitnessState {
-    init_complete_count: usize,
-    observed_checkwitness: Option<Vec<StackValue>>,
-}
-
 unsafe extern "C" fn ffi_storage_context_callback(
     user_data: *mut c_void,
     api: u32,
@@ -7446,16 +7431,6 @@ unsafe extern "C" fn ffi_initializer_witness_callback(
     }
 
     false
-}
-
-struct FfiInitializerStoragePutState {
-    init_complete_count: usize,
-    observed_keys: Vec<Vec<u8>>,
-}
-
-struct FfiInitializerStorageGetThenCallState {
-    init_complete_count: usize,
-    get_calls: usize,
 }
 
 unsafe extern "C" fn ffi_initializer_storage_put_callback(

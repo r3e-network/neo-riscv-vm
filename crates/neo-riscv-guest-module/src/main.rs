@@ -6,8 +6,17 @@ extern crate alloc;
 #[cfg(target_arch = "riscv32")]
 mod mem_intrinsics;
 
+mod aligned_arena;
+#[cfg(target_arch = "riscv32")]
+mod buf_writer;
+mod bump_state;
+mod polkavm_syscall_provider;
+mod raw_buffer;
+mod resettable_bump_allocator;
+mod runtime_state;
+mod runtime_state_cell;
+
 use alloc::vec::Vec;
-use core::alloc::{GlobalAlloc, Layout};
 
 // Increase PolkaVM call stack from the default size to handle deep codec
 // decoding (e.g., nested arrays in Contract.Call results at mainnet block 78538).
@@ -16,10 +25,14 @@ use core::alloc::{GlobalAlloc, Layout};
     target_feature = "e"
 ))]
 polkavm_derive::min_stack_size!(1048576);
-use core::cell::UnsafeCell;
-use core::ptr::NonNull;
-use neo_riscv_abi::{callback_codec, fast_codec, ExecutionResult, StackValue};
-use neo_riscv_guest::SyscallProvider;
+use aligned_arena::AlignedArena;
+#[cfg(target_arch = "riscv32")]
+use buf_writer::BufWriter;
+use neo_riscv_abi::{fast_codec, ExecutionResult, StackValue};
+use polkavm_syscall_provider::PolkaVmSyscallProvider;
+use resettable_bump_allocator::ResettableBumpAllocator;
+use runtime_state::RuntimeState;
+use runtime_state_cell::RuntimeStateCell;
 
 // Keep enough heap headroom for 1MB MaxItemSize allocations alongside
 // interpreter state and callback decoding buffers. Mainnet NeoVM compatibility
@@ -34,108 +47,7 @@ const ALLOC_PRETOUCH_SIZE: usize = 1024 * 1024;
 const PANIC_BUF_SIZE: usize = 256;
 const TRACE_HEAD_SIZE: usize = 32;
 
-struct RawBuffer<const N: usize>(UnsafeCell<[u8; N]>);
-
-unsafe impl<const N: usize> Sync for RawBuffer<N> {}
-
-impl<const N: usize> RawBuffer<N> {
-    const fn new() -> Self {
-        Self(UnsafeCell::new([0; N]))
-    }
-
-    unsafe fn as_mut_ptr(&self) -> *mut u8 {
-        self.0.get().cast::<u8>()
-    }
-}
-
-#[repr(align(64))]
-struct AlignedArena(RawBuffer<ARENA_SIZE>);
-
-unsafe impl Sync for AlignedArena {}
-
-impl AlignedArena {
-    const fn new() -> Self {
-        Self(RawBuffer::new())
-    }
-
-    unsafe fn as_mut_ptr(&self) -> *mut u8 {
-        self.0.as_mut_ptr()
-    }
-}
-
 static ARENA: AlignedArena = AlignedArena::new();
-
-#[derive(Default)]
-struct BumpState {
-    offset: usize,
-    peak: usize,
-    fail_count: u32,
-    fail_size: usize,
-    fail_align: usize,
-}
-
-impl BumpState {
-    const fn new() -> Self {
-        Self {
-            offset: 0,
-            peak: 0,
-            fail_count: 0,
-            fail_size: 0,
-            fail_align: 0,
-        }
-    }
-
-    fn clear(&mut self) {
-        *self = Self::new();
-    }
-}
-
-#[repr(C)]
-struct RuntimeState {
-    magic: u32,
-    bump: BumpState,
-    result_ptr: u32,
-    result_len: u32,
-    panic_len: u32,
-    trace_res_len: u32,
-    trace_syscall_stage: u32,
-    trace_syscall_api: u32,
-    trace_syscall_ip: u32,
-    trace_req_len: u32,
-    trace_stack_items: u32,
-    trace_res_head: [u8; TRACE_HEAD_SIZE],
-    panic_buf: [u8; PANIC_BUF_SIZE],
-}
-
-impl RuntimeState {
-    const fn new() -> Self {
-        Self {
-            magic: 0x4e52_5653,
-            bump: BumpState::new(),
-            result_ptr: 0,
-            result_len: 0,
-            panic_len: 0,
-            trace_res_len: 0,
-            trace_syscall_stage: 0,
-            trace_syscall_api: 0,
-            trace_syscall_ip: 0,
-            trace_req_len: 0,
-            trace_stack_items: 0,
-            trace_res_head: [0; TRACE_HEAD_SIZE],
-            panic_buf: [0; PANIC_BUF_SIZE],
-        }
-    }
-}
-
-struct RuntimeStateCell(UnsafeCell<RuntimeState>);
-
-unsafe impl Sync for RuntimeStateCell {}
-
-impl RuntimeStateCell {
-    const fn new() -> Self {
-        Self(UnsafeCell::new(RuntimeState::new()))
-    }
-}
 
 const ALLOC_BASE_OFFSET: usize = 0;
 const REQ_BUF_OFFSET: usize = ALLOC_ARENA_SIZE;
@@ -149,7 +61,7 @@ const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
 static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
 
 unsafe fn runtime_state() -> &'static mut RuntimeState {
-    &mut *RUNTIME_STATE.0.get()
+    RUNTIME_STATE.get_mut()
 }
 
 unsafe fn arena_ptr(offset: usize) -> *mut u8 {
@@ -166,119 +78,19 @@ unsafe fn pretouch_alloc_arena() {
     }
 }
 
-struct ResettableBumpAllocator;
-
-unsafe impl Sync for ResettableBumpAllocator {}
-
-impl ResettableBumpAllocator {
-    const fn new() -> Self {
-        Self
-    }
-
-    unsafe fn reset(&self) {
-        let state = &mut runtime_state().bump;
-        state.clear();
-    }
-
-    unsafe fn alloc_from_arena(&self, layout: Layout) -> *mut u8 {
-        if layout.size() == 0 {
-            return NonNull::<u8>::dangling().as_ptr();
-        }
-
-        let state = &mut runtime_state().bump;
-        let base = arena_ptr(ALLOC_BASE_OFFSET) as usize;
-        let align_mask = layout.align() - 1;
-        // Use checked arithmetic to prevent 32-bit integer overflow when
-        // base + offset + align_mask wraps around on riscv32.
-        let Some(current) = base.checked_add(state.offset) else {
-            state.fail_count = state.fail_count.saturating_add(1);
-            state.fail_size = layout.size();
-            state.fail_align = layout.align();
-            return core::ptr::null_mut();
-        };
-        let Some(sum) = current.checked_add(align_mask) else {
-            state.fail_count = state.fail_count.saturating_add(1);
-            state.fail_size = layout.size();
-            state.fail_align = layout.align();
-            return core::ptr::null_mut();
-        };
-        let aligned = sum & !align_mask;
-        let Some(end) = aligned.checked_add(layout.size()) else {
-            state.fail_count = state.fail_count.saturating_add(1);
-            state.fail_size = layout.size();
-            state.fail_align = layout.align();
-            return core::ptr::null_mut();
-        };
-        if end > base + ALLOC_ARENA_SIZE {
-            state.fail_count = state.fail_count.saturating_add(1);
-            state.fail_size = layout.size();
-            state.fail_align = layout.align();
-            return core::ptr::null_mut();
-        }
-
-        state.offset = end - base;
-        state.peak = core::cmp::max(state.peak, state.offset);
-        aligned as *mut u8
-    }
-
-    unsafe fn peak_bytes(&self) -> u32 {
-        runtime_state().bump.peak.min(u32::MAX as usize) as u32
-    }
-
-    unsafe fn fail_count(&self) -> u32 {
-        runtime_state().bump.fail_count
-    }
-
-    unsafe fn fail_size(&self) -> u32 {
-        runtime_state().bump.fail_size.min(u32::MAX as usize) as u32
-    }
-
-    unsafe fn fail_align(&self) -> u32 {
-        runtime_state().bump.fail_align.min(u32::MAX as usize) as u32
-    }
-}
-
 #[cfg_attr(target_arch = "riscv32", global_allocator)]
 static ALLOCATOR: ResettableBumpAllocator = ResettableBumpAllocator::new();
-
-unsafe impl GlobalAlloc for ResettableBumpAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.alloc_from_arena(layout)
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let _ = (ptr, layout);
-    }
-}
 
 /// Capture panic message into PANIC_BUF for host-side diagnostics.
 /// No heap allocation: writes directly into the static buffer.
 #[cfg(target_arch = "riscv32")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    struct BufWriter {
-        buf: &'static mut [u8],
-        len: usize,
-    }
-
-    impl core::fmt::Write for BufWriter {
-        fn write_str(&mut self, s: &str) -> core::fmt::Result {
-            let bytes = s.as_bytes();
-            let remaining = self.buf.len().saturating_sub(self.len);
-            let copy = bytes.len().min(remaining);
-            if copy > 0 {
-                self.buf[self.len..self.len + copy].copy_from_slice(&bytes[..copy]);
-                self.len += copy;
-            }
-            Ok(())
-        }
-    }
-
     unsafe {
         let buf = &mut runtime_state().panic_buf[..];
-        let mut w = BufWriter { buf, len: 0 };
+        let mut w = BufWriter::new(buf);
         let _ = core::fmt::write(&mut w, format_args!("{info}"));
-        runtime_state().panic_len = w.len as u32;
+        runtime_state().panic_len = w.len() as u32;
     }
     unsafe {
         core::arch::asm!("unimp");
@@ -337,97 +149,6 @@ unsafe extern "C" fn host_call(
 #[no_mangle]
 unsafe extern "C" fn host_on_instruction(_opcode: u32) -> u32 {
     1
-}
-
-struct PolkaVmSyscallProvider;
-
-impl SyscallProvider for PolkaVmSyscallProvider {
-    fn on_instruction(&mut self, opcode: u8) -> Result<(), alloc::string::String> {
-        let success = unsafe { host_on_instruction(opcode as u32) };
-        if success == 0 {
-            return Err("host instruction charge failed".into());
-        }
-        Ok(())
-    }
-
-    fn syscall(
-        &mut self,
-        api: u32,
-        ip: usize,
-        stack: &mut Vec<StackValue>,
-    ) -> Result<(), alloc::string::String> {
-        unsafe {
-            let state = runtime_state();
-            state.trace_syscall_stage = 1;
-            state.trace_syscall_api = api;
-            state.trace_syscall_ip = ip.min(u32::MAX as usize) as u32;
-            state.trace_stack_items = stack.len().min(u32::MAX as usize) as u32;
-            state.trace_req_len = 0;
-        }
-        let req_bytes = unsafe { arena_slice(REQ_BUF_OFFSET, SCRATCH_BUF_SIZE) };
-        let req_bytes = fast_codec::encode_stack_to_slice(stack, req_bytes)
-            .map_err(|e| alloc::format!("failed to serialize stack: {e}"))?;
-        unsafe {
-            let state = runtime_state();
-            state.trace_syscall_stage = 2;
-            state.trace_req_len = req_bytes.len().min(u32::MAX as usize) as u32;
-        }
-
-        unsafe {
-            runtime_state().trace_syscall_stage = 3;
-        }
-        let success = unsafe {
-            host_call(
-                api,
-                ip as u32,
-                req_bytes.as_ptr() as u32,
-                req_bytes.len() as u32,
-                arena_ptr(RES_BUF_OFFSET) as u32,
-                SCRATCH_BUF_SIZE as u32,
-            )
-        };
-        unsafe {
-            runtime_state().trace_syscall_stage = 4;
-        }
-
-        if success == 0 {
-            return Err("host syscall failed".into());
-        }
-
-        let res_len = success as usize;
-        unsafe {
-            runtime_state().trace_res_len = res_len as u32;
-        }
-        if res_len == 0 {
-            *stack = Vec::new();
-            return Ok(());
-        }
-        if res_len > SCRATCH_BUF_SIZE {
-            return Err(alloc::format!("host response too large: {res_len}"));
-        }
-        unsafe {
-            let res_bytes = arena_slice(RES_BUF_OFFSET, res_len);
-
-            let new_stack = callback_codec::decode_stack_result(res_bytes)
-                .map_err(|error| alloc::format!("failed to decode stack result: {error}"))??;
-            // Write trace header directly from response bytes (avoid clone which doubles memory)
-            let trace_head = &mut runtime_state().trace_res_head[..];
-            let copy_len = core::cmp::min(res_len, TRACE_HEAD_SIZE);
-            trace_head[..copy_len].copy_from_slice(&res_bytes[..copy_len]);
-            if copy_len < TRACE_HEAD_SIZE {
-                trace_head[copy_len..].fill(0);
-            }
-            let retired = core::mem::replace(stack, new_stack);
-            core::mem::forget(retired);
-            runtime_state().trace_syscall_stage = 5;
-        }
-        Ok(())
-    }
-
-    fn initializer_complete(&mut self, ip: usize) -> Result<(), alloc::string::String> {
-        let mut stack = Vec::new();
-        self.syscall(neo_riscv_guest::INITIALIZER_COMPLETE_MARKER, ip, &mut stack)
-    }
 }
 
 #[no_mangle]

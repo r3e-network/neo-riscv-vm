@@ -1,4 +1,11 @@
 use crate::bridge::{register_host_functions, ClosureHost};
+mod cached_execution_instance;
+mod cached_native_execution_instance;
+mod native_cache_key;
+
+pub(crate) use cached_execution_instance::CachedExecutionInstance;
+pub(crate) use cached_native_execution_instance::CachedNativeExecutionInstance;
+use native_cache_key::NativeCacheKey;
 use polkavm::{
     BackendKind as PolkaBackendKind, Config, Engine, GasMeteringKind, Instance, InstancePre,
     Linker, Module, ModuleConfig, ProgramBlob,
@@ -27,83 +34,6 @@ static INSTANCE_PRES: OnceLock<Mutex<InstancePreMap>> = OnceLock::new();
 static EXECUTION_INSTANCES: OnceLock<Mutex<ExecutionInstancePool>> = OnceLock::new();
 static NATIVE_INSTANCE_PRES: OnceLock<Mutex<NativeInstancePreMap>> = OnceLock::new();
 static NATIVE_EXECUTION_INSTANCES: OnceLock<Mutex<NativeExecutionInstancePool>> = OnceLock::new();
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct NativeCacheKey {
-    binary_hash: u64,
-    aux_size: u32,
-}
-
-pub(crate) struct CachedExecutionInstance {
-    aux_size: u32,
-    instance_pre: CachedInstancePre,
-    instance: Option<ExecutionInstance>,
-}
-
-impl CachedExecutionInstance {
-    pub(crate) fn module(&self) -> &Module {
-        self.instance_pre.module()
-    }
-
-    pub(crate) fn instance_mut(&mut self) -> &mut ExecutionInstance {
-        self.instance
-            .as_mut()
-            .expect("cached execution instance should be present")
-    }
-}
-
-impl Drop for CachedExecutionInstance {
-    fn drop(&mut self) {
-        let Some(instance) = self.instance.take() else {
-            return;
-        };
-
-        if let Some(pool) = EXECUTION_INSTANCES.get() {
-            if let Ok(mut guard) = pool.lock() {
-                let instances = guard.entry(self.aux_size).or_default();
-                if instances.len() < MAX_POOL_SIZE_PER_AUX {
-                    instances.push(instance);
-                }
-                // else: pool is full, just drop the instance
-            }
-        }
-    }
-}
-
-pub(crate) struct CachedNativeExecutionInstance {
-    key: NativeCacheKey,
-    instance_pre: CachedInstancePre,
-    instance: Option<ExecutionInstance>,
-}
-
-impl CachedNativeExecutionInstance {
-    pub(crate) fn module(&self) -> &Module {
-        self.instance_pre.module()
-    }
-
-    pub(crate) fn instance_mut(&mut self) -> &mut ExecutionInstance {
-        self.instance
-            .as_mut()
-            .expect("cached native execution instance should be present")
-    }
-}
-
-impl Drop for CachedNativeExecutionInstance {
-    fn drop(&mut self) {
-        let Some(instance) = self.instance.take() else {
-            return;
-        };
-
-        if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get() {
-            if let Ok(mut guard) = pool.lock() {
-                let instances = guard.entry(self.key).or_default();
-                if instances.len() < MAX_POOL_SIZE_PER_AUX {
-                    instances.push(instance);
-                }
-            }
-        }
-    }
-}
 
 pub(crate) fn ensure_runtime_ready() -> Result<(), String> {
     let _ = cached_engine()?;

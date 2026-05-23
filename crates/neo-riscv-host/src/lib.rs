@@ -5,9 +5,11 @@
 
 mod bridge;
 mod ffi;
+mod host_callback_result;
 mod pricing;
 mod profiling;
 mod runtime_cache;
+mod runtime_context;
 
 use bridge::{
     read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic, read_guest_result_diag,
@@ -102,28 +104,13 @@ pub use ffi::{
     NativeExecutionResult, NativeHostCallback, NativeHostFreeCallback, NativeHostResult,
     NativeStackItem,
 };
+pub use host_callback_result::HostCallbackResult;
 pub use profiling::{get_current_memory, get_peak_memory, reset as reset_profiling};
+pub use runtime_context::RuntimeContext;
 
 /// PolkaVM runtime instance.
 pub struct PolkaVmRuntime {
     backend_kind: BackendKind,
-}
-
-/// Runtime execution context for VM scripts.
-#[derive(Clone, Copy)]
-pub struct RuntimeContext {
-    /// Trigger type (Application, Verification, etc.).
-    pub trigger: u8,
-    /// Network magic number.
-    pub network: u32,
-    /// Address version byte.
-    pub address_version: u8,
-    /// Block timestamp (optional).
-    pub timestamp: Option<u64>,
-    /// Remaining gas.
-    pub gas_left: i64,
-    /// Gas price factor in pico units.
-    pub exec_fee_factor_pico: i64,
 }
 
 impl PolkaVmRuntime {
@@ -664,11 +651,6 @@ fn required_aux_size(script_len: u32, stack_len: u32) -> u32 {
     } else {
         align_up_u32(script_len, 8).saturating_add(stack_len)
     }
-}
-
-#[derive(Debug)]
-pub struct HostCallbackResult {
-    pub stack: Vec<neo_riscv_abi::StackValue>,
 }
 
 pub(crate) fn charge_native_metered_instructions(

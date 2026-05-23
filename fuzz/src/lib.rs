@@ -3,11 +3,13 @@
 extern crate alloc;
 
 pub mod generators;
+mod simple_rng;
 
 use alloc::string::String;
 use alloc::vec::Vec;
 use neo_riscv_abi::{ExecutionResult, StackValue, VmState};
 use neo_riscv_guest::{interpret_with_stack_and_syscalls, SyscallProvider};
+pub use simple_rng::SimpleRng;
 
 #[cfg(test)]
 #[path = "stack_ops_builder.rs"]
@@ -95,23 +97,6 @@ fn check_single_value(value: &StackValue) {
                 check_single_value(value);
             }
         }
-    }
-}
-
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> u64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
-        self.0
     }
 }
 

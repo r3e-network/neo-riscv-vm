@@ -1,4 +1,3 @@
-use crate::pricing::charge_opcode;
 use crate::{
     execute_native_contract_builtin, execute_native_contract_builtin_by_id,
     execute_script_with_context, execute_script_with_host_and_stack_and_ip,
@@ -8,10 +7,21 @@ use crate::{
     RuntimeContext,
 };
 use neo_riscv_abi::ExecutionResult;
-use neo_riscv_guest::SyscallProvider;
 use std::{ffi::c_void, ptr, slice};
 
 use crate::reset_last_fault_ip;
+
+mod ffi_host;
+mod native_execution_result;
+mod native_host_result;
+mod native_integer_execution_result;
+mod native_stack_item;
+
+use ffi_host::FfiHost;
+pub use native_execution_result::NativeExecutionResult;
+pub use native_host_result::NativeHostResult;
+pub use native_integer_execution_result::NativeIntegerExecutionResult;
+pub use native_stack_item::NativeStackItem;
 
 /// Returns the instruction pointer of the most recent FAULT on the calling thread,
 /// or `u32::MAX` if no IP was attributed (HALT, or the FAULT path did not carry one).
@@ -78,14 +88,6 @@ impl SerializedStack {
     }
 }
 
-#[repr(C)]
-pub struct NativeHostResult {
-    pub stack_ptr: *mut NativeStackItem,
-    pub stack_len: usize,
-    pub error_ptr: *mut u8,
-    pub error_len: usize,
-}
-
 pub type NativeHostCallback = unsafe extern "C" fn(
     user_data: *mut c_void,
     api: u32,
@@ -102,106 +104,6 @@ pub type NativeHostCallback = unsafe extern "C" fn(
 
 pub type NativeHostFreeCallback =
     unsafe extern "C" fn(user_data: *mut c_void, result: *mut NativeHostResult);
-
-struct FfiHost {
-    context: RuntimeContext,
-    fee_consumed_pico: i64,
-    user_data: *mut c_void,
-    callback: NativeHostCallback,
-    free_callback: NativeHostFreeCallback,
-}
-
-impl SyscallProvider for FfiHost {
-    fn on_instruction(&mut self, opcode: u8) -> Result<(), String> {
-        charge_opcode(&mut self.context, &mut self.fee_consumed_pico, opcode)
-    }
-
-    fn syscall(
-        &mut self,
-        api: u32,
-        ip: usize,
-        stack: &mut Vec<neo_riscv_abi::StackValue>,
-    ) -> Result<(), String> {
-        *stack = self.syscall_host(api, ip, stack)?;
-        Ok(())
-    }
-}
-
-impl FfiHost {
-    fn syscall_host(
-        &mut self,
-        api: u32,
-        ip: usize,
-        stack: &[neo_riscv_abi::StackValue],
-    ) -> Result<Vec<neo_riscv_abi::StackValue>, String> {
-        let mut result = NativeHostResult {
-            stack_ptr: ptr::null_mut(),
-            stack_len: 0,
-            error_ptr: ptr::null_mut(),
-            error_len: 0,
-        };
-        let serialized_stack = serialize_stack_items_fast(stack);
-        let input_stack_ptr = serialized_stack.ptr();
-        let input_stack_len = serialized_stack.len();
-
-        // SAFETY: self.callback is a C# delegate pointer provided by the FFI caller.
-        // self.user_data is a GCHandle pinned for the duration of the execution.
-        // input_stack_ptr was allocated by serialize_stack_items and is valid until freed below.
-        let invoked = unsafe {
-            (self.callback)(
-                self.user_data,
-                api,
-                ip,
-                self.context.trigger,
-                self.context.network,
-                self.context.address_version,
-                self.context.timestamp.unwrap_or_default(),
-                self.context.gas_left,
-                input_stack_ptr,
-                input_stack_len,
-                &mut result,
-            )
-        };
-        serialized_stack.free();
-
-        if !invoked {
-            return Err(format!(
-                "host callback invocation failed for syscall 0x{api:08x}"
-            ));
-        }
-
-        // copy_native_host_result deep-copies all data from the C#-owned result BEFORE
-        // free_callback is called. This ordering is critical — the free_callback releases
-        // the C# GCHandle and associated memory.
-        let host_result = copy_native_host_result(&result);
-        // SAFETY: self.free_callback is the C# cleanup delegate. result was populated by
-        // the callback above and is valid for this call.
-        unsafe {
-            (self.free_callback)(self.user_data, &mut result);
-        }
-
-        let host_result = host_result?;
-        Ok(host_result.stack)
-    }
-}
-
-#[repr(C)]
-pub struct NativeExecutionResult {
-    pub fee_consumed_pico: i64,
-    pub state: u32,
-    pub stack_ptr: *mut NativeStackItem,
-    pub stack_len: usize,
-    pub error_ptr: *mut u8,
-    pub error_len: usize,
-}
-
-#[repr(C)]
-pub struct NativeStackItem {
-    pub kind: u32,
-    pub integer_value: i64,
-    pub bytes_ptr: *mut u8,
-    pub bytes_len: usize,
-}
 
 fn copy_native_stack_items(
     stack_ptr: *mut NativeStackItem,
@@ -1458,15 +1360,6 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
             true
         }
     }
-}
-
-#[repr(C)]
-pub struct NativeIntegerExecutionResult {
-    pub fee_consumed_pico: i64,
-    pub state: u32,
-    pub value: i64,
-    pub error_ptr: *mut u8,
-    pub error_len: usize,
 }
 
 /// Execute a native RISC-V method-id entry point that returns a single `i64`.

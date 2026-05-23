@@ -2,7 +2,16 @@ use neo_riscv_abi::{StackValue, VmState};
 use neo_riscv_guest::{
     interpret, interpret_with_stack_and_syscalls, interpret_with_stack_and_syscalls_at,
     interpret_with_stack_and_syscalls_at_with_initializer, interpret_with_syscalls,
-    SyscallProvider,
+};
+
+#[path = "interpreter/hosts/mod.rs"]
+mod hosts;
+
+use hosts::{
+    BlockLikeHost, CalltArrayAfterSyscallHost, CalltArrayHost, CalltHost, CalltNullHost,
+    ConsecutiveLargeCallHost, InitCompleteHost, InstructionPointerHost, IntegerRoundTripHost,
+    InterpreterLocalStorageHost, InterpreterRetainedBytesHost, NoSyscalls, NoopHost,
+    PackedInteropHost, PlatformHost,
 };
 
 #[test]
@@ -534,146 +543,6 @@ fn passes_current_instruction_pointer_to_syscall_provider() {
     assert_eq!(host.observed_ip, Some(1));
 }
 
-struct NoopHost;
-
-impl SyscallProvider for NoopHost {
-    fn syscall(
-        &mut self,
-        api: u32,
-        _ip: usize,
-        _stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-}
-
-struct PlatformHost;
-
-impl SyscallProvider for PlatformHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        if api == neo_riscv_abi::interop_hash("System.Runtime.Platform") {
-            stack.push(StackValue::ByteString(b"NEO".to_vec()));
-            Ok(())
-        } else {
-            Err(format!("unexpected syscall 0x{api:08x}"))
-        }
-    }
-}
-
-struct InitCompleteHost {
-    completions: usize,
-}
-
-impl SyscallProvider for InitCompleteHost {
-    fn syscall(
-        &mut self,
-        api: u32,
-        _ip: usize,
-        _stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-
-    fn initializer_complete(&mut self, _ip: usize) -> Result<(), String> {
-        self.completions += 1;
-        Ok(())
-    }
-}
-
-struct InstructionPointerHost {
-    observed_ip: Option<usize>,
-}
-
-impl SyscallProvider for InstructionPointerHost {
-    fn syscall(&mut self, api: u32, ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        if api != neo_riscv_abi::interop_hash("System.Contract.CallNative") {
-            return Err(format!("unexpected syscall 0x{api:08x}"));
-        }
-
-        self.observed_ip = Some(ip);
-        stack.pop();
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct PackedInteropHost {
-    deserialize_count: u64,
-    observed_aggregate: Option<Vec<StackValue>>,
-}
-
-impl SyscallProvider for PackedInteropHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let deserialize_api = neo_riscv_abi::interop_hash("Crypto.Deserialize");
-        let aggregate_api = neo_riscv_abi::interop_hash("Crypto.Aggregate");
-
-        if api == deserialize_api {
-            self.deserialize_count += 1;
-            stack.push(StackValue::Interop(self.deserialize_count));
-            return Ok(());
-        }
-
-        if api == aggregate_api {
-            self.observed_aggregate = Some(stack.clone());
-            stack.clear();
-            stack.push(StackValue::Interop(99));
-            return Ok(());
-        }
-
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-}
-
-#[derive(Default)]
-struct IntegerRoundTripHost {
-    call_count: i64,
-    observed_third: Option<Vec<StackValue>>,
-}
-
-impl SyscallProvider for IntegerRoundTripHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let expected_api = neo_riscv_abi::interop_hash("System.Test.Multi");
-        if api != expected_api {
-            return Err(format!("unexpected syscall 0x{api:08x}"));
-        }
-
-        self.call_count += 1;
-        match self.call_count {
-            1 => {
-                stack.push(StackValue::Integer(1));
-                Ok(())
-            }
-            2 => {
-                *stack = vec![StackValue::Integer(1), StackValue::Integer(2)];
-                Ok(())
-            }
-            3 => {
-                self.observed_third = Some(stack.clone());
-                Ok(())
-            }
-            _ => Err("unexpected extra syscall".to_string()),
-        }
-    }
-}
-
-#[derive(Default)]
-struct ConsecutiveLargeCallHost {
-    call_count: i64,
-}
-
-impl SyscallProvider for ConsecutiveLargeCallHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let expected_api = neo_riscv_abi::interop_hash("System.Contract.Call");
-        if api != expected_api {
-            return Err(format!("unexpected syscall 0x{api:08x}"));
-        }
-
-        self.call_count += 1;
-        *stack = vec![StackValue::Integer(self.call_count)];
-        Ok(())
-    }
-}
-
 #[test]
 fn retained_bytestring_survives_no_result_then_null_result_syscalls_in_interpreter() {
     let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
@@ -780,91 +649,6 @@ fn local_storage_round_trip_survives_delete_and_following_get_in_interpreter() {
         result.stack,
         vec![StackValue::ByteString(b"v".to_vec()), StackValue::Null]
     );
-}
-
-struct InterpreterRetainedBytesHost<'a> {
-    observed_log: &'a mut Option<Vec<StackValue>>,
-    observed_get: &'a mut Option<Vec<StackValue>>,
-}
-
-impl SyscallProvider for InterpreterRetainedBytesHost<'_> {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
-        let log_api = neo_riscv_abi::interop_hash("System.Runtime.Log");
-        let local_get_api = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
-
-        if api == platform_api {
-            *stack = vec![StackValue::ByteString(b"v".to_vec())];
-            return Ok(());
-        }
-        if api == log_api {
-            *self.observed_log = Some(stack.clone());
-            stack.clear();
-            return Ok(());
-        }
-        if api == local_get_api {
-            *self.observed_get = Some(stack.clone());
-            *stack = vec![StackValue::Null];
-            return Ok(());
-        }
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-}
-
-#[derive(Default)]
-struct InterpreterLocalStorageHost {
-    storage: std::collections::HashMap<Vec<u8>, Vec<u8>>,
-}
-
-impl SyscallProvider for InterpreterLocalStorageHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let local_put = neo_riscv_abi::interop_hash("System.Storage.Local.Put");
-        let local_get = neo_riscv_abi::interop_hash("System.Storage.Local.Get");
-        let local_delete = neo_riscv_abi::interop_hash("System.Storage.Local.Delete");
-
-        match api {
-            value if value == local_put => {
-                assert_eq!(stack.len(), 2);
-                let key = match &stack[0] {
-                    StackValue::ByteString(bytes) => bytes.clone(),
-                    other => panic!("expected local-put key bytes, got {other:?}"),
-                };
-                let val = match &stack[1] {
-                    StackValue::ByteString(bytes) => bytes.clone(),
-                    other => panic!("expected local-put value bytes, got {other:?}"),
-                };
-                self.storage.insert(key, val);
-                stack.clear();
-                Ok(())
-            }
-            value if value == local_get => {
-                assert_eq!(stack.len(), 1);
-                let key = match &stack[0] {
-                    StackValue::ByteString(bytes) => bytes.clone(),
-                    other => panic!("expected local-get key bytes, got {other:?}"),
-                };
-                let item = self
-                    .storage
-                    .get(&key)
-                    .cloned()
-                    .map(StackValue::ByteString)
-                    .unwrap_or(StackValue::Null);
-                *stack = vec![item];
-                Ok(())
-            }
-            value if value == local_delete => {
-                assert_eq!(stack.len(), 1);
-                let key = match &stack[0] {
-                    StackValue::ByteString(bytes) => bytes.clone(),
-                    other => panic!("expected local-delete key bytes, got {other:?}"),
-                };
-                self.storage.remove(&key);
-                stack.clear();
-                Ok(())
-            }
-            other => Err(format!("unexpected syscall 0x{other:08x}")),
-        }
-    }
 }
 
 #[test]
@@ -2906,19 +2690,6 @@ fn gas_exhaustion_faults() {
     );
 }
 
-struct NoSyscalls;
-
-impl SyscallProvider for NoSyscalls {
-    fn syscall(
-        &mut self,
-        api: u32,
-        _ip: usize,
-        _stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-}
-
 // =============================================================================
 // Exception handling & advanced opcode tests
 // =============================================================================
@@ -3509,30 +3280,6 @@ fn pushdata4_with_valid_payload() {
     );
 }
 
-struct CalltHost;
-
-impl SyscallProvider for CalltHost {
-    fn syscall(
-        &mut self,
-        api: u32,
-        _ip: usize,
-        _stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-
-    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        assert_eq!(token, 0, "expected CALLT token 0");
-        // Pop one integer, add 100, push result
-        let val = match stack.pop() {
-            Some(StackValue::Integer(n)) => n,
-            other => return Err(format!("callt expected Integer, got {:?}", other)),
-        };
-        stack.push(StackValue::Integer(val + 100));
-        Ok(())
-    }
-}
-
 #[test]
 fn callt_invokes_host() {
     // PUSH1, CALLT token=0x0000, RET → host adds 100 → 101
@@ -3547,28 +3294,6 @@ fn callt_invokes_host() {
         .expect("CALLT should invoke host callt provider");
     assert_eq!(result.state, VmState::Halt);
     assert_eq!(result.stack, vec![StackValue::Integer(101)]);
-}
-
-struct CalltArrayHost;
-
-impl SyscallProvider for CalltArrayHost {
-    fn syscall(
-        &mut self,
-        api: u32,
-        _ip: usize,
-        _stack: &mut Vec<StackValue>,
-    ) -> Result<(), String> {
-        Err(format!("unexpected syscall 0x{api:08x}"))
-    }
-
-    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        assert_eq!(token, 0, "expected CALLT token 0");
-        stack.clear();
-        stack.push(StackValue::Array(vec![StackValue::ByteString(
-            b"Hello World!".to_vec(),
-        )]));
-        Ok(())
-    }
 }
 
 #[test]
@@ -3592,29 +3317,6 @@ fn callt_array_result_round_trips_through_locals_and_pickitem() {
         result.stack,
         vec![StackValue::ByteString(b"Hello World!".to_vec())]
     );
-}
-
-struct CalltArrayAfterSyscallHost;
-
-impl SyscallProvider for CalltArrayAfterSyscallHost {
-    fn syscall(&mut self, api: u32, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        let platform_api = neo_riscv_abi::interop_hash("System.Runtime.Platform");
-        if api != platform_api {
-            return Err(format!("unexpected syscall 0x{api:08x}"));
-        }
-        stack.clear();
-        stack.push(StackValue::ByteString(b"NEO".to_vec()));
-        Ok(())
-    }
-
-    fn callt(&mut self, token: u16, _ip: usize, stack: &mut Vec<StackValue>) -> Result<(), String> {
-        assert_eq!(token, 0, "expected CALLT token 0");
-        stack.clear();
-        stack.push(StackValue::Array(vec![StackValue::ByteString(
-            b"Hello World!".to_vec(),
-        )]));
-        Ok(())
-    }
 }
 
 #[test]
@@ -3912,39 +3614,6 @@ fn caller_catch_restores_locals_after_callee_throw() {
 
 #[test]
 fn callt_null_result_can_flow_through_two_arg_helper() {
-    struct CalltNullHost {
-        runtime_log: u32,
-    }
-
-    impl SyscallProvider for CalltNullHost {
-        fn syscall(
-            &mut self,
-            api: u32,
-            _ip: usize,
-            stack: &mut Vec<StackValue>,
-        ) -> Result<(), String> {
-            if api == self.runtime_log {
-                stack.clear();
-                return Ok(());
-            }
-            Err(format!("unexpected syscall 0x{api:08x}"))
-        }
-
-        fn callt(
-            &mut self,
-            token: u16,
-            _ip: usize,
-            stack: &mut Vec<StackValue>,
-        ) -> Result<(), String> {
-            if token == 2 {
-                stack.clear();
-                stack.push(StackValue::Null);
-                return Ok(());
-            }
-            Err(format!("unexpected callt token {token}"))
-        }
-    }
-
     let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
     let script: &[u8] = &[
         0x57,
@@ -4004,35 +3673,6 @@ fn callt_null_result_can_flow_through_two_arg_helper() {
 
 #[test]
 fn callt_block_like_struct_survives_local_and_helper_pickitem_in_interpreter() {
-    struct BlockLikeHost {
-        block_like: StackValue,
-    }
-
-    impl SyscallProvider for BlockLikeHost {
-        fn syscall(
-            &mut self,
-            api: u32,
-            _ip: usize,
-            _stack: &mut Vec<StackValue>,
-        ) -> Result<(), String> {
-            Err(format!("unexpected syscall 0x{api:08x}"))
-        }
-
-        fn callt(
-            &mut self,
-            token: u16,
-            _ip: usize,
-            stack: &mut Vec<StackValue>,
-        ) -> Result<(), String> {
-            if token != 2 {
-                return Err(format!("unexpected callt token {token}"));
-            }
-            stack.clear();
-            stack.push(self.block_like.clone());
-            Ok(())
-        }
-    }
-
     let prev_hash = vec![
         0x15, 0x7c, 0xa8, 0xda, 0x91, 0xa2, 0x99, 0x58, 0x6f, 0x5f, 0xaa, 0xc4, 0x26, 0x7c, 0x7d,
         0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,

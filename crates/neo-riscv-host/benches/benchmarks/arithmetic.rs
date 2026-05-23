@@ -1,13 +1,18 @@
 use criterion::{black_box, Criterion};
+use neo_riscv_abi::OpCode;
 use neo_riscv_host::execute_script;
 
 pub fn bench(c: &mut Criterion) {
     let mut script = Vec::new();
     for _ in 0..250 {
-        script.extend_from_slice(&[0x11, 0x12, 0x9e]); // PUSH1, PUSH2, ADD
-        script.push(0x45); // DROP
+        script.extend_from_slice(&[
+            OpCode::PUSH1.byte(),
+            OpCode::PUSH2.byte(),
+            OpCode::ADD.byte(),
+        ]);
+        script.push(OpCode::DROP.byte());
     }
-    script.push(0x40); // RET
+    script.push(OpCode::RET.byte());
 
     c.bench_function("arithmetic_1000_ops", |b| {
         b.iter(|| {

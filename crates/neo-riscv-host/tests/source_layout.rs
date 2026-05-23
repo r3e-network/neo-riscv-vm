@@ -78,6 +78,47 @@ fn fuzz_targets_use_shared_opcode_enum() {
     }
 }
 
+#[test]
+fn examples_and_benches_build_bytecode_from_shared_opcode_enum() {
+    for relative_path in [
+        "crates/neo-riscv-host/examples/profile_hotspot.rs",
+        "crates/neo-riscv-host/benches/benchmarks/arithmetic.rs",
+        "crates/neo-riscv-host/benches/benchmarks/control_flow.rs",
+        "crates/neo-riscv-host/benches/benchmarks/overhead.rs",
+        "crates/neo-riscv-host/benches/benchmarks/stack_ops.rs",
+        "crates/neo-riscv-host/benches/propagate_update_bench.rs",
+    ] {
+        let source = read_workspace_source(relative_path);
+
+        assert!(
+            source.contains("OpCode::") && source.contains(".byte()"),
+            "{relative_path} should build bytecode through neo-vm-rs opcode metadata"
+        );
+        for duplicate in [
+            "const PUSHINT8: u8 = 0x00",
+            "const PUSH1: u8 = 0x11",
+            "const NOP: u8 = 0x21",
+            "const RET: u8 = 0x40",
+            "const DUP: u8 = 0x4a",
+            "const ADD: u8 = 0x9e",
+            "const NEWARRAY0: u8 = 0xc2",
+            "const NEWARRAY: u8 = 0xc3",
+            "const APPEND: u8 = 0xcf",
+            "const SETITEM: u8 = 0xd0",
+            "0x08, 0x24, 0x02, 0x11",
+            "0x11, 0x12, 0x9e",
+            "0x11, 0x4a, 0x50, 0x45",
+            "script.push(0x40)",
+            "script.push(0x45)",
+        ] {
+            assert!(
+                !source.contains(duplicate),
+                "{relative_path} must not duplicate NeoVM opcode byte constants: {duplicate}"
+            );
+        }
+    }
+}
+
 fn read_source(relative_path: &str) -> String {
     fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path))
         .unwrap_or_else(|error| panic!("{relative_path} should be readable: {error}"))

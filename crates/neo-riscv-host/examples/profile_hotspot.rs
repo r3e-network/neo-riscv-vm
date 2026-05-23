@@ -1,18 +1,6 @@
+use neo_riscv_abi::OpCode;
 use neo_riscv_host::execute_script;
 use std::time::{Duration, Instant};
-
-const PUSHINT8: u8 = 0x00;
-const PUSH1: u8 = 0x11;
-const PUSH2: u8 = 0x12;
-const NOP: u8 = 0x21;
-const RET: u8 = 0x40;
-const DROP: u8 = 0x45;
-const DUP: u8 = 0x4a;
-const ADD: u8 = 0x9e;
-const NEWARRAY0: u8 = 0xc2;
-const NEWARRAY: u8 = 0xc3;
-const APPEND: u8 = 0xcf;
-const SETITEM: u8 = 0xd0;
 
 fn main() {
     let mode = std::env::args()
@@ -41,34 +29,51 @@ fn main() {
 fn script_for(mode: &str) -> Vec<u8> {
     match mode {
         "empty" => Vec::new(),
-        "ret" => vec![RET],
+        "ret" => vec![OpCode::RET.byte()],
         "nop100" => {
-            let mut script = vec![NOP; 100];
-            script.push(RET);
+            let mut script = vec![OpCode::NOP.byte(); 100];
+            script.push(OpCode::RET.byte());
             script
         }
         "arithmetic" => {
             let mut script = Vec::new();
             for _ in 0..250 {
-                script.extend_from_slice(&[PUSH1, PUSH2, ADD, DROP]);
+                script.extend_from_slice(&[
+                    OpCode::PUSH1.byte(),
+                    OpCode::PUSH2.byte(),
+                    OpCode::ADD.byte(),
+                    OpCode::DROP.byte(),
+                ]);
             }
-            script.push(RET);
+            script.push(OpCode::RET.byte());
             script
         }
         "setitem" => {
-            let mut script = vec![PUSHINT8, 100, NEWARRAY];
+            let mut script = vec![OpCode::PUSHINT8.byte(), 100, OpCode::NEWARRAY.byte()];
             for i in 0..50 {
-                script.extend_from_slice(&[DUP, PUSHINT8, i as u8, PUSHINT8, 42, SETITEM]);
+                script.extend_from_slice(&[
+                    OpCode::DUP.byte(),
+                    OpCode::PUSHINT8.byte(),
+                    i as u8,
+                    OpCode::PUSHINT8.byte(),
+                    42,
+                    OpCode::SETITEM.byte(),
+                ]);
             }
-            script.push(RET);
+            script.push(OpCode::RET.byte());
             script
         }
         "append" => {
-            let mut script = vec![NEWARRAY0];
+            let mut script = vec![OpCode::NEWARRAY0.byte()];
             for i in 0..100 {
-                script.extend_from_slice(&[DUP, PUSHINT8, i as u8, APPEND]);
+                script.extend_from_slice(&[
+                    OpCode::DUP.byte(),
+                    OpCode::PUSHINT8.byte(),
+                    i as u8,
+                    OpCode::APPEND.byte(),
+                ]);
             }
-            script.push(RET);
+            script.push(OpCode::RET.byte());
             script
         }
         other => {

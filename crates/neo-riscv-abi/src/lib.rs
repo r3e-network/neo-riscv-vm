@@ -12,7 +12,6 @@ pub mod callback_codec;
 pub mod fast_codec;
 pub mod result_codec;
 
-pub use neo_vm_rs::semantics;
 pub use neo_vm_rs::{
     byte_sequence_bytes, byte_sequence_len, concat_byte_sequences, default_value_for_type_tag,
     encode_integer, interop_hash, new_array_default_value_for_type_tag,
@@ -30,6 +29,7 @@ pub use neo_vm_rs::{
     STACK_VALUE_CODEC_TAG_INTEROP, STACK_VALUE_CODEC_TAG_ITERATOR, STACK_VALUE_CODEC_TAG_MAP,
     STACK_VALUE_CODEC_TAG_NULL, STACK_VALUE_CODEC_TAG_POINTER, STACK_VALUE_CODEC_TAG_STRUCT,
 };
+pub use neo_vm_rs::{runtime, semantics};
 
 #[cfg(test)]
 mod tests {

@@ -32,6 +32,8 @@ fn contract_runtime_does_not_reintroduce_opcode_adapters() {
     let source = read_contract_rt_src("mod.rs");
 
     assert!(source.contains("VmContext"));
+    assert!(source.contains("neo_riscv_abi::runtime::ops"));
+    assert!(!source.contains("semantics::runtime"));
     assert!(!source.contains("pub stack:"));
     assert!(!source.contains("pub locals:"));
     assert!(!source.contains("pub args:"));

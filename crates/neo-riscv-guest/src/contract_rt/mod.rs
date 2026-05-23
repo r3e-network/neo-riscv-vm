@@ -14,7 +14,7 @@ mod mem_intrinsics;
 
 pub use stack_value::StackValue;
 
-use neo_riscv_abi::{semantics::runtime::RuntimeStack, ExecutionResult, VmContext};
+use neo_riscv_abi::{runtime::RuntimeStack, ExecutionResult, VmContext};
 
 /// Signature of a syscall bridge function.
 ///
@@ -39,7 +39,7 @@ pub fn set_syscall_bridge(function: SyscallBridgeFn) {
 ///
 /// Common VM state is stored in [`VmContext`]. This wrapper keeps only the
 /// RISC-V-specific syscall surface so opcode semantics can be called directly
-/// through `neo_riscv_abi::semantics::runtime`.
+/// through `neo_riscv_abi::runtime::ops`.
 pub struct Context {
     vm: VmContext,
 }
@@ -133,7 +133,7 @@ impl RuntimeStack for Context {
 mod tests {
     use super::*;
     use alloc::vec;
-    use neo_riscv_abi::{semantics::runtime, VmState};
+    use neo_riscv_abi::{runtime::ops, VmState};
 
     #[test]
     fn from_abi_stack_roundtrip() {
@@ -157,7 +157,7 @@ mod tests {
 
         context.push_int(10);
         context.push_int(3);
-        runtime::arithmetic::sub(&mut context);
+        ops::arithmetic::sub(&mut context);
 
         assert_eq!(context.pop(), StackValue::Integer(7));
     }

@@ -1,5 +1,5 @@
 use neo_riscv_guest::contract_rt::{Context, StackValue};
-use neo_riscv_guest::{semantics::runtime, VmState};
+use neo_riscv_guest::{runtime::ops, VmState};
 
 fn empty_ctx() -> Context {
     Context::from_abi_stack(vec![])
@@ -35,7 +35,7 @@ fn add_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(3);
     ctx.push_int(4);
-    runtime::arithmetic::add(&mut ctx);
+    ops::arithmetic::add(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
@@ -44,7 +44,7 @@ fn sub_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(10);
     ctx.push_int(3);
-    runtime::arithmetic::sub(&mut ctx);
+    ops::arithmetic::sub(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(7));
 }
 
@@ -53,7 +53,7 @@ fn mul_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(3);
     ctx.push_int(4);
-    runtime::arithmetic::mul(&mut ctx);
+    ops::arithmetic::mul(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(12));
 }
 
@@ -62,7 +62,7 @@ fn equal_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(5);
     ctx.push_int(5);
-    runtime::comparison::equal(&mut ctx);
+    ops::comparison::equal(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Boolean(true));
 }
 
@@ -71,7 +71,7 @@ fn not_equal_integers() {
     let mut ctx = empty_ctx();
     ctx.push_int(5);
     ctx.push_int(6);
-    runtime::comparison::equal(&mut ctx);
+    ops::comparison::equal(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Boolean(false));
 }
 
@@ -99,11 +99,11 @@ fn dup_and_swap() {
     ctx.push_int(1);
     ctx.push_int(2);
 
-    runtime::stack::dup(&mut ctx);
+    ops::stack::dup(&mut ctx);
     assert_eq!(ctx.stack.len(), 3);
     assert_eq!(ctx.pop(), StackValue::Integer(2));
 
-    runtime::stack::swap(&mut ctx);
+    ops::stack::swap(&mut ctx);
     assert_eq!(ctx.pop(), StackValue::Integer(1));
     assert_eq!(ctx.pop(), StackValue::Integer(2));
 }

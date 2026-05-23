@@ -1,5 +1,5 @@
 use neo_riscv_guest::contract_rt::{Context, StackValue};
-use neo_riscv_guest::{semantics::runtime, VmState};
+use neo_riscv_guest::{runtime::ops, VmState};
 
 #[test]
 fn contract_runtime_context_executes_shared_vm_runtime_ops() {
@@ -7,7 +7,7 @@ fn contract_runtime_context_executes_shared_vm_runtime_ops() {
 
     context.push_int(10);
     context.push_int(3);
-    runtime::arithmetic::sub(&mut context);
+    ops::arithmetic::sub(&mut context);
 
     assert_eq!(context.pop(), StackValue::Integer(7));
 }

@@ -1,4 +1,4 @@
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{format, string::String, vec, vec::Vec};
 use neo_riscv_abi::{callback_codec, StackValue};
 
 extern "C" {
@@ -28,7 +28,11 @@ pub fn invoke_host_call(api: u32, stack: &[StackValue]) -> Result<Vec<StackValue
     };
 
     if len == 0 {
-        return Ok(Vec::new());
+        // host_call returns 0 exclusively on failure (buffer-too-small, read failure,
+        // write failure, deserialization failure). A successful empty stack encodes as
+        // [2] (ENCODED_OK_EMPTY), which has length 1, not 0. See bridge.rs
+        // host_call_import for the failure paths.
+        return Err(format!("host_call(api=0x{api:08x}) failed: returned 0"));
     }
 
     result_buf.truncate(len as usize);

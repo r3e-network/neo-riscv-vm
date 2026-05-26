@@ -13,6 +13,13 @@ impl CachedExecutionInstance {
         self.instance_pre.module()
     }
 
+    /// Returns a mutable reference to the execution instance.
+    ///
+    /// # Panics
+    /// Panics if the instance is `None`. This is a logic invariant: the
+    /// instance must be initialized before any execution function is called.
+    /// This is enforced by `ensure_runtime_ready()` which is invoked at
+    /// system startup and cached thereafter.
     pub(crate) fn instance_mut(&mut self) -> &mut ExecutionInstance {
         self.instance
             .as_mut()

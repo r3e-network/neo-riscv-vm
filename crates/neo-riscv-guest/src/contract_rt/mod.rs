@@ -10,6 +10,7 @@ use core::ops::{Deref, DerefMut};
 pub mod stack_value;
 
 #[cfg(target_arch = "riscv32")]
+#[path = "../../neo-riscv-guest-module/src/mem_intrinsics.rs"]
 mod mem_intrinsics;
 
 pub use stack_value::StackValue;

@@ -1,5 +1,5 @@
 /// Runtime execution context for VM scripts.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct RuntimeContext {
     /// Trigger type (Application, Verification, etc.).
     pub trigger: u8,

@@ -1,6 +1,42 @@
 #![cfg_attr(target_arch = "riscv32", no_std)]
 #![cfg_attr(target_arch = "riscv32", no_main)]
 
+//! PolkaVM guest runtime for the Neo RISC-V execution environment.
+//!
+//! # Safety
+//!
+//! This module runs inside the PolkaVM guest on `riscv32emac-unknown-none-polkavm`.
+//! All `unsafe` blocks herein are governed by the following invariants:
+//!
+//! - **Memory layout**: The guest linear memory is pre-allocated by the host.
+//!   `ARENA_SIZE` and offsets (`ALLOC_BASE_OFFSET`, `RES_BUF_OFFSET`, etc.) are
+//!   compile-time constants verified by `const _: () = assert!(...)` at the top
+//!   of `execute_inner`. Raw pointer arithmetic is confined to these bounds.
+//!
+//! - **Single-threaded**: The guest runs in a single-threaded context. All
+//!   mutable statics (`RUNTIME_STATE`, `ALLOCATOR`, `DEBUG_BUF`) are accessed
+//!   without synchronization because no concurrent access is possible.
+//!
+//! - **Lifetime of `&'static mut`**: Functions returning `&'static mut` from
+//!   raw pointers (e.g. `runtime_state()`, `arena_slice()`) are safe because
+//!   the underlying memory outlives every guest execution — the host allocates
+//!   the arena once and reuses it across `execute_inner` calls with explicit
+//!   reset between invocations.
+//!
+//! - **FFI boundaries**: `extern "C"` functions (`host_call`, `host_on_instruction`,
+//!   `memcpy`, `memset`, `memmove`, `memcmp`) are called by the PolkaVM engine
+//!   or the RISC-V compiler runtime. Their signatures match the C ABI
+//!   expectations of the target. The `mem*` functions operate on raw pointers
+//!   provided by compiled RISC-V code; correctness depends on the compiler
+//!   emitting valid pointers.
+//!
+//! - **Allocator safety**: `ResettableBumpAllocator` implements `GlobalAlloc`
+//!   with no-op `dealloc`. This is sound because (a) the allocator is
+//!   bulk-reset via `ALLOCATOR.reset()` at the start of each execution,
+//!   (b) `Sync` is implemented for the allocator because single-threaded
+//!   access is guaranteed, and (c) allocation overflow is checked via
+//!   `offset.checked_add(layout.size())`.
+
 extern crate alloc;
 
 #[cfg(target_arch = "riscv32")]

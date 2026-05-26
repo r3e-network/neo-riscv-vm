@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct BumpState {
     pub(crate) offset: usize,
     pub(crate) peak: usize,

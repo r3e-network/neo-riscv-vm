@@ -30,7 +30,7 @@ pub use native_stack_item::NativeStackItem;
 ///
 /// # Safety
 /// None — this function is safe to call at any time; no aliasing or pointer safety concerns.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_last_fault_ip() -> u32 {
     crate::last_fault_ip()
 }
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn neo_riscv_last_fault_ip() -> u32 {
 /// # Safety
 /// `out_ptr` must be either null or point to a writable buffer of at least `out_capacity`
 /// bytes. Contents are undefined outside the first `min(returned_length, out_capacity)` bytes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_last_fault_locals(
     out_ptr: *mut u8,
     out_capacity: usize,
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn neo_riscv_last_fault_locals(
 ///
 /// `usize::MAX` means the guest must pass the full stack because the syscall uses
 /// a count-based suffix rather than a fixed descriptor arity.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_syscall_arg_count(api: u32) -> usize {
     neo_riscv_abi::syscall_arg_count(api)
 }
@@ -105,10 +105,27 @@ pub type NativeHostCallback = unsafe extern "C" fn(
 pub type NativeHostFreeCallback =
     unsafe extern "C" fn(user_data: *mut c_void, result: *mut NativeHostResult);
 
+/// Maximum nesting depth for `NativeStackItem` structures to prevent stack
+/// overflow from maliciously nested arrays/structs/maps.
+const MAX_STACK_ITEM_DEPTH: u32 = 64;
+
 fn copy_native_stack_items(
     stack_ptr: *mut NativeStackItem,
     stack_len: usize,
 ) -> Result<Vec<neo_riscv_abi::StackValue>, String> {
+    copy_native_stack_items_with_depth(stack_ptr, stack_len, 0)
+}
+
+fn copy_native_stack_items_with_depth(
+    stack_ptr: *mut NativeStackItem,
+    stack_len: usize,
+    depth: u32,
+) -> Result<Vec<neo_riscv_abi::StackValue>, String> {
+    if depth > MAX_STACK_ITEM_DEPTH {
+        return Err(format!(
+            "native stack item nesting depth {depth} exceeds maximum {MAX_STACK_ITEM_DEPTH}"
+        ));
+    }
     let mut stack = Vec::with_capacity(stack_len);
 
     for index in 0..stack_len {
@@ -154,9 +171,10 @@ fn copy_native_stack_items(
                 let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                     Vec::new()
                 } else {
-                    copy_native_stack_items(
+                    copy_native_stack_items_with_depth(
                         item.bytes_ptr.cast::<NativeStackItem>(),
                         item.bytes_len,
+                        depth + 1,
                     )?
                 };
                 stack.push(neo_riscv_abi::StackValue::Array(items));
@@ -165,9 +183,10 @@ fn copy_native_stack_items(
                 let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                     Vec::new()
                 } else {
-                    copy_native_stack_items(
+                    copy_native_stack_items_with_depth(
                         item.bytes_ptr.cast::<NativeStackItem>(),
                         item.bytes_len,
+                        depth + 1,
                     )?
                 };
                 stack.push(neo_riscv_abi::StackValue::Struct(items));
@@ -176,9 +195,10 @@ fn copy_native_stack_items(
                 let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                     Vec::new()
                 } else {
-                    copy_native_stack_items(
+                    copy_native_stack_items_with_depth(
                         item.bytes_ptr.cast::<NativeStackItem>(),
                         item.bytes_len,
+                        depth + 1,
                     )?
                 };
                 if items.len() % 2 != 0 {
@@ -328,6 +348,13 @@ fn serialize_stack_items_fast(stack: &[neo_riscv_abi::StackValue]) -> Serialized
     }
 }
 
+/// Serialize stack items by borrowing their internal byte buffers.
+///
+/// SAFETY: The returned `NativeStackItem.bytes_ptr` fields are cast from
+/// `&[u8]` references to `*mut u8` for C# FFI compatibility. The C# callback
+/// is contractually restricted to reading through these pointers; writes
+/// would be undefined behavior. Owned data paths use `Box::into_raw` and
+/// are safe to expose as `*mut u8` since deallocation recasts.
 fn serialize_stack_items_borrowed(stack: &[neo_riscv_abi::StackValue]) -> Option<SerializedStack> {
     if stack.is_empty() {
         return Some(SerializedStack::Borrowed(ptr::null_mut(), 0));
@@ -342,12 +369,17 @@ fn serialize_stack_items_borrowed(stack: &[neo_riscv_abi::StackValue]) -> Option
                 bytes_ptr: ptr::null_mut(),
                 bytes_len: 0,
             },
-            neo_riscv_abi::StackValue::BigInteger(value) => NativeStackItem {
-                kind: 5,
-                integer_value: 0,
-                bytes_ptr: value.as_ptr() as *mut u8,
-                bytes_len: value.len(),
-            },
+            neo_riscv_abi::StackValue::BigInteger(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+                // through bytes_ptr. Writes would be UB. This cast is required for FFI
+                // compatibility with the NativeStackItem struct which uses *mut u8 for
+                // C# interop.
+                NativeStackItem {
+                    kind: 5,
+                    integer_value: 0,
+                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_len: value.len(),
+                }
+            }
             neo_riscv_abi::StackValue::Iterator(handle) => NativeStackItem {
                 kind: 6,
                 integer_value: *handle as i64,
@@ -360,18 +392,28 @@ fn serialize_stack_items_borrowed(stack: &[neo_riscv_abi::StackValue]) -> Option
                 bytes_ptr: ptr::null_mut(),
                 bytes_len: 0,
             },
-            neo_riscv_abi::StackValue::ByteString(value) => NativeStackItem {
-                kind: 1,
-                integer_value: 0,
-                bytes_ptr: value.as_ptr() as *mut u8,
-                bytes_len: value.len(),
-            },
-            neo_riscv_abi::StackValue::Buffer(value) => NativeStackItem {
-                kind: 11,
-                integer_value: 0,
-                bytes_ptr: value.as_ptr() as *mut u8,
-                bytes_len: value.len(),
-            },
+            neo_riscv_abi::StackValue::ByteString(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+                // through bytes_ptr. Writes would be UB. This cast is required for FFI
+                // compatibility with the NativeStackItem struct which uses *mut u8 for
+                // C# interop.
+                NativeStackItem {
+                    kind: 1,
+                    integer_value: 0,
+                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_len: value.len(),
+                }
+            }
+            neo_riscv_abi::StackValue::Buffer(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+                // through bytes_ptr. Writes would be UB. This cast is required for FFI
+                // compatibility with the NativeStackItem struct which uses *mut u8 for
+                // C# interop.
+                NativeStackItem {
+                    kind: 11,
+                    integer_value: 0,
+                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_len: value.len(),
+                }
+            }
             neo_riscv_abi::StackValue::Boolean(value) => NativeStackItem {
                 kind: 3,
                 integer_value: if *value { 1 } else { 0 },
@@ -598,7 +640,7 @@ fn write_err_result(error: String, fee_consumed_pico: i64, output: *mut NativeEx
 /// - `script_ptr` must point to a valid byte buffer of `script_len` bytes.
 /// - `output` must point to a valid, writable `NativeExecutionResult`.
 /// - The caller owns the output and must call `neo_riscv_free_execution_result` to release it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_script(
     script_ptr: *const u8,
     script_len: usize,
@@ -607,7 +649,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
     timestamp: u64,
     gas_left: i64,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if script_ptr.is_null() || output.is_null() {
         return false;
     }
@@ -650,7 +692,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
             true
         }
     }
-}
+}}
 
 /// # Safety
 ///
@@ -661,7 +703,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
 /// - `free_callback` must be a valid function pointer for releasing host callback results.
 /// - `user_data` is passed through to the callback and must satisfy its safety requirements.
 /// - The caller owns the output and must call `neo_riscv_free_execution_result` to release it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
     script_ptr: *const u8,
     script_len: usize,
@@ -678,11 +720,12 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if script_ptr.is_null() || output.is_null() {
         return false;
     }
     reset_last_fault_ip();
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let script = slice::from_raw_parts(script_ptr, script_len);
@@ -753,14 +796,14 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
             true
         }
     }
-}
+}}
 
 /// # Safety
 ///
 /// Same contract as `neo_riscv_execute_script_with_host`, but the HALT result stack
 /// is trimmed inside the guest before serialization. `result_limit = 0` clears the
 /// return stack; positive values keep that many top-most stack items.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
     script_ptr: *const u8,
     script_len: usize,
@@ -778,11 +821,12 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if script_ptr.is_null() || output.is_null() {
         return false;
     }
     reset_last_fault_ip();
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let script = slice::from_raw_parts(script_ptr, script_len);
@@ -854,7 +898,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
             true
         }
     }
-}
+}}
 
 /// # Safety
 ///
@@ -865,7 +909,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
 /// - `free_callback` must be a valid function pointer for releasing host callback results.
 /// - `user_data` is passed through to the callback and must satisfy its safety requirements.
 /// - The caller owns the output and must call `neo_riscv_free_execution_result` to release it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer(
     script_ptr: *const u8,
     script_len: usize,
@@ -883,11 +927,12 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if script_ptr.is_null() || output.is_null() {
         return false;
     }
     reset_last_fault_ip();
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let script = slice::from_raw_parts(script_ptr, script_len);
@@ -959,13 +1004,13 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer(
             true
         }
     }
-}
+}}
 
 /// # Safety
 ///
 /// Same contract as `neo_riscv_execute_script_with_host_and_initializer`, but
 /// trims the HALT result stack inside the guest before serialization.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_result_limit(
     script_ptr: *const u8,
     script_len: usize,
@@ -984,11 +1029,12 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if script_ptr.is_null() || output.is_null() {
         return false;
     }
     reset_last_fault_ip();
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let script = slice::from_raw_parts(script_ptr, script_len);
@@ -1061,15 +1107,15 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_
             true
         }
     }
-}
+}}
 
 /// # Safety
 ///
 /// - `result` must either be null or point to a `NativeExecutionResult` previously returned
 ///   by `neo_riscv_execute_script` or `neo_riscv_execute_script_with_host`.
 /// - Each result must be freed at most once.
-#[no_mangle]
-pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExecutionResult) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExecutionResult) { unsafe {
     if result.is_null() {
         return;
     }
@@ -1089,7 +1135,7 @@ pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExec
             result.error_len = 0;
         }
     }));
-}
+}}
 
 /// Execute a native RISC-V contract binary directly via PolkaVM.
 ///
@@ -1103,7 +1149,7 @@ pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExec
 /// - `free_callback` must be a valid function pointer for releasing host callback results.
 /// - `user_data` is passed through to the callback and must satisfy its safety requirements.
 /// - The caller owns the output and must call `neo_riscv_free_execution_result` to release it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_native_contract(
     binary_ptr: *const u8,
     binary_len: usize,
@@ -1121,10 +1167,12 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
         return false;
     }
+
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let binary = slice::from_raw_parts(binary_ptr, binary_len);
@@ -1204,7 +1252,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
             true
         }
     }
-}
+}}
 
 /// Execute a native RISC-V contract using the built-in Rust host implementation
 /// for common syscalls. This bypasses the external host callback boundary.
@@ -1215,7 +1263,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
 /// - `method_ptr` must point to a valid UTF-8 byte buffer of `method_len` bytes.
 /// - `initial_stack_ptr` must either be null or point to a valid `NativeStackItem` array.
 /// - `output` must point to a valid, writable `NativeExecutionResult`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin(
     binary_ptr: *const u8,
     binary_len: usize,
@@ -1230,10 +1278,12 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
         return false;
     }
+
+    crate::reset_last_native_fee_consumed_pico();
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let binary = slice::from_raw_parts(binary_ptr, binary_len);
@@ -1291,7 +1341,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin(
             true
         }
     }
-}
+}}
 
 /// Execute a native RISC-V contract using the built-in Rust host implementation
 /// and a precomputed method id, bypassing method-name UTF-8/hash work.
@@ -1301,7 +1351,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin(
 /// `binary_ptr` must point to `binary_len` readable bytes, `initial_stack_ptr`
 /// must either be null or point to `initial_stack_len` valid stack items, and
 /// `output` must point to writable result storage owned by the caller.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
     binary_ptr: *const u8,
     binary_len: usize,
@@ -1315,7 +1365,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if binary_ptr.is_null() || output.is_null() {
         return false;
     }
@@ -1369,7 +1419,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
             true
         }
     }
-}
+}}
 
 /// Execute a native RISC-V method-id entry point that returns a single `i64`.
 ///
@@ -1377,7 +1427,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
 ///
 /// `binary_ptr` must point to `binary_len` readable bytes and `output` must
 /// point to writable result storage owned by the caller.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_i64_by_id(
     binary_ptr: *const u8,
     binary_len: usize,
@@ -1389,7 +1439,7 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_i64_by_id(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeIntegerExecutionResult,
-) -> bool {
+) -> bool { unsafe {
     if binary_ptr.is_null() || output.is_null() {
         return false;
     }
@@ -1561,4 +1611,4 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_i64_by_id(
             true
         }
     }
-}
+}}

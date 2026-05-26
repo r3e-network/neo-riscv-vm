@@ -16,6 +16,7 @@ pub(crate) const NEO_INSTRUCTION_CEILING: u64 = 1_000_000_000;
 /// Return `Err` with a descriptive message if the running opcode count has reached
 /// the instruction ceiling. `count` is the already-incremented count for the
 /// current opcode — i.e. callers should post-increment then call this.
+#[inline]
 pub(crate) fn check_instruction_ceiling(count: u64) -> Result<(), String> {
     if count >= NEO_INSTRUCTION_CEILING {
         Err(format!(
@@ -26,6 +27,7 @@ pub(crate) fn check_instruction_ceiling(count: u64) -> Result<(), String> {
     }
 }
 
+#[inline]
 pub(crate) fn charge_opcode(
     context: &mut RuntimeContext,
     fee_consumed_pico: &mut i64,
@@ -105,6 +107,11 @@ pub(crate) fn charge_native_instructions(
     Ok(())
 }
 
+/// Price an opcode in pico fee units. Unknown opcodes default to 65_536
+/// (~2× the most expensive known opcode). This default is a gas-modeling
+/// choice — unknown opcodes consume outsized gas so fuzzed bytecode can't
+/// execute cheaply. Aligns with Neo N3's pricing convention.
+#[inline]
 pub(crate) fn opcode_price(opcode: u8) -> i64 {
     OpCode::try_from(opcode).map_or(65_536, opcode_price_for)
 }

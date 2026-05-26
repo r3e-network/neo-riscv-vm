@@ -82,6 +82,20 @@ unsafe impl GlobalAlloc for ResettableBumpAllocator {
         self.alloc_from_arena(layout)
     }
 
+    // SAFETY: dealloc is intentionally a no-op. This allocator uses a bump-pointer
+    // strategy where all allocations live in a single 128 MB arena. Individual
+    // deallocations are not possible; instead, the entire arena is bulk-reset via
+    // `ALLOCATOR.reset()` between guest executions. This means:
+    //
+    // 1. Drop is NEVER called for heap-allocated types in the guest. Guest code
+    //    MUST NOT rely on Drop for resource cleanup (file handles, locks, etc.);
+    //    these resource types are not available in the RISC-V guest environment.
+    //
+    // 2. Memory usage grows monotonically during a single execution. Operators
+    //    must ensure the 128 MB arena is sufficient for the worst-case script.
+    //
+    // This is the standard pattern for single-use bump allocators in embedded
+    // and guest VM contexts.
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let _ = (ptr, layout);
     }

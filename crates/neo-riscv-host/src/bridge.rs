@@ -17,8 +17,19 @@ use neo_riscv_guest::SyscallProvider;
 use polkavm::Linker;
 use std::ffi::c_void;
 
+const MAX_STORAGE_KEY_LEN: usize = 1024;
+const MAX_STORAGE_VALUE_LEN: usize = 1024 * 1024;
+const MAX_SYSCALL_STACK_BYTES: u32 = 128 * 1024;
+
 pub(crate) type GuestTrace = Option<(u32, Vec<u8>)>;
 type HostCallbackOutcome = Result<HostCallbackResult, String>;
+/// Function pointer type for the C# FFI callback that handles syscall dispatch.
+///
+/// # Safety
+/// The caller must ensure `user_data` is a valid pointer to the C# callback
+/// context, and that the callback does not retain references to `stack` beyond
+/// the call's return. The host invokes this via `invoke_callback` which
+/// validates the function pointer is non-null before calling.
 type CallbackInvokeFn = unsafe fn(
     *mut c_void,
     u32,
@@ -100,6 +111,9 @@ fn host_call_import(
     host.last_stack_len = Some(stack_len);
     host.last_result_cap = Some(result_cap);
 
+    if stack_len > MAX_SYSCALL_STACK_BYTES {
+        return 0;
+    }
     host.callback_read_buf.resize(stack_len as usize, 0);
     host.last_host_call_stage = 2;
     if let Err(e) = caller
@@ -209,6 +223,7 @@ fn host_storage_get_import(
         };
         value
     } else {
+        if key_len_usize > MAX_STORAGE_KEY_LEN { return u32::MAX; }
         let mut key_heap = vec![0u8; key_len_usize];
         if caller
             .instance
@@ -262,6 +277,7 @@ fn host_storage_contains_import(
                 .is_some(),
         )
     } else {
+        if key_len_usize > MAX_STORAGE_KEY_LEN { return 0; }
         let mut key_heap = vec![0u8; key_len_usize];
         if caller
             .instance
@@ -334,6 +350,9 @@ fn host_storage_put_import(
         return 1;
     }
 
+    if key_len_usize > MAX_STORAGE_KEY_LEN || value_len_usize > MAX_STORAGE_VALUE_LEN {
+        return 0;
+    }
     let mut key_heap = vec![0u8; key_len_usize];
     let mut value_heap = vec![0u8; value_len_usize];
     if caller
@@ -390,7 +409,8 @@ fn host_storage_put_and_contains_import(
         return 1;
     }
 
-    let mut key_heap = vec![0u8; key_len_usize];
+    if key_len_usize > MAX_STORAGE_KEY_LEN { return u32::MAX; }
+        let mut key_heap = vec![0u8; key_len_usize];
     let mut value_heap = vec![0u8; value_len_usize];
     if caller
         .instance
@@ -900,12 +920,12 @@ where
         RuntimeContext,
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
-{
+{ unsafe {
     // SAFETY: callback_data points to a live &mut F stored by ClosureHost::new().
     // The caller (ClosureHost::invoke) guarantees the pointer is valid and uniquely borrowed.
     let callback = &mut *(callback_data as *mut F);
     callback(api, ip, context, stack)
-}
+}}
 
 pub(crate) fn read_guest_trace(
     instance: &mut polkavm::Instance<ClosureHost>,
@@ -970,7 +990,6 @@ pub(crate) fn read_guest_result_diag(
     Some((stage, stack_len, limit))
 }
 
-#[allow(dead_code)]
 pub(crate) fn read_guest_debug(
     instance: &mut polkavm::Instance<ClosureHost>,
     host: &mut ClosureHost,
@@ -983,28 +1002,6 @@ pub(crate) fn read_guest_debug(
     }
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_debug_ptr", ())
-        .ok()?;
-    if ptr == 0 {
-        return None;
-    }
-    let mut bytes = vec![0u8; len as usize];
-    instance.read_memory_into(ptr, &mut bytes[..]).ok()?;
-    Some(bytes)
-}
-
-#[allow(dead_code)]
-pub(crate) fn read_pc_trace(
-    instance: &mut polkavm::Instance<ClosureHost>,
-    host: &mut ClosureHost,
-) -> Option<Vec<u8>> {
-    let len = instance
-        .call_typed_and_get_result::<u32, ()>(host, "get_pc_trace_len", ())
-        .ok()?;
-    if len == 0 {
-        return Some(Vec::new());
-    }
-    let ptr = instance
-        .call_typed_and_get_result::<u32, ()>(host, "get_pc_trace_ptr", ())
         .ok()?;
     if ptr == 0 {
         return None;

@@ -84,6 +84,9 @@ pub(crate) fn read_last_fault_locals(out_ptr: *mut u8, out_capacity: usize) -> u
         let buf = cell.borrow();
         let len = buf.len();
         if out_capacity >= len && !out_ptr.is_null() && len > 0 {
+            // SAFETY: out_ptr is non-null, out_capacity >= len (checked above),
+            // buf.as_ptr() is valid for len bytes, and the two regions cannot
+            // overlap (buf is thread-local, out_ptr is caller-allocated).
             unsafe {
                 std::ptr::copy_nonoverlapping(buf.as_ptr(), out_ptr, len);
             }
@@ -937,6 +940,17 @@ where
     result
 }
 
+/// Compute the native contract method dispatch ID using FNV-1a (32-bit).
+///
+/// **Security**: 32-bit FNV-1a has a birthday bound of ~77K names. This is
+/// acceptable because native contract method names come from a fixed,
+/// controlled set defined in each native contract's source — not user input.
+/// The guest-side syscall dispatcher uses `interop_hash` (SHA-256 truncated)
+/// for its broader, partly user-controlled API surface.
+///
+/// **Migration**: A future protocol version should replace this with
+/// `interop_hash` for consistency. This changes all method IDs and requires
+/// a coordinated native contract + host upgrade.
 fn native_method_id(method: &str) -> u32 {
     let mut hash: u32 = 2166136261;
     for byte in method.as_bytes() {

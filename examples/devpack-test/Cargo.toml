@@ -8,7 +8,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 neo-riscv-devpack = { path = "../../crates/neo-riscv-devpack" }
-polkavm-derive = "0.32.0"
+polkavm-derive = "0.33.0"
 
 [profile.release]
 opt-level = "z"

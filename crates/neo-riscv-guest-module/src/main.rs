@@ -17,6 +17,7 @@ mod runtime_state;
 mod runtime_state_cell;
 
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU32, Ordering};
 
 // Increase PolkaVM call stack from the default size to handle deep codec
 // decoding (e.g., nested arrays in Contract.Call results at mainnet block 78538).
@@ -308,22 +309,16 @@ pub extern "C" fn execute_with_result_limit(
     store_result(result, result_limit);
 }
 
-static mut NEXT_RESULT_LIMIT: u32 = u32::MAX;
+static NEXT_RESULT_LIMIT: AtomicU32 = AtomicU32::new(u32::MAX);
 
 #[no_mangle]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn set_result_limit(result_limit: u32) {
-    unsafe {
-        NEXT_RESULT_LIMIT = result_limit;
-    }
+    NEXT_RESULT_LIMIT.store(result_limit, Ordering::Relaxed);
 }
 
 fn take_result_limit() -> u32 {
-    unsafe {
-        let result_limit = NEXT_RESULT_LIMIT;
-        NEXT_RESULT_LIMIT = u32::MAX;
-        result_limit
-    }
+    NEXT_RESULT_LIMIT.swap(u32::MAX, Ordering::Relaxed)
 }
 
 #[no_mangle]

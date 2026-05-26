@@ -795,10 +795,26 @@ pub(crate) struct ClosureHost {
     pub(crate) charge_error: Option<String>,
     builtin_storage: Option<BuiltinStorage>,
     callback_data: *mut c_void,
+    /// SAFETY: `callback_data` must point to a live borrow of the closure `F`
+    /// that was passed to `ClosureHost::new`. `ClosureHost` borrows `F` mutably
+    /// and must not outlive the scope within which `F` is borrowed. All
+    /// call-sites in this crate construct `ClosureHost` and drop it before the
+    /// enclosing function returns, ensuring the pointer remains valid. Do not
+    /// store `ClosureHost` in a long-lived location without proving the closure
+    /// outlives it.
     callback_invoke: CallbackInvokeFn,
 }
 
 impl ClosureHost {
+    /// Construct a `ClosureHost` that will invoke `callback` for host syscalls.
+    ///
+    /// # Safety
+    ///
+    /// `ClosureHost` must be dropped before `callback` goes out of scope.
+    /// The stored raw pointer is only dereferenced inside `invoke()`, which is
+    /// called while the host is alive — and the host is always dropped before
+    /// `callback` is released. Callers outside this module must uphold this
+    /// invariant.
     pub(crate) fn new<F>(context: RuntimeContext, callback: &mut F) -> Self
     where
         F: FnMut(

@@ -358,8 +358,8 @@ where
 
     // If the guest returned a VM-level FAULT with fault_message, return it without
     // internal trace (trace is for FFI-level errors only).
-    if let Ok(ref r) = result {
-        if r.state == VmState::Fault {
+    if let Ok(ref r) = result
+        && r.state == VmState::Fault {
             // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
             // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
             // `neo_riscv_last_fault_locals()`.
@@ -376,7 +376,6 @@ where
                 return Err(msg.clone());
             }
         }
-    }
 
     match result {
         Ok(result) => Ok((result, trace)),
@@ -657,8 +656,8 @@ where
 
     // If the guest returned a VM-level FAULT with fault_message, return it without
     // internal trace (trace is for FFI-level errors only).
-    if let Ok(ref r) = result {
-        if r.state == VmState::Fault {
+    if let Ok(ref r) = result
+        && r.state == VmState::Fault {
             // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
             // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
             // `neo_riscv_last_fault_locals()`.
@@ -675,7 +674,6 @@ where
                 return Err(msg.clone());
             }
         }
-    }
 
     if let Err(error) = result {
         let trace = read_guest_trace(instance, &mut host);
@@ -917,8 +915,8 @@ where
 
     // If the contract returned a VM-level FAULT with fault_message, return as error
     // (consistent with execute_script_* paths).
-    if let Ok(ref r) = result {
-        if r.state == VmState::Fault {
+    if let Ok(ref r) = result
+        && r.state == VmState::Fault {
             // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
             // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
             // `neo_riscv_last_fault_locals()`.
@@ -935,7 +933,6 @@ where
                 return Err(msg.clone());
             }
         }
-    }
 
     result
 }
@@ -1116,8 +1113,8 @@ pub fn execute_native_contract_builtin_by_id(
         r.fee_consumed_pico = host.fee_consumed_pico;
     }
 
-    if let Ok(ref r) = result {
-        if r.state == VmState::Fault {
+    if let Ok(ref r) = result
+        && r.state == VmState::Fault {
             // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
             // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
             // `neo_riscv_last_fault_locals()`.
@@ -1134,7 +1131,6 @@ pub fn execute_native_contract_builtin_by_id(
                 return Err(msg.clone());
             }
         }
-    }
 
     result
 }

@@ -33,14 +33,13 @@ impl Drop for CachedExecutionInstance {
             return;
         };
 
-        if let Some(pool) = EXECUTION_INSTANCES.get() {
-            if let Ok(mut guard) = pool.lock() {
+        if let Some(pool) = EXECUTION_INSTANCES.get()
+            && let Ok(mut guard) = pool.lock() {
                 let instances = guard.entry(self.aux_size).or_default();
                 if instances.len() < MAX_POOL_SIZE_PER_AUX {
                     instances.push(instance);
                 }
                 // else: pool is full, just drop the instance
             }
-        }
     }
 }

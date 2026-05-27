@@ -27,11 +27,10 @@ impl BuiltinStorage {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub(super) fn get(&self, key: &[u8]) -> Option<&[u8]> {
-        if let Some(entry) = &self.hot_small {
-            if entry.matches(key) {
+        if let Some(entry) = &self.hot_small
+            && entry.matches(key) {
                 return Some(entry.value());
             }
-        }
         for entry in self.small.iter().flatten() {
             if entry.matches(key) {
                 return Some(entry.value());
@@ -106,14 +105,13 @@ impl BuiltinStorage {
             self.small[index] = None;
         }
 
-        if let Some(entry) = SmallStorageEntry::new(key, value) {
-            if let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none()) {
+        if let Some(entry) = SmallStorageEntry::new(key, value)
+            && let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none()) {
                 *slot = Some(entry);
                 self.remove_from_inline_only(key);
                 self.heap.remove(key);
                 return;
             }
-        }
 
         if let Some(index) = self.find_inline_index(key) {
             if self.inline[index]
@@ -126,23 +124,21 @@ impl BuiltinStorage {
             self.inline[index] = None;
         }
 
-        if let Some(entry) = InlineStorageEntry::new(key, value) {
-            if let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none()) {
+        if let Some(entry) = InlineStorageEntry::new(key, value)
+            && let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none()) {
                 *slot = Some(entry);
                 self.heap.remove(key);
                 return;
             }
-        }
 
         // Check if we've reached the maximum heap entries limit.
         // Evict the first key in sorted (BTreeMap) order to maintain deterministic
         // behavior across nodes — critical for blockchain consensus.
-        if !self.heap.contains_key(key) && self.heap.len() >= MAX_HEAP_ENTRIES {
-            if let Some(first_key) = self.heap.keys().next() {
+        if !self.heap.contains_key(key) && self.heap.len() >= MAX_HEAP_ENTRIES
+            && let Some(first_key) = self.heap.keys().next() {
                 let key_to_remove = first_key.clone();
                 self.heap.remove(&key_to_remove);
             }
-        }
 
         self.heap.insert(key.to_vec(), value.to_vec());
     }
@@ -162,14 +158,13 @@ impl BuiltinStorage {
             self.small[index] = None;
         }
 
-        if let Some(entry) = SmallStorageEntry::new(key, value) {
-            if let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none()) {
+        if let Some(entry) = SmallStorageEntry::new(key, value)
+            && let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none()) {
                 *slot = Some(entry);
                 self.remove_from_inline_only(key);
                 self.heap.remove(key);
                 return true;
             }
-        }
 
         if let Some(index) = self.find_inline_index(key) {
             if self.inline[index]
@@ -182,13 +177,12 @@ impl BuiltinStorage {
             self.inline[index] = None;
         }
 
-        if let Some(entry) = InlineStorageEntry::new(key, value) {
-            if let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none()) {
+        if let Some(entry) = InlineStorageEntry::new(key, value)
+            && let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none()) {
                 *slot = Some(entry);
                 self.heap.remove(key);
                 return true;
             }
-        }
         false
     }
 

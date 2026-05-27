@@ -29,13 +29,12 @@ impl Drop for CachedNativeExecutionInstance {
             return;
         };
 
-        if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get() {
-            if let Ok(mut guard) = pool.lock() {
+        if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get()
+            && let Ok(mut guard) = pool.lock() {
                 let instances = guard.entry(self.key).or_default();
                 if instances.len() < MAX_POOL_SIZE_PER_AUX {
                     instances.push(instance);
                 }
             }
-        }
     }
 }

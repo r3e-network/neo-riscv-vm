@@ -136,8 +136,8 @@ fn host_call_import(
         return 0;
     }
 
-    if let Some(storage) = host.builtin_storage.as_mut() {
-        if let Some(response) =
+    if let Some(storage) = host.builtin_storage.as_mut()
+        && let Some(response) =
             try_handle_builtin_storage_syscall(api, &host.callback_read_buf, storage)
         {
             let bytes = match &response {
@@ -161,7 +161,6 @@ fn host_call_import(
             host.last_host_call_stage = 6;
             return bytes.len() as u32;
         }
-    }
 
     let stack: Vec<neo_riscv_abi::StackValue> = match fast_codec::decode_stack(
         &host.callback_read_buf,

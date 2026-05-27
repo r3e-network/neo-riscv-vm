@@ -126,6 +126,11 @@ fn copy_native_stack_items_with_depth(
             "native stack item nesting depth {depth} exceeds maximum {MAX_STACK_ITEM_DEPTH}"
         ));
     }
+    // Cap stack_len to prevent OOM from corrupted guest
+    const MAX_STACK_ITEMS: usize = 10_000;
+    if stack_len > MAX_STACK_ITEMS {
+        return Err(format!("stack_len {stack_len} exceeds maximum {MAX_STACK_ITEMS}"));
+    }
     let mut stack = Vec::with_capacity(stack_len);
 
     for index in 0..stack_len {
@@ -650,7 +655,7 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
     gas_left: i64,
     output: *mut NativeExecutionResult,
 ) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() {
+    if script_ptr.is_null() || output.is_null() || script_len == 0 {
         return false;
     }
     reset_last_fault_ip();

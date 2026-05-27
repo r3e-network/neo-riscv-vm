@@ -5,6 +5,9 @@ use super::{
     INLINE_ENTRY_SLOTS, SMALL_ENTRY_SLOTS,
 };
 
+/// Maximum number of entries allowed in the heap storage to prevent memory exhaustion.
+const MAX_HEAP_ENTRIES: usize = 1024;
+
 pub(super) struct BuiltinStorage {
     pub(super) hot_small: Option<SmallStorageEntry>,
     small: [Option<SmallStorageEntry>; SMALL_ENTRY_SLOTS],
@@ -128,6 +131,14 @@ impl BuiltinStorage {
                 *slot = Some(entry);
                 self.heap.remove(key);
                 return;
+            }
+        }
+
+        // Check if we've reached the maximum heap entries limit
+        if !self.heap.contains_key(key) && self.heap.len() >= MAX_HEAP_ENTRIES {
+            // Evict the oldest entry to prevent memory exhaustion
+            if let Some(oldest_key) = self.heap.keys().next().cloned() {
+                self.heap.remove(&oldest_key);
             }
         }
 

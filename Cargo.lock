@@ -602,6 +602,7 @@ dependencies = [
  "postcard",
  "proptest",
  "serde",
+ "sha2 0.10.9",
  "thiserror",
  "tracing",
 ]

@@ -20,6 +20,8 @@ use std::ffi::c_void;
 const MAX_STORAGE_KEY_LEN: usize = 1024;
 const MAX_STORAGE_VALUE_LEN: usize = 1024 * 1024;
 const MAX_SYSCALL_STACK_BYTES: u32 = 128 * 1024;
+/// Maximum size for diagnostic messages (panic, debug) to prevent OOM from corrupted guest.
+const MAX_DIAGNOSTIC_SIZE: u32 = 16 * 1024 * 1024;
 
 pub(crate) type GuestTrace = Option<(u32, Vec<u8>)>;
 type HostCallbackOutcome = Result<HostCallbackResult, String>;
@@ -79,13 +81,21 @@ pub(crate) fn register_host_functions(
 
 fn host_on_instruction_import(caller: polkavm::Caller<ClosureHost>, opcode: u32) -> u32 {
     let host = caller.user_data;
-    host.last_opcode = Some(opcode as u8);
+    // Validate opcode fits in u8 to prevent silent truncation
+    let opcode_byte = match u8::try_from(opcode) {
+        Ok(b) => b,
+        Err(_) => {
+            host.charge_error = Some(format!("opcode {opcode} exceeds u8 range"));
+            return 0;
+        }
+    };
+    host.last_opcode = Some(opcode_byte);
     host.opcode_count = host.opcode_count.saturating_add(1);
     if let Err(e) = crate::pricing::check_instruction_ceiling(host.opcode_count) {
         host.charge_error = Some(e);
         return 0;
     }
-    match charge_opcode(&mut host.context, &mut host.fee_consumed_pico, opcode as u8) {
+    match charge_opcode(&mut host.context, &mut host.fee_consumed_pico, opcode_byte) {
         Ok(()) => 1,
         Err(e) => {
             host.charge_error = Some(e);
@@ -410,7 +420,8 @@ fn host_storage_put_and_contains_import(
     }
 
     if key_len_usize > MAX_STORAGE_KEY_LEN { return u32::MAX; }
-        let mut key_heap = vec![0u8; key_len_usize];
+    if value_len_usize > MAX_STORAGE_VALUE_LEN { return u32::MAX; }
+    let mut key_heap = vec![0u8; key_len_usize];
     let mut value_heap = vec![0u8; value_len_usize];
     if caller
         .instance
@@ -953,6 +964,10 @@ pub(crate) fn read_guest_panic(
     if len == 0 {
         return None;
     }
+    // Cap allocation size to prevent OOM from corrupted guest
+    if len > MAX_DIAGNOSTIC_SIZE {
+        return Some(format!("panic message too large: {} bytes (max {})", len, MAX_DIAGNOSTIC_SIZE));
+    }
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_panic_ptr", ())
         .ok()?;
@@ -999,6 +1014,10 @@ pub(crate) fn read_guest_debug(
         .ok()?;
     if len == 0 {
         return Some(Vec::new());
+    }
+    // Cap allocation size to prevent OOM from corrupted guest
+    if len > MAX_DIAGNOSTIC_SIZE {
+        return None;
     }
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_debug_ptr", ())

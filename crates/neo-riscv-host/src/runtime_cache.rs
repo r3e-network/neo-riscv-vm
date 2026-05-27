@@ -10,9 +10,9 @@ use polkavm::{
     BackendKind as PolkaBackendKind, Config, Engine, GasMeteringKind, Instance, InstancePre,
     Linker, Module, ModuleConfig, ProgramBlob,
 };
+use sha2::{Digest, Sha256};
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::Hasher,
+    collections::HashMap,
     sync::{Mutex, OnceLock},
 };
 
@@ -228,10 +228,11 @@ fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, St
 }
 
 fn hash_binary(binary: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    hasher.write_usize(binary.len());
-    hasher.write(binary);
-    hasher.finish()
+    let mut hasher = Sha256::new();
+    hasher.update(binary);
+    let result = hasher.finalize();
+    // Use first 8 bytes of SHA-256 as cache key
+    u64::from_le_bytes(result[..8].try_into().unwrap())
 }
 
 fn cached_engine() -> Result<&'static Engine, String> {

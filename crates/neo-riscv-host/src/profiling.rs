@@ -3,22 +3,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static PEAK_MEMORY: AtomicUsize = AtomicUsize::new(0);
 static CURRENT_MEMORY: AtomicUsize = AtomicUsize::new(0);
 
-/// Diagnostic hooks for memory tracking. Call these from allocation/deallocation
-/// sites to enable peak-memory profiling via `get_peak_memory()`.
-/// Currently unused in production — wire these into the allocator or runtime
-/// if memory profiling is needed. Suppressing dead_code warning to keep the
-/// API available for conditional compilation or future use.
-#[allow(dead_code)]
-pub fn record_allocation(size: usize) {
-    let current = CURRENT_MEMORY.fetch_add(size, Ordering::Relaxed) + size;
-    PEAK_MEMORY.fetch_max(current, Ordering::Relaxed);
-}
-
-#[allow(dead_code)]
-pub fn record_deallocation(size: usize) {
-    CURRENT_MEMORY.fetch_sub(size, Ordering::Relaxed);
-}
-
 pub fn get_peak_memory() -> usize {
     PEAK_MEMORY.load(Ordering::Relaxed)
 }

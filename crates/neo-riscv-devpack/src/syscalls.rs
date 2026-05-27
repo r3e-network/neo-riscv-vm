@@ -123,6 +123,18 @@ pub fn runtime_check_witness(hash: &[u8]) -> bool {
         .unwrap_or(false)
 }
 
+/// Witness check with explicit error propagation.
+/// Returns `Ok(true/false)` on success, `Err(...)` if the host call fails.
+/// Prefer this over `runtime_check_witness` for authorization decisions.
+pub fn try_runtime_check_witness(hash: &[u8]) -> Result<bool, String> {
+    let stack = vec![StackValue::ByteString(hash.to_vec())];
+    let result = ffi::invoke_host_call(api_ids::RUNTIME_CHECK_WITNESS, &stack)?;
+    match result.first() {
+        Some(StackValue::Boolean(b)) => Ok(*b),
+        _ => Ok(false),
+    }
+}
+
 pub fn runtime_get_notifications(hash: &[u8]) -> Vec<StackValue> {
     let stack = vec![StackValue::ByteString(hash.to_vec())];
     ffi::invoke_host_call(api_ids::RUNTIME_GET_NOTIFICATIONS, &stack)
@@ -305,6 +317,21 @@ pub fn crypto_verify_signature(message: &[u8], pubkey: &[u8], signature: &[u8]) 
         .unwrap_or(false)
 }
 
+/// Signature verification with explicit error propagation.
+/// Returns `Ok(true/false)` on success, `Err(...)` if the host call fails.
+pub fn try_crypto_verify_signature(message: &[u8], pubkey: &[u8], signature: &[u8]) -> Result<bool, String> {
+    let stack = vec![
+        StackValue::ByteString(message.to_vec()),
+        StackValue::ByteString(pubkey.to_vec()),
+        StackValue::ByteString(signature.to_vec()),
+    ];
+    let result = ffi::invoke_host_call(api_ids::CRYPTO_VERIFY_SIGNATURE, &stack)?;
+    match result.first() {
+        Some(StackValue::Boolean(b)) => Ok(*b),
+        _ => Ok(false),
+    }
+}
+
 pub fn crypto_check_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[Vec<u8>]) -> bool {
     let pk: Vec<StackValue> = pubkeys
         .iter()
@@ -327,6 +354,22 @@ pub fn crypto_check_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[
             _ => None,
         })
         .unwrap_or(false)
+}
+
+/// Multisig verification with explicit error propagation.
+pub fn try_crypto_check_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[Vec<u8>]) -> Result<bool, String> {
+    let pk: Vec<StackValue> = pubkeys.iter().map(|k| StackValue::ByteString(k.clone())).collect();
+    let sig: Vec<StackValue> = signatures.iter().map(|s| StackValue::ByteString(s.clone())).collect();
+    let stack = vec![
+        StackValue::ByteString(message.to_vec()),
+        StackValue::Array(pk),
+        StackValue::Array(sig),
+    ];
+    let result = ffi::invoke_host_call(api_ids::CRYPTO_CHECK_MULTISIG, &stack)?;
+    match result.first() {
+        Some(StackValue::Boolean(b)) => Ok(*b),
+        _ => Ok(false),
+    }
 }
 
 // System.Iterator

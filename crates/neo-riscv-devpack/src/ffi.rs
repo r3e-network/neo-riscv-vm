@@ -1,7 +1,7 @@
 use alloc::{format, string::String, vec, vec::Vec};
 use neo_riscv_abi::{callback_codec, StackValue};
 
-extern "C" {
+unsafe extern "C" {
     fn host_call(
         api: u32,
         ip: u32,

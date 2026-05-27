@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{
     inline_storage_entry::InlineStorageEntry, small_storage_entry::SmallStorageEntry,
@@ -12,7 +12,7 @@ pub(super) struct BuiltinStorage {
     pub(super) hot_small: Option<SmallStorageEntry>,
     small: [Option<SmallStorageEntry>; SMALL_ENTRY_SLOTS],
     inline: [Option<InlineStorageEntry>; INLINE_ENTRY_SLOTS],
-    heap: HashMap<Vec<u8>, Vec<u8>>,
+    heap: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
 impl BuiltinStorage {
@@ -21,7 +21,7 @@ impl BuiltinStorage {
             hot_small: None,
             small: std::array::from_fn(|_| None),
             inline: std::array::from_fn(|_| None),
-            heap: HashMap::new(),
+            heap: BTreeMap::new(),
         }
     }
 
@@ -134,11 +134,13 @@ impl BuiltinStorage {
             }
         }
 
-        // Check if we've reached the maximum heap entries limit
+        // Check if we've reached the maximum heap entries limit.
+        // Evict the first key in sorted (BTreeMap) order to maintain deterministic
+        // behavior across nodes — critical for blockchain consensus.
         if !self.heap.contains_key(key) && self.heap.len() >= MAX_HEAP_ENTRIES {
-            // Evict the oldest entry to prevent memory exhaustion
-            if let Some(oldest_key) = self.heap.keys().next().cloned() {
-                self.heap.remove(&oldest_key);
+            if let Some(first_key) = self.heap.keys().next() {
+                let key_to_remove = first_key.clone();
+                self.heap.remove(&key_to_remove);
             }
         }
 

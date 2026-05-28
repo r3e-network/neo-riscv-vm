@@ -1,5 +1,3 @@
-#![allow(clippy::items_after_test_module)]
-
 mod builtin_storage;
 mod inline_storage_entry;
 mod small_storage_entry;

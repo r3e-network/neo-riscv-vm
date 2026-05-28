@@ -347,8 +347,6 @@ where
     instance
         .read_memory_into(res_ptr, &mut res_bytes[..])
         .map_err(|e| format!("guest read_memory failed: {e:?}"))?;
-    // Debug: uncomment to trace RESULT_BYTES
-    // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
     let mut result = decode_guest_execution_result(&res_bytes)?;
     set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 
@@ -645,8 +643,6 @@ where
     instance
         .read_memory_into(res_ptr, &mut res_bytes[..])
         .map_err(|e| format!("guest read_memory failed: {e:?}"))?;
-    // Debug: uncomment to trace RESULT_BYTES
-    // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
     let mut result = decode_guest_execution_result(&res_bytes)?;
     set_last_native_fee_consumed_pico(host.fee_consumed_pico);
 

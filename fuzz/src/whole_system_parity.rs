@@ -6,7 +6,9 @@ extern crate libfuzzer_sys;
 mod deterministic_model;
 mod guest_parity_provider;
 mod parity_run;
+#[path = "whole_system_parity/scenario.rs"]
 mod scenario;
+#[path = "whole_system_parity/trace_entry.rs"]
 mod trace_entry;
 
 use deterministic_model::DeterministicModel;

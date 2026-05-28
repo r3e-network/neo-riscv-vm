@@ -28,7 +28,6 @@ fuzz_target!(|data: &[u8]| {
 });
 
 fn build_type_conv_script(seed: u64, context: &[u8]) -> Vec<u8> {
-    let _rng = SimpleRng::new(seed);
     let mut script = Vec::new();
 
     let ops = [

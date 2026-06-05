@@ -1,10 +1,10 @@
 use crate::{
-    execute_native_contract_builtin, execute_native_contract_builtin_by_id,
-    execute_script_with_context, execute_script_with_host_and_stack_and_ip,
+    HostCallbackResult, RuntimeContext, execute_native_contract_builtin,
+    execute_native_contract_builtin_by_id, execute_script_with_context,
+    execute_script_with_host_and_stack_and_ip,
     execute_script_with_host_and_stack_and_ip_and_initializer,
     execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit,
-    execute_script_with_host_and_stack_and_ip_with_result_limit, HostCallbackResult,
-    RuntimeContext,
+    execute_script_with_host_and_stack_and_ip_with_result_limit,
 };
 use neo_riscv_abi::ExecutionResult;
 use std::{ffi::c_void, ptr, slice};
@@ -129,7 +129,9 @@ fn copy_native_stack_items_with_depth(
     // Cap stack_len to prevent OOM from corrupted guest
     const MAX_STACK_ITEMS: usize = 10_000;
     if stack_len > MAX_STACK_ITEMS {
-        return Err(format!("stack_len {stack_len} exceeds maximum {MAX_STACK_ITEMS}"));
+        return Err(format!(
+            "stack_len {stack_len} exceeds maximum {MAX_STACK_ITEMS}"
+        ));
     }
     let mut stack = Vec::with_capacity(stack_len);
 
@@ -177,7 +179,7 @@ fn copy_native_stack_items_with_depth(
                     Vec::new()
                 } else {
                     copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast::<NativeStackItem>(),
+                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
                         item.bytes_len,
                         depth + 1,
                     )?
@@ -189,7 +191,7 @@ fn copy_native_stack_items_with_depth(
                     Vec::new()
                 } else {
                     copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast::<NativeStackItem>(),
+                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
                         item.bytes_len,
                         depth + 1,
                     )?
@@ -201,7 +203,7 @@ fn copy_native_stack_items_with_depth(
                     Vec::new()
                 } else {
                     copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast::<NativeStackItem>(),
+                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
                         item.bytes_len,
                         depth + 1,
                     )?
@@ -239,13 +241,13 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
             neo_riscv_abi::StackValue::Integer(value) => NativeStackItem {
                 kind: 0,
                 integer_value: *value,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::BigInteger(value) => {
                 let bytes = value.clone().into_boxed_slice();
                 let bytes_len = bytes.len();
-                let bytes_ptr = Box::into_raw(bytes) as *mut u8;
+                let bytes_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
                 NativeStackItem {
                     kind: 5,
                     integer_value: 0,
@@ -256,19 +258,19 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
             neo_riscv_abi::StackValue::Iterator(handle) => NativeStackItem {
                 kind: 6,
                 integer_value: *handle as i64,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Interop(handle) => NativeStackItem {
                 kind: 9,
                 integer_value: *handle as i64,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::ByteString(value) => {
                 let bytes = value.clone().into_boxed_slice();
                 let bytes_len = bytes.len();
-                let bytes_ptr = Box::into_raw(bytes) as *mut u8;
+                let bytes_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
                 NativeStackItem {
                     kind: 1,
                     integer_value: 0,
@@ -279,7 +281,7 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
             neo_riscv_abi::StackValue::Buffer(value) => {
                 let bytes = value.clone().into_boxed_slice();
                 let bytes_len = bytes.len();
-                let bytes_ptr = Box::into_raw(bytes) as *mut u8;
+                let bytes_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
                 NativeStackItem {
                     kind: 11,
                     integer_value: 0,
@@ -290,7 +292,7 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
             neo_riscv_abi::StackValue::Boolean(value) => NativeStackItem {
                 kind: 3,
                 integer_value: if *value { 1 } else { 0 },
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Array(items) => {
@@ -327,13 +329,13 @@ fn serialize_stack_items(stack: &[neo_riscv_abi::StackValue]) -> (*mut NativeSta
             neo_riscv_abi::StackValue::Null => NativeStackItem {
                 kind: 2,
                 integer_value: 0,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Pointer(value) => NativeStackItem {
                 kind: 10,
                 integer_value: *value,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
         })
@@ -371,70 +373,73 @@ fn serialize_stack_items_borrowed(stack: &[neo_riscv_abi::StackValue]) -> Option
             neo_riscv_abi::StackValue::Integer(value) => NativeStackItem {
                 kind: 0,
                 integer_value: *value,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
-            neo_riscv_abi::StackValue::BigInteger(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+            neo_riscv_abi::StackValue::BigInteger(value) => {
+                // SAFETY: the C# FFI callback is contractually restricted to reading
                 // through bytes_ptr. Writes would be UB. This cast is required for FFI
                 // compatibility with the NativeStackItem struct which uses *mut u8 for
                 // C# interop.
                 NativeStackItem {
                     kind: 5,
                     integer_value: 0,
-                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_ptr: value.as_ptr(),
                     bytes_len: value.len(),
                 }
             }
             neo_riscv_abi::StackValue::Iterator(handle) => NativeStackItem {
                 kind: 6,
                 integer_value: *handle as i64,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Interop(handle) => NativeStackItem {
                 kind: 9,
                 integer_value: *handle as i64,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
-            neo_riscv_abi::StackValue::ByteString(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+            neo_riscv_abi::StackValue::ByteString(value) => {
+                // SAFETY: the C# FFI callback is contractually restricted to reading
                 // through bytes_ptr. Writes would be UB. This cast is required for FFI
                 // compatibility with the NativeStackItem struct which uses *mut u8 for
                 // C# interop.
                 NativeStackItem {
                     kind: 1,
                     integer_value: 0,
-                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_ptr: value.as_ptr(),
                     bytes_len: value.len(),
                 }
             }
-            neo_riscv_abi::StackValue::Buffer(value) => {                // SAFETY: the C# FFI callback is contractually restricted to reading
+            neo_riscv_abi::StackValue::Buffer(value) => {
+                // SAFETY: the C# FFI callback is contractually restricted to reading
                 // through bytes_ptr. Writes would be UB. This cast is required for FFI
                 // compatibility with the NativeStackItem struct which uses *mut u8 for
                 // C# interop.
                 NativeStackItem {
                     kind: 11,
                     integer_value: 0,
-                    bytes_ptr: value.as_ptr() as *mut u8,
+                    bytes_ptr: value.as_ptr(),
                     bytes_len: value.len(),
                 }
             }
             neo_riscv_abi::StackValue::Boolean(value) => NativeStackItem {
                 kind: 3,
                 integer_value: if *value { 1 } else { 0 },
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Null => NativeStackItem {
                 kind: 2,
                 integer_value: 0,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Pointer(value) => NativeStackItem {
                 kind: 10,
                 integer_value: *value,
-                bytes_ptr: ptr::null_mut(),
+                bytes_ptr: ptr::null(),
                 bytes_len: 0,
             },
             neo_riscv_abi::StackValue::Array(_)
@@ -460,9 +465,13 @@ fn free_native_stack_items(stack_ptr: *mut NativeStackItem, stack_len: usize) {
         let item = unsafe { &mut *item_ptr };
         if !item.bytes_ptr.is_null() {
             if item.kind == 4 || item.kind == 7 || item.kind == 8 {
-                free_native_stack_items(item.bytes_ptr.cast::<NativeStackItem>(), item.bytes_len);
+                free_native_stack_items(
+                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+                    item.bytes_len,
+                );
             } else {
-                let bytes = ptr::slice_from_raw_parts_mut(item.bytes_ptr, item.bytes_len);
+                let bytes =
+                    ptr::slice_from_raw_parts_mut(item.bytes_ptr.cast_mut(), item.bytes_len);
                 unsafe {
                     drop(Box::from_raw(bytes));
                 }
@@ -553,7 +562,10 @@ fn copy_single_native_stack_item(
             let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                 Vec::new()
             } else {
-                copy_native_stack_items(item.bytes_ptr.cast::<NativeStackItem>(), item.bytes_len)?
+                copy_native_stack_items(
+                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+                    item.bytes_len,
+                )?
             };
             Ok(neo_riscv_abi::StackValue::Array(items))
         }
@@ -561,7 +573,10 @@ fn copy_single_native_stack_item(
             let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                 Vec::new()
             } else {
-                copy_native_stack_items(item.bytes_ptr.cast::<NativeStackItem>(), item.bytes_len)?
+                copy_native_stack_items(
+                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+                    item.bytes_len,
+                )?
             };
             Ok(neo_riscv_abi::StackValue::Struct(items))
         }
@@ -569,7 +584,10 @@ fn copy_single_native_stack_item(
             let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
                 Vec::new()
             } else {
-                copy_native_stack_items(item.bytes_ptr.cast::<NativeStackItem>(), item.bytes_len)?
+                copy_native_stack_items(
+                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+                    item.bytes_len,
+                )?
             };
             if items.len() % 2 != 0 {
                 return Err("map stack item contains an odd number of entries".to_string());
@@ -626,7 +644,7 @@ fn write_ok_result(
 fn write_err_result(error: String, fee_consumed_pico: i64, output: *mut NativeExecutionResult) {
     let native_error = error.into_bytes().into_boxed_slice();
     let error_len = native_error.len();
-    let error_ptr = Box::into_raw(native_error) as *mut u8;
+    let error_ptr = Box::into_raw(native_error).cast::<u8>() as *const u8;
 
     unsafe {
         *output = NativeExecutionResult {
@@ -654,50 +672,52 @@ pub unsafe extern "C" fn neo_riscv_execute_script(
     timestamp: u64,
     gas_left: i64,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() || script_len == 0 {
-        return false;
-    }
-    reset_last_fault_ip();
+) -> bool {
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let script = slice::from_raw_parts(script_ptr, script_len);
-        match execute_script_with_context(
-            script,
-            RuntimeContext {
-                trigger,
-                network,
-                address_version: 0,
-                timestamp: if timestamp == 0 {
-                    None
-                } else {
-                    Some(timestamp)
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            match execute_script_with_context(
+                script,
+                RuntimeContext {
+                    trigger,
+                    network,
+                    address_version: 0,
+                    timestamp: if timestamp == 0 {
+                        None
+                    } else {
+                        Some(timestamp)
+                    },
+                    gas_left,
+                    exec_fee_factor_pico: 0,
                 },
-                gas_left,
-                exec_fee_factor_pico: 0,
-            },
-        ) {
-            Ok(result) => {
-                write_ok_result(result, 0, output);
+            ) {
+                Ok(result) => {
+                    write_ok_result(result, 0, output);
+                    true
+                }
+                Err(error) => {
+                    write_err_result(error.to_string(), 0, output);
+                    true
+                }
+            }
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                write_err_result(
+                    "internal panic in neo_riscv_execute_script".to_string(),
+                    0,
+                    output,
+                );
                 true
             }
-            Err(error) => {
-                write_err_result(error, 0, output);
-                true
-            }
-        }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_script".to_string(),
-                0,
-                output,
-            );
-            true
         }
     }
-}}
+}
 
 /// # Safety
 ///
@@ -725,83 +745,85 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() {
-        return false;
-    }
-    reset_last_fault_ip();
-    crate::reset_last_native_fee_consumed_pico();
+) -> bool {
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let script = slice::from_raw_parts(script_ptr, script_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
             } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
+
+            match execute_script_with_host_and_stack_and_ip(
+                script,
+                initial_stack,
+                initial_ip,
+                context,
+                |api, ip, runtime_context, stack| {
+                    host.context = runtime_context;
+                    let stack_vec = host.syscall_host(api, ip, stack)?;
+                    Ok(HostCallbackResult { stack: stack_vec })
+                },
+            ) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
                 Err(error) => {
-                    write_err_result(error, 0, output);
-                    return true;
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                        output,
+                    );
+                    true
                 }
             }
-        };
-        let mut host = FfiHost {
-            context,
-            fee_consumed_pico: 0,
-            user_data,
-            callback,
-            free_callback,
-        };
-
-        match execute_script_with_host_and_stack_and_ip(
-            script,
-            initial_stack,
-            initial_ip,
-            context,
-            |api, ip, runtime_context, stack| {
-                host.context = runtime_context;
-                let stack_vec = host.syscall_host(api, ip, stack)?;
-                Ok(HostCallbackResult { stack: stack_vec })
-            },
-        ) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
-                true
-            }
-            Err(error) => {
+        })) {
+            Ok(result) => result,
+            Err(_) => {
                 write_err_result(
-                    error,
-                    host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                    "internal panic in neo_riscv_execute_script_with_host".to_string(),
+                    0,
                     output,
                 );
                 true
             }
         }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_script_with_host".to_string(),
-                0,
-                output,
-            );
-            true
-        }
     }
-}}
+}
 
 /// # Safety
 ///
@@ -826,84 +848,87 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() {
-        return false;
-    }
-    reset_last_fault_ip();
-    crate::reset_last_native_fee_consumed_pico();
+) -> bool {
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let script = slice::from_raw_parts(script_ptr, script_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
             } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
+
+            match execute_script_with_host_and_stack_and_ip_with_result_limit(
+                script,
+                initial_stack,
+                initial_ip,
+                result_limit,
+                context,
+                |api, ip, runtime_context, stack| {
+                    host.context = runtime_context;
+                    let stack_vec = host.syscall_host(api, ip, stack)?;
+                    Ok(HostCallbackResult { stack: stack_vec })
+                },
+            ) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
                 Err(error) => {
-                    write_err_result(error, 0, output);
-                    return true;
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                        output,
+                    );
+                    true
                 }
             }
-        };
-        let mut host = FfiHost {
-            context,
-            fee_consumed_pico: 0,
-            user_data,
-            callback,
-            free_callback,
-        };
-
-        match execute_script_with_host_and_stack_and_ip_with_result_limit(
-            script,
-            initial_stack,
-            initial_ip,
-            result_limit,
-            context,
-            |api, ip, runtime_context, stack| {
-                host.context = runtime_context;
-                let stack_vec = host.syscall_host(api, ip, stack)?;
-                Ok(HostCallbackResult { stack: stack_vec })
-            },
-        ) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
-                true
-            }
-            Err(error) => {
+        })) {
+            Ok(result) => result,
+            Err(_) => {
                 write_err_result(
-                    error,
-                    host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                    "internal panic in neo_riscv_execute_script_with_host_and_result_limit"
+                        .to_string(),
+                    0,
                     output,
                 );
                 true
             }
         }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_script_with_host_and_result_limit".to_string(),
-                0,
-                output,
-            );
-            true
-        }
     }
-}}
+}
 
 /// # Safety
 ///
@@ -932,84 +957,87 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() {
-        return false;
-    }
-    reset_last_fault_ip();
-    crate::reset_last_native_fee_consumed_pico();
+) -> bool {
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let script = slice::from_raw_parts(script_ptr, script_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
             } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
+
+            match execute_script_with_host_and_stack_and_ip_and_initializer(
+                script,
+                initial_stack,
+                initial_ip,
+                initializer_ip,
+                context,
+                |api, ip, runtime_context, stack| {
+                    host.context = runtime_context;
+                    let stack_vec = host.syscall_host(api, ip, stack)?;
+                    Ok(HostCallbackResult { stack: stack_vec })
+                },
+            ) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
                 Err(error) => {
-                    write_err_result(error, 0, output);
-                    return true;
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                        output,
+                    );
+                    true
                 }
             }
-        };
-        let mut host = FfiHost {
-            context,
-            fee_consumed_pico: 0,
-            user_data,
-            callback,
-            free_callback,
-        };
-
-        match execute_script_with_host_and_stack_and_ip_and_initializer(
-            script,
-            initial_stack,
-            initial_ip,
-            initializer_ip,
-            context,
-            |api, ip, runtime_context, stack| {
-                host.context = runtime_context;
-                let stack_vec = host.syscall_host(api, ip, stack)?;
-                Ok(HostCallbackResult { stack: stack_vec })
-            },
-        ) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
-                true
-            }
-            Err(error) => {
+        })) {
+            Ok(result) => result,
+            Err(_) => {
                 write_err_result(
-                    error,
-                    host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                    "internal panic in neo_riscv_execute_script_with_host_and_initializer"
+                        .to_string(),
+                    0,
                     output,
                 );
                 true
             }
         }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_script_with_host_and_initializer".to_string(),
-                0,
-                output,
-            );
-            true
-        }
     }
-}}
+}
 
 /// # Safety
 ///
@@ -1034,85 +1062,87 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if script_ptr.is_null() || output.is_null() {
-        return false;
-    }
-    reset_last_fault_ip();
-    crate::reset_last_native_fee_consumed_pico();
+) -> bool {
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let script = slice::from_raw_parts(script_ptr, script_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
             } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
+
+            match execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit(
+                script,
+                initial_stack,
+                initial_ip,
+                initializer_ip,
+                result_limit,
+                context,
+                |api, ip, runtime_context, stack| {
+                    host.context = runtime_context;
+                    let stack_vec = host.syscall_host(api, ip, stack)?;
+                    Ok(HostCallbackResult { stack: stack_vec })
+                },
+            ) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
                 Err(error) => {
-                    write_err_result(error, 0, output);
-                    return true;
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                        output,
+                    );
+                    true
                 }
             }
-        };
-        let mut host = FfiHost {
-            context,
-            fee_consumed_pico: 0,
-            user_data,
-            callback,
-            free_callback,
-        };
-
-        match execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit(
-            script,
-            initial_stack,
-            initial_ip,
-            initializer_ip,
-            result_limit,
-            context,
-            |api, ip, runtime_context, stack| {
-                host.context = runtime_context;
-                let stack_vec = host.syscall_host(api, ip, stack)?;
-                Ok(HostCallbackResult { stack: stack_vec })
-            },
-        ) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
-                true
-            }
-            Err(error) => {
+        })) {
+            Ok(result) => result,
+            Err(_) => {
                 write_err_result(
-                    error,
-                    host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
-                    output,
-                );
-                true
-            }
-        }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
                 "internal panic in neo_riscv_execute_script_with_host_and_initializer_and_result_limit".to_string(),
                 0,
                 output,
             );
-            true
+                true
+            }
         }
     }
-}}
+}
 
 /// # Safety
 ///
@@ -1120,27 +1150,30 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_
 ///   by `neo_riscv_execute_script` or `neo_riscv_execute_script_with_host`.
 /// - Each result must be freed at most once.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExecutionResult) { unsafe {
-    if result.is_null() {
-        return;
+pub unsafe extern "C" fn neo_riscv_free_execution_result(result: *mut NativeExecutionResult) {
+    unsafe {
+        if result.is_null() {
+            return;
+        }
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let result = &mut *result;
+            if !result.stack_ptr.is_null() {
+                free_native_stack_items(result.stack_ptr, result.stack_len);
+                result.stack_ptr = ptr::null_mut();
+                result.stack_len = 0;
+            }
+
+            if !result.error_ptr.is_null() {
+                let slice =
+                    ptr::slice_from_raw_parts_mut(result.error_ptr.cast_mut(), result.error_len);
+                drop(Box::from_raw(slice));
+                result.error_ptr = ptr::null_mut();
+                result.error_len = 0;
+            }
+        }));
     }
-
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let result = &mut *result;
-        if !result.stack_ptr.is_null() {
-            free_native_stack_items(result.stack_ptr, result.stack_len);
-            result.stack_ptr = ptr::null_mut();
-            result.stack_len = 0;
-        }
-
-        if !result.error_ptr.is_null() {
-            let slice = ptr::slice_from_raw_parts_mut(result.error_ptr, result.error_len);
-            drop(Box::from_raw(slice));
-            result.error_ptr = ptr::null_mut();
-            result.error_len = 0;
-        }
-    }));
-}}
+}
 
 /// Execute a native RISC-V contract binary directly via PolkaVM.
 ///
@@ -1172,92 +1205,94 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract(
     callback: NativeHostCallback,
     free_callback: NativeHostFreeCallback,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
-        return false;
-    }
+) -> bool {
+    unsafe {
+        if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
+            return false;
+        }
 
-    crate::reset_last_native_fee_consumed_pico();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let binary = slice::from_raw_parts(binary_ptr, binary_len);
-        let method_bytes = slice::from_raw_parts(method_ptr, method_len);
-        let method = match std::str::from_utf8(method_bytes) {
-            Ok(s) => s,
-            Err(_) => {
-                write_err_result("invalid UTF-8 method name".to_string(), 0, output);
-                return true;
-            }
-        };
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
-            } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
-                Err(error) => {
-                    write_err_result(error, 0, output);
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let binary = slice::from_raw_parts(binary_ptr, binary_len);
+            let method_bytes = slice::from_raw_parts(method_ptr, method_len);
+            let method = match std::str::from_utf8(method_bytes) {
+                Ok(s) => s,
+                Err(_) => {
+                    write_err_result("invalid UTF-8 method name".to_string(), 0, output);
                     return true;
                 }
-            }
-        };
-        let mut host = FfiHost {
-            context,
-            fee_consumed_pico: 0,
-            user_data,
-            callback,
-            free_callback,
-        };
+            };
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
+            } else {
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
 
-        match crate::execute_native_contract(
-            binary,
-            method,
-            initial_stack,
-            context,
-            |api, ip, runtime_context, stack| {
-                host.context = runtime_context;
-                let stack_vec = host.syscall_host(api, ip, stack)?;
-                Ok(crate::HostCallbackResult { stack: stack_vec })
-            },
-        ) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
-                true
+            match crate::execute_native_contract(
+                binary,
+                method,
+                initial_stack,
+                context,
+                |api, ip, runtime_context, stack| {
+                    host.context = runtime_context;
+                    let stack_vec = host.syscall_host(api, ip, stack)?;
+                    Ok(crate::HostCallbackResult { stack: stack_vec })
+                },
+            ) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
+                Err(error) => {
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico
+                            .saturating_add(crate::last_native_fee_consumed_pico()),
+                        output,
+                    );
+                    true
+                }
             }
-            Err(error) => {
+        })) {
+            Ok(result) => result,
+            Err(_) => {
                 write_err_result(
-                    error,
-                    host.fee_consumed_pico
-                        .saturating_add(crate::last_native_fee_consumed_pico()),
+                    "internal panic in neo_riscv_execute_native_contract".to_string(),
+                    0,
                     output,
                 );
                 true
             }
         }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_native_contract".to_string(),
-                0,
-                output,
-            );
-            true
-        }
     }
-}}
+}
 
 /// Execute a native RISC-V contract using the built-in Rust host implementation
 /// for common syscalls. This bypasses the external host callback boundary.
@@ -1283,70 +1318,72 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
-        return false;
-    }
+) -> bool {
+    unsafe {
+        if binary_ptr.is_null() || method_ptr.is_null() || output.is_null() {
+            return false;
+        }
 
-    crate::reset_last_native_fee_consumed_pico();
+        crate::reset_last_native_fee_consumed_pico();
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let binary = slice::from_raw_parts(binary_ptr, binary_len);
-        let method_bytes = slice::from_raw_parts(method_ptr, method_len);
-        let method = match std::str::from_utf8(method_bytes) {
-            Ok(s) => s,
-            Err(_) => {
-                write_err_result("invalid UTF-8 method name".to_string(), 0, output);
-                return true;
-            }
-        };
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
-            } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
-                Err(error) => {
-                    write_err_result(error, 0, output);
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let binary = slice::from_raw_parts(binary_ptr, binary_len);
+            let method_bytes = slice::from_raw_parts(method_ptr, method_len);
+            let method = match std::str::from_utf8(method_bytes) {
+                Ok(s) => s,
+                Err(_) => {
+                    write_err_result("invalid UTF-8 method name".to_string(), 0, output);
                     return true;
                 }
-            }
-        };
+            };
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
+            } else {
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
 
-        match execute_native_contract_builtin(binary, method, initial_stack, context) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
+            match execute_native_contract_builtin(binary, method, initial_stack, context) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
+                Err(error) => {
+                    write_err_result(error, crate::last_native_fee_consumed_pico(), output);
+                    true
+                }
+            }
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                write_err_result(
+                    "internal panic in neo_riscv_execute_native_contract_builtin".to_string(),
+                    0,
+                    output,
+                );
                 true
             }
-            Err(error) => {
-                write_err_result(error, crate::last_native_fee_consumed_pico(), output);
-                true
-            }
-        }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_native_contract_builtin".to_string(),
-                0,
-                output,
-            );
-            true
         }
     }
-}}
+}
 
 /// Execute a native RISC-V contract using the built-in Rust host implementation
 /// and a precomputed method id, bypassing method-name UTF-8/hash work.
@@ -1370,61 +1407,63 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_by_id(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeExecutionResult,
-) -> bool { unsafe {
-    if binary_ptr.is_null() || output.is_null() {
-        return false;
-    }
+) -> bool {
+    unsafe {
+        if binary_ptr.is_null() || output.is_null() {
+            return false;
+        }
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        crate::reset_last_native_fee_consumed_pico();
-        let binary = slice::from_raw_parts(binary_ptr, binary_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::reset_last_native_fee_consumed_pico();
+            let binary = slice::from_raw_parts(binary_ptr, binary_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
             } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
-        let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-            Vec::new()
-        } else {
-            match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                Ok(stack) => stack,
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+
+            match execute_native_contract_builtin_by_id(binary, method_id, initial_stack, context) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
                 Err(error) => {
-                    write_err_result(error, 0, output);
-                    return true;
+                    write_err_result(error, crate::last_native_fee_consumed_pico(), output);
+                    true
                 }
             }
-        };
-
-        match execute_native_contract_builtin_by_id(binary, method_id, initial_stack, context) {
-            Ok(result) => {
-                let fee_consumed_pico = result.fee_consumed_pico;
-                write_ok_result(result, fee_consumed_pico, output);
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                write_err_result(
+                    "internal panic in neo_riscv_execute_native_contract_builtin_by_id".to_string(),
+                    0,
+                    output,
+                );
                 true
             }
-            Err(error) => {
-                write_err_result(error, crate::last_native_fee_consumed_pico(), output);
-                true
-            }
-        }
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            write_err_result(
-                "internal panic in neo_riscv_execute_native_contract_builtin_by_id".to_string(),
-                0,
-                output,
-            );
-            true
         }
     }
-}}
+}
 
 /// Execute a native RISC-V method-id entry point that returns a single `i64`.
 ///
@@ -1444,176 +1483,178 @@ pub unsafe extern "C" fn neo_riscv_execute_native_contract_builtin_i64_by_id(
     gas_left: i64,
     exec_fee_factor_pico: i64,
     output: *mut NativeIntegerExecutionResult,
-) -> bool { unsafe {
-    if binary_ptr.is_null() || output.is_null() {
-        return false;
-    }
+) -> bool {
+    unsafe {
+        if binary_ptr.is_null() || output.is_null() {
+            return false;
+        }
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        crate::reset_last_native_fee_consumed_pico();
-        let binary = slice::from_raw_parts(binary_ptr, binary_len);
-        let context = RuntimeContext {
-            trigger,
-            network,
-            address_version,
-            timestamp: if timestamp == 0 {
-                None
-            } else {
-                Some(timestamp)
-            },
-            gas_left,
-            exec_fee_factor_pico,
-        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::reset_last_native_fee_consumed_pico();
+            let binary = slice::from_raw_parts(binary_ptr, binary_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
 
-        let aux_size = 0;
-        let mut cached_instance =
-            match crate::runtime_cache::cached_native_execution_instance(binary, aux_size) {
-                Ok(instance) => instance,
+            let aux_size = 0;
+            let mut cached_instance =
+                match crate::runtime_cache::cached_native_execution_instance(binary, aux_size) {
+                    Ok(instance) => instance,
+                    Err(error) => {
+                        let bytes = error.into_bytes().into_boxed_slice();
+                        (*output).fee_consumed_pico = 0;
+                        (*output).state = 1;
+                        (*output).value = 0;
+                        (*output).error_len = bytes.len();
+                        (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
+                        return true;
+                    }
+                };
+            let instance = cached_instance.instance_mut();
+            let mut host = crate::bridge::ClosureHost::new_builtin(context);
+            let native_gas_limit = crate::pricing::native_instruction_limit(&host.context);
+            instance.set_gas(native_gas_limit);
+
+            let status: u32 = match instance.call_typed_and_get_result(
+                &mut host,
+                "execute_method_i64",
+                (method_id, 0u32, 0u32),
+            ) {
+                Ok(status) => status,
                 Err(error) => {
-                    let bytes = error.into_bytes().into_boxed_slice();
-                    (*output).fee_consumed_pico = 0;
+                    let charge_error = crate::charge_native_metered_instructions(
+                        instance,
+                        &mut host,
+                        native_gas_limit,
+                    )
+                    .err();
+                    let message = charge_error
+                        .as_deref()
+                        .or_else(|| crate::native_call_error(&error))
+                        .map(str::to_string)
+                        .unwrap_or_else(|| format!("native contract execute failed: {error:?}"));
+                    let bytes = message.into_bytes().into_boxed_slice();
+                    (*output).fee_consumed_pico = host.fee_consumed_pico;
                     (*output).state = 1;
                     (*output).value = 0;
                     (*output).error_len = bytes.len();
-                    (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
+                    (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
                     return true;
                 }
             };
-        let instance = cached_instance.instance_mut();
-        let mut host = crate::bridge::ClosureHost::new_builtin(context);
-        let native_gas_limit = crate::pricing::native_instruction_limit(&host.context);
-        instance.set_gas(native_gas_limit);
 
-        let status: u32 = match instance.call_typed_and_get_result(
-            &mut host,
-            "execute_method_i64",
-            (method_id, 0u32, 0u32),
-        ) {
-            Ok(status) => status,
-            Err(error) => {
-                let charge_error = crate::charge_native_metered_instructions(
-                    instance,
-                    &mut host,
-                    native_gas_limit,
-                )
-                .err();
-                let message = charge_error
-                    .as_deref()
-                    .or_else(|| crate::native_call_error(&error))
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("native contract execute failed: {error:?}"));
-                let bytes = message.into_bytes().into_boxed_slice();
+            if status == 1 {
+                let lo: u32 =
+                    match instance.call_typed_and_get_result(&mut host, "get_result_i64_lo", ()) {
+                        Ok(v) => v,
+                        Err(error) => {
+                            let charge_error = crate::charge_native_metered_instructions(
+                                instance,
+                                &mut host,
+                                native_gas_limit,
+                            )
+                            .err();
+                            let message = charge_error
+                                .as_deref()
+                                .or_else(|| crate::native_call_error(&error))
+                                .map(str::to_string)
+                                .unwrap_or_else(|| {
+                                    format!("native get_result_i64_lo failed: {error:?}")
+                                });
+                            let bytes = message.into_bytes().into_boxed_slice();
+                            (*output).fee_consumed_pico = host.fee_consumed_pico;
+                            (*output).state = 1;
+                            (*output).value = 0;
+                            (*output).error_len = bytes.len();
+                            (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
+                            return true;
+                        }
+                    };
+                let hi: u32 =
+                    match instance.call_typed_and_get_result(&mut host, "get_result_i64_hi", ()) {
+                        Ok(v) => v,
+                        Err(error) => {
+                            let charge_error = crate::charge_native_metered_instructions(
+                                instance,
+                                &mut host,
+                                native_gas_limit,
+                            )
+                            .err();
+                            let message = charge_error
+                                .as_deref()
+                                .or_else(|| crate::native_call_error(&error))
+                                .map(str::to_string)
+                                .unwrap_or_else(|| {
+                                    format!("native get_result_i64_hi failed: {error:?}")
+                                });
+                            let bytes = message.into_bytes().into_boxed_slice();
+                            (*output).fee_consumed_pico = host.fee_consumed_pico;
+                            (*output).state = 1;
+                            (*output).value = 0;
+                            (*output).error_len = bytes.len();
+                            (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
+                            return true;
+                        }
+                    };
+                if let Err(error) =
+                    crate::charge_native_metered_instructions(instance, &mut host, native_gas_limit)
+                {
+                    let bytes = error.into_bytes().into_boxed_slice();
+                    (*output).fee_consumed_pico = host.fee_consumed_pico;
+                    (*output).state = 1;
+                    (*output).value = 0;
+                    (*output).error_len = bytes.len();
+                    (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
+                    return true;
+                }
                 (*output).fee_consumed_pico = host.fee_consumed_pico;
-                (*output).state = 1;
-                (*output).value = 0;
-                (*output).error_len = bytes.len();
-                (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
+                (*output).state = 0;
+                (*output).value = (((hi as u64) << 32) | (lo as u64)) as i64;
+                (*output).error_len = 0;
+                (*output).error_ptr = std::ptr::null_mut();
                 return true;
             }
-        };
 
-        if status == 1 {
-            let lo: u32 =
-                match instance.call_typed_and_get_result(&mut host, "get_result_i64_lo", ()) {
-                    Ok(v) => v,
-                    Err(error) => {
-                        let charge_error = crate::charge_native_metered_instructions(
-                            instance,
-                            &mut host,
-                            native_gas_limit,
-                        )
-                        .err();
-                        let message = charge_error
-                            .as_deref()
-                            .or_else(|| crate::native_call_error(&error))
-                            .map(str::to_string)
-                            .unwrap_or_else(|| {
-                                format!("native get_result_i64_lo failed: {error:?}")
-                            });
-                        let bytes = message.into_bytes().into_boxed_slice();
-                        (*output).fee_consumed_pico = host.fee_consumed_pico;
-                        (*output).state = 1;
-                        (*output).value = 0;
-                        (*output).error_len = bytes.len();
-                        (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
-                        return true;
-                    }
-                };
-            let hi: u32 =
-                match instance.call_typed_and_get_result(&mut host, "get_result_i64_hi", ()) {
-                    Ok(v) => v,
-                    Err(error) => {
-                        let charge_error = crate::charge_native_metered_instructions(
-                            instance,
-                            &mut host,
-                            native_gas_limit,
-                        )
-                        .err();
-                        let message = charge_error
-                            .as_deref()
-                            .or_else(|| crate::native_call_error(&error))
-                            .map(str::to_string)
-                            .unwrap_or_else(|| {
-                                format!("native get_result_i64_hi failed: {error:?}")
-                            });
-                        let bytes = message.into_bytes().into_boxed_slice();
-                        (*output).fee_consumed_pico = host.fee_consumed_pico;
-                        (*output).state = 1;
-                        (*output).value = 0;
-                        (*output).error_len = bytes.len();
-                        (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
-                        return true;
-                    }
-                };
-            if let Err(error) =
-                crate::charge_native_metered_instructions(instance, &mut host, native_gas_limit)
-            {
-                let bytes = error.into_bytes().into_boxed_slice();
-                (*output).fee_consumed_pico = host.fee_consumed_pico;
-                (*output).state = 1;
-                (*output).value = 0;
-                (*output).error_len = bytes.len();
-                (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
-                return true;
-            }
+            let bytes = if status == 0 {
+                "native integer method faulted"
+                    .as_bytes()
+                    .to_vec()
+                    .into_boxed_slice()
+            } else {
+                "native method did not return an integer"
+                    .as_bytes()
+                    .to_vec()
+                    .into_boxed_slice()
+            };
             (*output).fee_consumed_pico = host.fee_consumed_pico;
-            (*output).state = 0;
-            (*output).value = (((hi as u64) << 32) | (lo as u64)) as i64;
-            (*output).error_len = 0;
-            (*output).error_ptr = std::ptr::null_mut();
-            return true;
-        }
-
-        let bytes = if status == 0 {
-            "native integer method faulted"
-                .as_bytes()
-                .to_vec()
-                .into_boxed_slice()
-        } else {
-            "native method did not return an integer"
-                .as_bytes()
-                .to_vec()
-                .into_boxed_slice()
-        };
-        (*output).fee_consumed_pico = host.fee_consumed_pico;
-        (*output).state = 1;
-        (*output).value = 0;
-        (*output).error_len = bytes.len();
-        (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
-        true
-    })) {
-        Ok(result) => result,
-        Err(_) => {
-            let bytes = "internal panic in neo_riscv_execute_native_contract_builtin_i64_by_id"
-                .as_bytes()
-                .to_vec()
-                .into_boxed_slice();
-            (*output).fee_consumed_pico = 0;
             (*output).state = 1;
             (*output).value = 0;
             (*output).error_len = bytes.len();
-            (*output).error_ptr = Box::into_raw(bytes) as *mut u8;
+            (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
             true
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                let bytes = "internal panic in neo_riscv_execute_native_contract_builtin_i64_by_id"
+                    .as_bytes()
+                    .to_vec()
+                    .into_boxed_slice();
+                (*output).fee_consumed_pico = 0;
+                (*output).state = 1;
+                (*output).value = 0;
+                (*output).error_len = bytes.len();
+                (*output).error_ptr = Box::into_raw(bytes).cast::<u8>() as *const u8;
+                true
+            }
         }
     }
-}}
+}

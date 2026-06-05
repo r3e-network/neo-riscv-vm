@@ -1,5 +1,5 @@
 use neo_riscv_abi::{OpCode, StackValue, VmState};
-use neo_riscv_host::{execute_script_with_context, PolkaVmRuntime, RuntimeContext};
+use neo_riscv_host::{PolkaVmRuntime, RuntimeContext, execute_script_with_context};
 
 #[test]
 fn runtime_initializes_for_gas_validation() {

@@ -2,14 +2,14 @@ mod builtin_storage;
 mod inline_storage_entry;
 mod small_storage_entry;
 
-use crate::{pricing::charge_opcode, HostCallbackResult, RuntimeContext};
+use crate::{HostCallbackResult, RuntimeContext, pricing::charge_opcode};
 use builtin_storage::BuiltinStorage;
 use neo_riscv_abi::{
-    callback_codec, fast_codec, STACK_VALUE_CODEC_TAG_ARRAY, STACK_VALUE_CODEC_TAG_BIG_INTEGER,
-    STACK_VALUE_CODEC_TAG_BOOLEAN, STACK_VALUE_CODEC_TAG_BUFFER, STACK_VALUE_CODEC_TAG_BYTESTRING,
-    STACK_VALUE_CODEC_TAG_INTEGER, STACK_VALUE_CODEC_TAG_INTEROP, STACK_VALUE_CODEC_TAG_ITERATOR,
-    STACK_VALUE_CODEC_TAG_MAP, STACK_VALUE_CODEC_TAG_NULL, STACK_VALUE_CODEC_TAG_POINTER,
-    STACK_VALUE_CODEC_TAG_STRUCT,
+    STACK_VALUE_CODEC_TAG_ARRAY, STACK_VALUE_CODEC_TAG_BIG_INTEGER, STACK_VALUE_CODEC_TAG_BOOLEAN,
+    STACK_VALUE_CODEC_TAG_BUFFER, STACK_VALUE_CODEC_TAG_BYTESTRING, STACK_VALUE_CODEC_TAG_INTEGER,
+    STACK_VALUE_CODEC_TAG_INTEROP, STACK_VALUE_CODEC_TAG_ITERATOR, STACK_VALUE_CODEC_TAG_MAP,
+    STACK_VALUE_CODEC_TAG_NULL, STACK_VALUE_CODEC_TAG_POINTER, STACK_VALUE_CODEC_TAG_STRUCT,
+    callback_codec, fast_codec,
 };
 use neo_riscv_guest::SyscallProvider;
 use polkavm::Linker;
@@ -137,28 +137,28 @@ fn host_call_import(
     if let Some(storage) = host.builtin_storage.as_mut()
         && let Some(response) =
             try_handle_builtin_storage_syscall(api, &host.callback_read_buf, storage)
-        {
-            let bytes = match &response {
-                BuiltinResponse::Static(bytes) => *bytes,
-                BuiltinResponse::Owned(bytes) => bytes.as_slice(),
-            };
-            if bytes.len() > result_cap as usize {
-                eprintln!(
-                    "[neo-riscv-host] builtin host_call(api={api}): result buffer too small (need {} bytes, cap={result_cap})",
-                    bytes.len()
-                );
-                return 0;
-            }
-            host.last_host_call_stage = 5;
-            if let Err(e) = caller.instance.write_memory(result_ptr, bytes) {
-                eprintln!(
-                    "[neo-riscv-host] builtin host_call(api={api}): write_memory failed at ptr=0x{result_ptr:08x}: {e}"
-                );
-                return 0;
-            }
-            host.last_host_call_stage = 6;
-            return bytes.len() as u32;
+    {
+        let bytes = match &response {
+            BuiltinResponse::Static(bytes) => *bytes,
+            BuiltinResponse::Owned(bytes) => bytes.as_slice(),
+        };
+        if bytes.len() > result_cap as usize {
+            eprintln!(
+                "[neo-riscv-host] builtin host_call(api={api}): result buffer too small (need {} bytes, cap={result_cap})",
+                bytes.len()
+            );
+            return 0;
         }
+        host.last_host_call_stage = 5;
+        if let Err(e) = caller.instance.write_memory(result_ptr, bytes) {
+            eprintln!(
+                "[neo-riscv-host] builtin host_call(api={api}): write_memory failed at ptr=0x{result_ptr:08x}: {e}"
+            );
+            return 0;
+        }
+        host.last_host_call_stage = 6;
+        return bytes.len() as u32;
+    }
 
     let stack: Vec<neo_riscv_abi::StackValue> = match fast_codec::decode_stack(
         &host.callback_read_buf,
@@ -166,8 +166,8 @@ fn host_call_import(
         Ok(s) => s,
         Err(e) => {
             eprintln!(
-                    "[neo-riscv-host] host_call(api={api}): fast_codec deserialization failed (len={stack_len}): {e}"
-                );
+                "[neo-riscv-host] host_call(api={api}): fast_codec deserialization failed (len={stack_len}): {e}"
+            );
             return 0;
         }
     };
@@ -230,7 +230,9 @@ fn host_storage_get_import(
         };
         value
     } else {
-        if key_len_usize > MAX_STORAGE_KEY_LEN { return u32::MAX; }
+        if key_len_usize > MAX_STORAGE_KEY_LEN {
+            return u32::MAX;
+        }
         let mut key_heap = vec![0u8; key_len_usize];
         if caller
             .instance
@@ -284,7 +286,9 @@ fn host_storage_contains_import(
                 .is_some(),
         )
     } else {
-        if key_len_usize > MAX_STORAGE_KEY_LEN { return 0; }
+        if key_len_usize > MAX_STORAGE_KEY_LEN {
+            return 0;
+        }
         let mut key_heap = vec![0u8; key_len_usize];
         if caller
             .instance
@@ -416,8 +420,12 @@ fn host_storage_put_and_contains_import(
         return 1;
     }
 
-    if key_len_usize > MAX_STORAGE_KEY_LEN { return u32::MAX; }
-    if value_len_usize > MAX_STORAGE_VALUE_LEN { return u32::MAX; }
+    if key_len_usize > MAX_STORAGE_KEY_LEN {
+        return u32::MAX;
+    }
+    if value_len_usize > MAX_STORAGE_VALUE_LEN {
+        return u32::MAX;
+    }
     let mut key_heap = vec![0u8; key_len_usize];
     let mut value_heap = vec![0u8; value_len_usize];
     if caller
@@ -480,8 +488,8 @@ fn try_handle_builtin_storage_syscall(
     raw_stack: &[u8],
     storage: &mut BuiltinStorage,
 ) -> Option<BuiltinResponse> {
-    use neo_riscv_abi::interop_hash;
     use neo_riscv_abi::StackValue;
+    use neo_riscv_abi::interop_hash;
 
     if api == interop_hash("System.Storage.GetContext")
         || api == interop_hash("System.Storage.GetReadOnlyContext")
@@ -691,118 +699,6 @@ fn read_u32(raw: &[u8], offset: usize) -> Option<u32> {
     Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{BuiltinStorage, INLINE_VALUE_CAP, SMALL_ENTRY_SLOTS};
-
-    #[test]
-    fn small_entry_round_trip_stays_in_small_cache() {
-        let mut storage = BuiltinStorage::new();
-        storage.insert(&[0x01, 0x02], &[0x0a, 0x0b, 0x0c]);
-        assert_eq!(storage.get(&[0x01, 0x02]), Some(&[0x0a, 0x0b, 0x0c][..]));
-
-        storage.insert(&[0x01, 0x02], &[0x7f]);
-        assert_eq!(storage.get(&[0x01, 0x02]), Some(&[0x7f][..]));
-    }
-
-    #[test]
-    fn small_inline_slots_can_hold_multiple_entries() {
-        let mut storage = BuiltinStorage::new();
-        for i in 0u8..6 {
-            storage.insert(&[i], &[i + 10]);
-        }
-
-        for i in 0u8..6 {
-            assert_eq!(storage.get(&[i]), Some(&[i + 10][..]));
-        }
-    }
-
-    #[test]
-    fn large_entry_falls_back_without_breaking_small_entries() {
-        let mut storage = BuiltinStorage::new();
-        storage.insert(&[0x01], &[0x11]);
-        storage.insert(&[0x02; 40], &[0x03; 140]);
-
-        assert_eq!(storage.get(&[0x01]), Some(&[0x11][..]));
-        assert_eq!(storage.get(&[0x02; 40]), Some(&[0x03; 140][..]));
-    }
-
-    #[test]
-    fn remove_clears_small_and_heap_entries() {
-        let mut storage = BuiltinStorage::new();
-        storage.insert(&[0x01], &[0x10]);
-        storage.insert(&[0x02; 40], &[0x20; 140]);
-
-        storage.remove(&[0x01]);
-        storage.remove(&[0x02; 40]);
-
-        assert_eq!(storage.get(&[0x01]), None);
-        assert_eq!(storage.get(&[0x02; 40]), None);
-    }
-
-    #[test]
-    fn get_promoting_rehydrates_hot_small_from_inline_entries() {
-        let mut storage = BuiltinStorage::new();
-        for i in 0u8..SMALL_ENTRY_SLOTS as u8 {
-            storage.insert(&[i], &[i + 1]);
-        }
-
-        storage.insert(&[0x55], &[0x66]);
-        storage.insert(&[0x77], &[0x88]);
-        storage.hot_small = None;
-
-        assert_eq!(storage.get_promoting(&[0x55]), Some(&[0x66][..]));
-        assert_eq!(
-            storage.hot_small.as_ref().map(|entry| entry.key()),
-            Some(&[0x55][..])
-        );
-        assert_eq!(
-            storage.hot_small.as_ref().map(|entry| entry.value()),
-            Some(&[0x66][..])
-        );
-    }
-
-    #[test]
-    fn insert_migrates_small_entries_without_returning_stale_values() {
-        let mut storage = BuiltinStorage::new();
-        let key = [0x01];
-        let large_value = [0xAB; 12];
-
-        storage.insert(&key, &[0x11]);
-        storage.insert(&key, &large_value);
-
-        assert_eq!(storage.get(&key), Some(large_value.as_slice()));
-        assert!(
-            storage.hot_small.is_none(),
-            "non-small updates must evict stale hot_small entries"
-        );
-    }
-
-    #[test]
-    fn insert_migrates_inline_entries_to_heap_without_returning_stale_values() {
-        let mut storage = BuiltinStorage::new();
-        for i in 0u8..SMALL_ENTRY_SLOTS as u8 {
-            storage.insert(&[i], &[i + 1]);
-        }
-
-        let key = [0x55];
-        let inline_value = [0xBC; 12];
-        let heap_value = [0xCD; INLINE_VALUE_CAP + 8];
-
-        storage.insert(&key, &inline_value);
-        storage.insert(&key, &heap_value);
-
-        assert_eq!(storage.get(&key), Some(heap_value.as_slice()));
-        assert!(
-            storage
-                .hot_small
-                .as_ref()
-                .is_none_or(|entry| !entry.matches(&key)),
-            "large updates must not leave stale hot_small entries for the migrated key"
-        );
-    }
-}
-
 pub(crate) struct ClosureHost {
     pub(crate) context: RuntimeContext,
     pub(crate) fee_consumed_pico: i64,
@@ -928,12 +824,14 @@ where
         RuntimeContext,
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
-{ unsafe {
-    // SAFETY: callback_data points to a live &mut F stored by ClosureHost::new().
-    // The caller (ClosureHost::invoke) guarantees the pointer is valid and uniquely borrowed.
-    let callback = &mut *(callback_data as *mut F);
-    callback(api, ip, context, stack)
-}}
+{
+    unsafe {
+        // SAFETY: callback_data points to a live &mut F stored by ClosureHost::new().
+        // The caller (ClosureHost::invoke) guarantees the pointer is valid and uniquely borrowed.
+        let callback = &mut *(callback_data as *mut F);
+        callback(api, ip, context, stack)
+    }
+}
 
 pub(crate) fn read_guest_trace(
     instance: &mut polkavm::Instance<ClosureHost>,
@@ -963,7 +861,10 @@ pub(crate) fn read_guest_panic(
     }
     // Cap allocation size to prevent OOM from corrupted guest
     if len > MAX_DIAGNOSTIC_SIZE {
-        return Some(format!("panic message too large: {} bytes (max {})", len, MAX_DIAGNOSTIC_SIZE));
+        return Some(format!(
+            "panic message too large: {} bytes (max {})",
+            len, MAX_DIAGNOSTIC_SIZE
+        ));
     }
     let ptr = instance
         .call_typed_and_get_result::<u32, ()>(host, "get_panic_ptr", ())
@@ -1053,5 +954,117 @@ impl SyscallProvider for ClosureHost {
         let result = self.invoke(api, ip, stack)?;
         *stack = result.stack;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BuiltinStorage, INLINE_VALUE_CAP, SMALL_ENTRY_SLOTS};
+
+    #[test]
+    fn small_entry_round_trip_stays_in_small_cache() {
+        let mut storage = BuiltinStorage::new();
+        storage.insert(&[0x01, 0x02], &[0x0a, 0x0b, 0x0c]);
+        assert_eq!(storage.get(&[0x01, 0x02]), Some(&[0x0a, 0x0b, 0x0c][..]));
+
+        storage.insert(&[0x01, 0x02], &[0x7f]);
+        assert_eq!(storage.get(&[0x01, 0x02]), Some(&[0x7f][..]));
+    }
+
+    #[test]
+    fn small_inline_slots_can_hold_multiple_entries() {
+        let mut storage = BuiltinStorage::new();
+        for i in 0u8..6 {
+            storage.insert(&[i], &[i + 10]);
+        }
+
+        for i in 0u8..6 {
+            assert_eq!(storage.get(&[i]), Some(&[i + 10][..]));
+        }
+    }
+
+    #[test]
+    fn large_entry_falls_back_without_breaking_small_entries() {
+        let mut storage = BuiltinStorage::new();
+        storage.insert(&[0x01], &[0x11]);
+        storage.insert(&[0x02; 40], &[0x03; 140]);
+
+        assert_eq!(storage.get(&[0x01]), Some(&[0x11][..]));
+        assert_eq!(storage.get(&[0x02; 40]), Some(&[0x03; 140][..]));
+    }
+
+    #[test]
+    fn remove_clears_small_and_heap_entries() {
+        let mut storage = BuiltinStorage::new();
+        storage.insert(&[0x01], &[0x10]);
+        storage.insert(&[0x02; 40], &[0x20; 140]);
+
+        storage.remove(&[0x01]);
+        storage.remove(&[0x02; 40]);
+
+        assert_eq!(storage.get(&[0x01]), None);
+        assert_eq!(storage.get(&[0x02; 40]), None);
+    }
+
+    #[test]
+    fn get_promoting_rehydrates_hot_small_from_inline_entries() {
+        let mut storage = BuiltinStorage::new();
+        for i in 0u8..SMALL_ENTRY_SLOTS as u8 {
+            storage.insert(&[i], &[i + 1]);
+        }
+
+        storage.insert(&[0x55], &[0x66]);
+        storage.insert(&[0x77], &[0x88]);
+        storage.hot_small = None;
+
+        assert_eq!(storage.get_promoting(&[0x55]), Some(&[0x66][..]));
+        assert_eq!(
+            storage.hot_small.as_ref().map(|entry| entry.key()),
+            Some(&[0x55][..])
+        );
+        assert_eq!(
+            storage.hot_small.as_ref().map(|entry| entry.value()),
+            Some(&[0x66][..])
+        );
+    }
+
+    #[test]
+    fn insert_migrates_small_entries_without_returning_stale_values() {
+        let mut storage = BuiltinStorage::new();
+        let key = [0x01];
+        let large_value = [0xAB; 12];
+
+        storage.insert(&key, &[0x11]);
+        storage.insert(&key, &large_value);
+
+        assert_eq!(storage.get(&key), Some(large_value.as_slice()));
+        assert!(
+            storage.hot_small.is_none(),
+            "non-small updates must evict stale hot_small entries"
+        );
+    }
+
+    #[test]
+    fn insert_migrates_inline_entries_to_heap_without_returning_stale_values() {
+        let mut storage = BuiltinStorage::new();
+        for i in 0u8..SMALL_ENTRY_SLOTS as u8 {
+            storage.insert(&[i], &[i + 1]);
+        }
+
+        let key = [0x55];
+        let inline_value = [0xBC; 12];
+        let heap_value = [0xCD; INLINE_VALUE_CAP + 8];
+
+        storage.insert(&key, &inline_value);
+        storage.insert(&key, &heap_value);
+
+        assert_eq!(storage.get(&key), Some(heap_value.as_slice()));
+        assert!(
+            storage
+                .hot_small
+                .as_ref()
+                .is_none_or(|entry| !entry.matches(&key)),
+            "large updates must not leave stale hot_small entries for the migrated key"
+        );
     }
 }

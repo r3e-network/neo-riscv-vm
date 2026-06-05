@@ -4,7 +4,7 @@
 ///   C# → nccs --target riscv → Rust → PolkaVM
 /// can be loaded and executed on neo-riscv-host without trapping.
 use neo_riscv_abi::{StackValue, VmState};
-use neo_riscv_host::{execute_native_contract, HostCallbackResult, RuntimeContext};
+use neo_riscv_host::{HostCallbackResult, RuntimeContext, execute_native_contract};
 use std::fs;
 use std::path::Path;
 

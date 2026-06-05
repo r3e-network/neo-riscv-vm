@@ -1,8 +1,8 @@
 use alloc::{string::String, vec::Vec};
 
 use neo_riscv_abi::{
-    stack_value_as_bool, stack_value_as_fixed_bytes, stack_value_as_i64, stack_value_as_string,
-    stack_value_as_u8, StackValue,
+    StackValue, stack_value_as_bool, stack_value_as_fixed_bytes, stack_value_as_i64,
+    stack_value_as_string, stack_value_as_u8,
 };
 
 use super::{call_native, call_native_read_only};

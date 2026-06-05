@@ -1,4 +1,4 @@
-use neo_riscv_abi::{stack_value_as_bool, stack_value_as_fixed_bytes, StackValue};
+use neo_riscv_abi::{StackValue, stack_value_as_bool, stack_value_as_fixed_bytes};
 
 use super::call_native_read_only;
 

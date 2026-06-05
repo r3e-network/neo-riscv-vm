@@ -1,5 +1,5 @@
-use criterion::{black_box, Criterion};
-use neo_riscv_abi::{fast_codec, StackValue};
+use criterion::{Criterion, black_box};
+use neo_riscv_abi::{StackValue, fast_codec};
 
 pub fn bench(c: &mut Criterion) {
     let stack = vec![

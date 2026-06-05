@@ -1,4 +1,4 @@
-use crate::bridge::{register_host_functions, ClosureHost};
+use crate::bridge::{ClosureHost, register_host_functions};
 mod cached_execution_instance;
 mod cached_native_execution_instance;
 mod native_cache_key;
@@ -227,12 +227,10 @@ fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, St
     Ok(guard.entry(key).or_insert_with(|| module.clone()).clone())
 }
 
-fn hash_binary(binary: &[u8]) -> u64 {
+fn hash_binary(binary: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(binary);
-    let result = hasher.finalize();
-    // Use first 8 bytes of SHA-256 as cache key
-    u64::from_le_bytes(result[..8].try_into().unwrap())
+    hasher.finalize().into()
 }
 
 fn cached_engine() -> Result<&'static Engine, String> {

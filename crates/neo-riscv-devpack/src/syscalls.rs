@@ -319,7 +319,11 @@ pub fn crypto_verify_signature(message: &[u8], pubkey: &[u8], signature: &[u8]) 
 
 /// Signature verification with explicit error propagation.
 /// Returns `Ok(true/false)` on success, `Err(...)` if the host call fails.
-pub fn try_crypto_verify_signature(message: &[u8], pubkey: &[u8], signature: &[u8]) -> Result<bool, String> {
+pub fn try_crypto_verify_signature(
+    message: &[u8],
+    pubkey: &[u8],
+    signature: &[u8],
+) -> Result<bool, String> {
     let stack = vec![
         StackValue::ByteString(message.to_vec()),
         StackValue::ByteString(pubkey.to_vec()),
@@ -357,9 +361,19 @@ pub fn crypto_check_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[
 }
 
 /// Multisig verification with explicit error propagation.
-pub fn try_crypto_check_multisig(message: &[u8], pubkeys: &[Vec<u8>], signatures: &[Vec<u8>]) -> Result<bool, String> {
-    let pk: Vec<StackValue> = pubkeys.iter().map(|k| StackValue::ByteString(k.clone())).collect();
-    let sig: Vec<StackValue> = signatures.iter().map(|s| StackValue::ByteString(s.clone())).collect();
+pub fn try_crypto_check_multisig(
+    message: &[u8],
+    pubkeys: &[Vec<u8>],
+    signatures: &[Vec<u8>],
+) -> Result<bool, String> {
+    let pk: Vec<StackValue> = pubkeys
+        .iter()
+        .map(|k| StackValue::ByteString(k.clone()))
+        .collect();
+    let sig: Vec<StackValue> = signatures
+        .iter()
+        .map(|s| StackValue::ByteString(s.clone()))
+        .collect();
     let stack = vec![
         StackValue::ByteString(message.to_vec()),
         StackValue::Array(pk),

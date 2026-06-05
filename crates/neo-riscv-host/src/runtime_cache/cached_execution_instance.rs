@@ -1,6 +1,6 @@
 use polkavm::Module;
 
-use super::{CachedInstancePre, ExecutionInstance, EXECUTION_INSTANCES, MAX_POOL_SIZE_PER_AUX};
+use super::{CachedInstancePre, EXECUTION_INSTANCES, ExecutionInstance, MAX_POOL_SIZE_PER_AUX};
 
 pub(crate) struct CachedExecutionInstance {
     pub(super) aux_size: u32,
@@ -34,12 +34,13 @@ impl Drop for CachedExecutionInstance {
         };
 
         if let Some(pool) = EXECUTION_INSTANCES.get()
-            && let Ok(mut guard) = pool.lock() {
-                let instances = guard.entry(self.aux_size).or_default();
-                if instances.len() < MAX_POOL_SIZE_PER_AUX {
-                    instances.push(instance);
-                }
-                // else: pool is full, just drop the instance
+            && let Ok(mut guard) = pool.lock()
+        {
+            let instances = guard.entry(self.aux_size).or_default();
+            if instances.len() < MAX_POOL_SIZE_PER_AUX {
+                instances.push(instance);
             }
+            // else: pool is full, just drop the instance
+        }
     }
 }

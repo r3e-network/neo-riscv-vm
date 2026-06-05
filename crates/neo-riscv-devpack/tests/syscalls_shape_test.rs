@@ -1,7 +1,7 @@
 use neo_riscv_abi::StackValue;
-use neo_riscv_devpack::syscalls::{build_contract_call_stack, CALL_FLAGS_ALL};
+use neo_riscv_devpack::syscalls::{CALL_FLAGS_ALL, build_contract_call_stack};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn host_call(
     _api: u32,
     _ip: u32,

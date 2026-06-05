@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use neo_riscv_abi::OpCode;
 use neo_riscv_host::execute_script;
 

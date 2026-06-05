@@ -5,7 +5,7 @@ use neo_riscv_devpack::syscalls::{
     runtime_log, runtime_notify,
 };
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn host_call(
     _api: u32,
     _ip: u32,

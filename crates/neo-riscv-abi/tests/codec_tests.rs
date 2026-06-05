@@ -1,5 +1,5 @@
 use neo_riscv_abi::callback_codec::{decode_stack_result, encode_stack_result};
-use neo_riscv_abi::{interop_hash, StackValue};
+use neo_riscv_abi::{StackValue, interop_hash};
 
 // ---------------------------------------------------------------------------
 // Helper: round-trip a single StackValue through encode → decode

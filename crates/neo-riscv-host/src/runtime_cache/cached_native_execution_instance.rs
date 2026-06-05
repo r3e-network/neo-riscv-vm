@@ -1,8 +1,8 @@
 use polkavm::Module;
 
 use super::{
-    native_cache_key::NativeCacheKey, CachedInstancePre, ExecutionInstance, MAX_POOL_SIZE_PER_AUX,
-    NATIVE_EXECUTION_INSTANCES,
+    CachedInstancePre, ExecutionInstance, MAX_POOL_SIZE_PER_AUX, NATIVE_EXECUTION_INSTANCES,
+    native_cache_key::NativeCacheKey,
 };
 
 pub(crate) struct CachedNativeExecutionInstance {
@@ -30,11 +30,12 @@ impl Drop for CachedNativeExecutionInstance {
         };
 
         if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get()
-            && let Ok(mut guard) = pool.lock() {
-                let instances = guard.entry(self.key).or_default();
-                if instances.len() < MAX_POOL_SIZE_PER_AUX {
-                    instances.push(instance);
-                }
+            && let Ok(mut guard) = pool.lock()
+        {
+            let instances = guard.entry(self.key).or_default();
+            if instances.len() < MAX_POOL_SIZE_PER_AUX {
+                instances.push(instance);
             }
+        }
     }
 }

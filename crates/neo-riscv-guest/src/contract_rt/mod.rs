@@ -10,12 +10,12 @@ use core::ops::{Deref, DerefMut};
 pub mod stack_value;
 
 #[cfg(target_arch = "riscv32")]
-#[path = "../../neo-riscv-guest-module/src/mem_intrinsics.rs"]
+#[path = "../../../neo-riscv-guest-module/src/mem_intrinsics.rs"]
 mod mem_intrinsics;
 
 pub use stack_value::StackValue;
 
-use neo_riscv_abi::{runtime::RuntimeStack, ExecutionResult, VmContext};
+use neo_riscv_abi::{ExecutionResult, VmContext, runtime::RuntimeStack};
 
 /// Signature of a syscall bridge function.
 ///
@@ -134,7 +134,7 @@ impl RuntimeStack for Context {
 mod tests {
     use super::*;
     use alloc::vec;
-    use neo_riscv_abi::{runtime::ops, VmState};
+    use neo_riscv_abi::{VmState, runtime::ops};
 
     #[test]
     fn from_abi_stack_roundtrip() {

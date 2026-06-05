@@ -4,6 +4,7 @@
 //! and execution context management.
 
 mod bridge;
+pub mod error;
 mod ffi;
 mod host_callback_result;
 mod pricing;
@@ -12,10 +13,10 @@ mod runtime_cache;
 mod runtime_context;
 
 use bridge::{
-    read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic, read_guest_result_diag,
-    read_guest_trace, ClosureHost, GuestTrace,
+    ClosureHost, GuestTrace, read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic,
+    read_guest_result_diag, read_guest_trace,
 };
-use neo_riscv_abi::{fast_codec, BackendKind, ExecutionResult, StackValue, VmState};
+use neo_riscv_abi::{BackendKind, ExecutionResult, StackValue, VmState, fast_codec};
 use serde::Deserialize;
 use std::cell::Cell;
 
@@ -149,14 +150,13 @@ fn decode_guest_execution_result(bytes: &[u8]) -> Result<Result<ExecutionResult,
 }
 
 pub use ffi::{
-    neo_riscv_execute_native_contract, neo_riscv_execute_native_contract_builtin,
+    NativeExecutionResult, NativeHostCallback, NativeHostFreeCallback, NativeHostResult,
+    NativeStackItem, neo_riscv_execute_native_contract, neo_riscv_execute_native_contract_builtin,
     neo_riscv_execute_native_contract_builtin_by_id,
     neo_riscv_execute_native_contract_builtin_i64_by_id, neo_riscv_execute_script,
     neo_riscv_execute_script_with_host, neo_riscv_execute_script_with_host_and_initializer,
     neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
     neo_riscv_execute_script_with_host_and_result_limit, neo_riscv_free_execution_result,
-    NativeExecutionResult, NativeHostCallback, NativeHostFreeCallback, NativeHostResult,
-    NativeStackItem,
 };
 pub use host_callback_result::HostCallbackResult;
 pub use profiling::{get_current_memory, get_peak_memory, reset as reset_profiling};
@@ -182,7 +182,9 @@ impl PolkaVmRuntime {
     }
 }
 
-pub fn execute_script(script: &[u8]) -> Result<ExecutionResult, String> {
+use error::HostError;
+
+pub fn execute_script(script: &[u8]) -> Result<ExecutionResult, HostError> {
     execute_script_with_context(
         script,
         RuntimeContext {
@@ -196,7 +198,10 @@ pub fn execute_script(script: &[u8]) -> Result<ExecutionResult, String> {
     )
 }
 
-pub fn execute_script_with_trigger(script: &[u8], trigger: u8) -> Result<ExecutionResult, String> {
+pub fn execute_script_with_trigger(
+    script: &[u8],
+    trigger: u8,
+) -> Result<ExecutionResult, HostError> {
     execute_script_with_context(
         script,
         RuntimeContext {
@@ -213,7 +218,7 @@ pub fn execute_script_with_trigger(script: &[u8], trigger: u8) -> Result<Executi
 pub fn execute_script_with_context(
     script: &[u8],
     context: RuntimeContext,
-) -> Result<ExecutionResult, String> {
+) -> Result<ExecutionResult, HostError> {
     execute_script_with_host_and_stack_and_ip(
         script,
         Vec::new(),
@@ -221,6 +226,7 @@ pub fn execute_script_with_context(
         context,
         |api, _ip, context, stack| builtin_host_callback(api, context, stack),
     )
+    .map_err(HostError::from)
 }
 
 pub fn execute_script_with_host_and_stack<F>(
@@ -357,23 +363,24 @@ where
     // If the guest returned a VM-level FAULT with fault_message, return it without
     // internal trace (trace is for FFI-level errors only).
     if let Ok(ref r) = result
-        && r.state == VmState::Fault {
-            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
-            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
-            // `neo_riscv_last_fault_locals()`.
-            set_last_fault_ip(r.fault_ip);
-            set_last_fault_locals(&r.fault_locals);
-            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
-            // instruction ceiling): the guest only saw the import's 0-return and replied
-            // with a generic "host instruction charge failed". host.charge_error preserves
-            // the specific reason.
-            if let Some(ref msg) = host.charge_error {
-                return Err(msg.clone());
-            }
-            if let Some(ref msg) = r.fault_message {
-                return Err(msg.clone());
-            }
+        && r.state == VmState::Fault
+    {
+        // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+        // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+        // `neo_riscv_last_fault_locals()`.
+        set_last_fault_ip(r.fault_ip);
+        set_last_fault_locals(&r.fault_locals);
+        // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+        // instruction ceiling): the guest only saw the import's 0-return and replied
+        // with a generic "host instruction charge failed". host.charge_error preserves
+        // the specific reason.
+        if let Some(ref msg) = host.charge_error {
+            return Err(msg.clone());
         }
+        if let Some(ref msg) = r.fault_message {
+            return Err(msg.clone());
+        }
+    }
 
     match result {
         Ok(result) => Ok((result, trace)),
@@ -653,23 +660,24 @@ where
     // If the guest returned a VM-level FAULT with fault_message, return it without
     // internal trace (trace is for FFI-level errors only).
     if let Ok(ref r) = result
-        && r.state == VmState::Fault {
-            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
-            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
-            // `neo_riscv_last_fault_locals()`.
-            set_last_fault_ip(r.fault_ip);
-            set_last_fault_locals(&r.fault_locals);
-            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
-            // instruction ceiling): the guest only saw the import's 0-return and replied
-            // with a generic "host instruction charge failed". host.charge_error preserves
-            // the specific reason.
-            if let Some(ref msg) = host.charge_error {
-                return Err(msg.clone());
-            }
-            if let Some(ref msg) = r.fault_message {
-                return Err(msg.clone());
-            }
+        && r.state == VmState::Fault
+    {
+        // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+        // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+        // `neo_riscv_last_fault_locals()`.
+        set_last_fault_ip(r.fault_ip);
+        set_last_fault_locals(&r.fault_locals);
+        // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+        // instruction ceiling): the guest only saw the import's 0-return and replied
+        // with a generic "host instruction charge failed". host.charge_error preserves
+        // the specific reason.
+        if let Some(ref msg) = host.charge_error {
+            return Err(msg.clone());
         }
+        if let Some(ref msg) = r.fault_message {
+            return Err(msg.clone());
+        }
+    }
 
     if let Err(error) = result {
         let trace = read_guest_trace(instance, &mut host);
@@ -900,8 +908,6 @@ where
 
     charge_native_metered_instructions(instance, &mut host, native_gas_limit)?;
 
-    // Debug: uncomment to trace RESULT_BYTES
-    // println!("Guest RESULT_BYTES ({} bytes): {:?}", res_len, res_bytes);
     let mut result = neo_riscv_abi::result_codec::decode_execution_result(&res_bytes)
         .map_err(|_| "failed to decode native result".to_string())?;
 
@@ -912,23 +918,24 @@ where
     // If the contract returned a VM-level FAULT with fault_message, return as error
     // (consistent with execute_script_* paths).
     if let Ok(ref r) = result
-        && r.state == VmState::Fault {
-            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
-            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
-            // `neo_riscv_last_fault_locals()`.
-            set_last_fault_ip(r.fault_ip);
-            set_last_fault_locals(&r.fault_locals);
-            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
-            // instruction ceiling): the guest only saw the import's 0-return and replied
-            // with a generic "host instruction charge failed". host.charge_error preserves
-            // the specific reason.
-            if let Some(ref msg) = host.charge_error {
-                return Err(msg.clone());
-            }
-            if let Some(ref msg) = r.fault_message {
-                return Err(msg.clone());
-            }
+        && r.state == VmState::Fault
+    {
+        // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+        // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+        // `neo_riscv_last_fault_locals()`.
+        set_last_fault_ip(r.fault_ip);
+        set_last_fault_locals(&r.fault_locals);
+        // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+        // instruction ceiling): the guest only saw the import's 0-return and replied
+        // with a generic "host instruction charge failed". host.charge_error preserves
+        // the specific reason.
+        if let Some(ref msg) = host.charge_error {
+            return Err(msg.clone());
         }
+        if let Some(ref msg) = r.fault_message {
+            return Err(msg.clone());
+        }
+    }
 
     result
 }
@@ -1110,23 +1117,24 @@ pub fn execute_native_contract_builtin_by_id(
     }
 
     if let Ok(ref r) = result
-        && r.state == VmState::Fault {
-            // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
-            // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
-            // `neo_riscv_last_fault_locals()`.
-            set_last_fault_ip(r.fault_ip);
-            set_last_fault_locals(&r.fault_locals);
-            // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
-            // instruction ceiling): the guest only saw the import's 0-return and replied
-            // with a generic "host instruction charge failed". host.charge_error preserves
-            // the specific reason.
-            if let Some(ref msg) = host.charge_error {
-                return Err(msg.clone());
-            }
-            if let Some(ref msg) = r.fault_message {
-                return Err(msg.clone());
-            }
+        && r.state == VmState::Fault
+    {
+        // Capture IP and locals in thread-local side-channels before the Ok(Fault)→Err
+        // conversion loses them. C# retrieves via `neo_riscv_last_fault_ip()` and
+        // `neo_riscv_last_fault_locals()`.
+        set_last_fault_ip(r.fault_ip);
+        set_last_fault_locals(&r.fault_locals);
+        // Prefer host.charge_error when the host-side charge failed (gas exhaustion or
+        // instruction ceiling): the guest only saw the import's 0-return and replied
+        // with a generic "host instruction charge failed". host.charge_error preserves
+        // the specific reason.
+        if let Some(ref msg) = host.charge_error {
+            return Err(msg.clone());
         }
+        if let Some(ref msg) = r.fault_message {
+            return Err(msg.clone());
+        }
+    }
 
     result
 }
@@ -1137,8 +1145,8 @@ pub(crate) fn builtin_host_callback(
     context: RuntimeContext,
     _stack: &[neo_riscv_abi::StackValue],
 ) -> Result<HostCallbackResult, String> {
-    use neo_riscv_abi::interop_hash;
     use neo_riscv_abi::StackValue;
+    use neo_riscv_abi::interop_hash;
 
     // All builtin syscalls are 0-arg: they receive an empty stack and return [result].
     // The caller (invoke_syscall) handles popping consumed args and pushing results.

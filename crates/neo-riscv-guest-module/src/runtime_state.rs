@@ -1,4 +1,4 @@
-use super::{bump_state::BumpState, PANIC_BUF_SIZE, TRACE_HEAD_SIZE};
+use super::{PANIC_BUF_SIZE, TRACE_HEAD_SIZE, bump_state::BumpState};
 
 #[repr(C)]
 pub(crate) struct RuntimeState {

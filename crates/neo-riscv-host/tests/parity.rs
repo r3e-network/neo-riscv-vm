@@ -16,7 +16,7 @@
 ///   fault gracefully because the dummy callback returns empty results.
 /// - Some contracts may hang if they contain loops waiting on host state.
 use neo_riscv_abi::{StackValue, VmState};
-use neo_riscv_host::{execute_native_contract, HostCallbackResult, RuntimeContext};
+use neo_riscv_host::{HostCallbackResult, RuntimeContext, execute_native_contract};
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc;

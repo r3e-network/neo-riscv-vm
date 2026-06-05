@@ -60,7 +60,9 @@ mod tests {
     fn newbuffer_exceeds_limit() {
         // PUSHINT32 1048577, NEWBUFFER
         let script = vec![0x02, 0x01, 0x00, 0x10, 0x00, 0x88];
-        let result = execute_script(&script).expect_err("NEWBUFFER > MaxItemSize should fail");
+        let result = execute_script(&script)
+            .expect_err("NEWBUFFER > MaxItemSize should fail")
+            .to_string();
         assert!(
             result.contains("MaxItemSize") || result.contains("size") || result.contains("FAULT"),
             "expected size-related fault, got: {result}",
@@ -79,7 +81,9 @@ mod tests {
         script.push(0x8b); // CAT
         script.push(0x40); // RET
 
-        let result = execute_script(&script).expect_err("CAT above MaxItemSize should fail");
+        let result = execute_script(&script)
+            .expect_err("CAT above MaxItemSize should fail")
+            .to_string();
         assert!(
             result.contains("MaxItemSize") || result.contains("size") || result.contains("FAULT"),
             "expected size-related CAT fault, got: {result}",

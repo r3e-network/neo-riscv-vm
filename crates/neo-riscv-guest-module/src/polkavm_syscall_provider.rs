@@ -1,11 +1,11 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::{callback_codec, fast_codec, StackValue};
+use neo_riscv_abi::{StackValue, callback_codec, fast_codec};
 use neo_riscv_guest::SyscallProvider;
 
 use super::{
-    arena_ptr, arena_slice, host_call, host_on_instruction, runtime_state, REQ_BUF_OFFSET,
-    RES_BUF_OFFSET, SCRATCH_BUF_SIZE, TRACE_HEAD_SIZE,
+    REQ_BUF_OFFSET, RES_BUF_OFFSET, SCRATCH_BUF_SIZE, TRACE_HEAD_SIZE, arena_ptr, arena_slice,
+    host_call, host_on_instruction, runtime_state,
 };
 
 pub(crate) struct PolkaVmSyscallProvider;

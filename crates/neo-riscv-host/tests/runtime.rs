@@ -1,5 +1,6 @@
 use neo_riscv_abi::{BackendKind, StackValue, VmState};
 use neo_riscv_host::{
+    HostCallbackResult, NativeExecutionResult, NativeHostResult, PolkaVmRuntime, RuntimeContext,
     debug_execute_script_with_host_and_stack, execute_script, execute_script_with_context,
     execute_script_with_host, execute_script_with_host_and_stack,
     execute_script_with_host_and_stack_and_ip,
@@ -8,8 +9,7 @@ use neo_riscv_host::{
     execute_script_with_host_and_stack_and_ip_with_result_limit, execute_script_with_trigger,
     neo_riscv_execute_script_with_host, neo_riscv_execute_script_with_host_and_initializer,
     neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
-    neo_riscv_free_execution_result, HostCallbackResult, NativeExecutionResult, NativeHostResult,
-    PolkaVmRuntime, RuntimeContext,
+    neo_riscv_free_execution_result,
 };
 use std::{ffi::c_void, ptr, slice};
 
@@ -148,12 +148,15 @@ unsafe fn free_native_stack_items(ptr_items: *mut neo_riscv_host::NativeStackIte
             if item.kind == 4 || item.kind == 7 || item.kind == 8 {
                 unsafe {
                     free_native_stack_items(
-                        item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                        item.bytes_ptr
+                            .cast_mut()
+                            .cast::<neo_riscv_host::NativeStackItem>(),
                         item.bytes_len,
                     )
                 };
             } else {
-                let bytes = ptr::slice_from_raw_parts_mut(item.bytes_ptr, item.bytes_len);
+                let bytes =
+                    ptr::slice_from_raw_parts_mut(item.bytes_ptr.cast_mut(), item.bytes_len);
                 unsafe { drop(Box::from_raw(bytes)) };
             }
             item.bytes_ptr = ptr::null_mut();
@@ -197,7 +200,9 @@ unsafe fn copy_test_native_stack_items(
                 } else {
                     unsafe {
                         copy_test_native_stack_items(
-                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_ptr
+                                .cast_mut()
+                                .cast::<neo_riscv_host::NativeStackItem>(),
                             item.bytes_len,
                         )
                     }?
@@ -210,7 +215,9 @@ unsafe fn copy_test_native_stack_items(
                 } else {
                     unsafe {
                         copy_test_native_stack_items(
-                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_ptr
+                                .cast_mut()
+                                .cast::<neo_riscv_host::NativeStackItem>(),
                             item.bytes_len,
                         )
                     }?
@@ -223,7 +230,9 @@ unsafe fn copy_test_native_stack_items(
                 } else {
                     unsafe {
                         copy_test_native_stack_items(
-                            item.bytes_ptr.cast::<neo_riscv_host::NativeStackItem>(),
+                            item.bytes_ptr
+                                .cast_mut()
+                                .cast::<neo_riscv_host::NativeStackItem>(),
                             item.bytes_len,
                         )
                     }?
@@ -355,7 +364,9 @@ fn size_matches_neovm_for_integer_and_boolean_values_through_host_runtime() {
 
 #[test]
 fn size_faults_on_null_like_neovm_through_host_runtime() {
-    let error = execute_script(&[0x0b, 0xca]).expect_err("SIZE on Null should fault like NeoVM");
+    let error = execute_script(&[0x0b, 0xca])
+        .expect_err("SIZE on Null should fault like NeoVM")
+        .to_string();
     assert!(
         error.contains("SIZE expects"),
         "error should mention SIZE incompatibility: {error}"
@@ -1691,7 +1702,8 @@ fn runtime_get_time_syscall_faults_without_timestamp() {
             exec_fee_factor_pico: 0,
         },
     )
-    .expect_err("host runtime should fault when runtime get time has no timestamp");
+    .expect_err("host runtime should fault when runtime get time has no timestamp")
+    .to_string();
 
     assert!(
         error.contains("GetTime")
@@ -4484,7 +4496,9 @@ fn debug_success_trace_for_two_item_second_response() {
         trace,
         Some((
             23,
-            vec![0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,],
+            vec![
+                0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+            ],
         ))
     );
 }
@@ -4660,7 +4674,9 @@ fn custom_host_callback_handles_contract_call_shape_with_interop_array_argument(
 
 #[test]
 fn unsupported_opcode_returns_fault_state() {
-    let error = execute_script(&[0xff]).expect_err("unsupported opcode should fault");
+    let error = execute_script(&[0xff])
+        .expect_err("unsupported opcode should fault")
+        .to_string();
     assert!(
         error.contains("unsupported opcode") || error.contains("Failed to decode result"),
         "error should mention unsupported opcode: {error}"
@@ -4701,7 +4717,7 @@ fn handles_multiple_syscalls_with_pack_and_interop() {
     // PACK
     script.push(0x12); // PUSH2
     script.push(0xc0); // PACK
-                       // Third SYSCALL: push "add", SYSCALL
+    // Third SYSCALL: push "add", SYSCALL
     script.push(0x0c); // PUSHDATA1
     script.push(3); // length
     script.extend_from_slice(b"add");
@@ -4826,7 +4842,8 @@ unsafe extern "C" fn ffi_error_free_callback(
         if result.is_null() || (*result).error_ptr.is_null() || (*result).error_len == 0 {
             return;
         }
-        let bytes = ptr::slice_from_raw_parts_mut((*result).error_ptr, (*result).error_len);
+        let bytes =
+            ptr::slice_from_raw_parts_mut((*result).error_ptr.cast_mut(), (*result).error_len);
         drop(Box::from_raw(bytes));
         (*result).error_ptr = ptr::null_mut();
         (*result).error_len = 0;
@@ -5441,7 +5458,7 @@ fn ffi_host_callback_errors_fault_without_trapping() {
 #[test]
 fn ffi_callt_null_result_can_flow_through_two_arg_helper() {
     let runtime_log = neo_riscv_abi::interop_hash("System.Runtime.Log");
-    let script = vec![
+    let script = [
         0x57,
         0x01,
         0x02, // INITSLOT 1 local, 2 args
@@ -5538,7 +5555,7 @@ fn ffi_callt_block_like_struct_survives_local_and_helper_pickitem() {
         0x77, 0xec, 0x6b, 0xa0, 0x79, 0x3f, 0x8d, 0x9b, 0x7b, 0x5e, 0xaa, 0x6f, 0xa4, 0xef, 0x1d,
         0x4d, 0x1f,
     ];
-    let script = vec![
+    let script = [
         0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
         0x78, // LDARG0
         0x37, 0x02, 0x00, // CALLT 2
@@ -5602,7 +5619,7 @@ fn ffi_callt_block_like_struct_survives_local_and_helper_pickitem() {
 
 #[test]
 fn ffi_tx_like_struct_hash_then_callt_signers() {
-    let script = vec![
+    let script = [
         0x57, 0x00, 0x02, // INITSLOT 0 locals, 2 args
         0x78, // LDARG0
         0x10, // PUSH0
@@ -5686,7 +5703,7 @@ fn ffi_callt_transaction_helper_then_callt_signers_with_live_args() {
         0x2a, 0x8a, 0xd4, 0x53, 0xfd, 0x6e, 0xdb, 0xdb, 0xc1, 0x47, 0x60, 0xd7, 0x4c, 0xf1, 0xc1,
         0xa1, 0xd4,
     ];
-    let script = vec![
+    let script = [
         0x57, 0x01, 0x02, // INITSLOT 1 local, 2 args
         0x78, // LDARG0
         0x37, 0x03, 0x00, // CALLT 3 -> getTransaction
@@ -5901,7 +5918,7 @@ fn ffi_large_dynamic_call_wrapper_host_error_surfaces_without_trapping() {
 #[test]
 fn ffi_mixed_integer_and_bytestring_results_round_trip() {
     let api = neo_riscv_abi::interop_hash("System.Test.Mixed");
-    let script = vec![
+    let script = [
         0x41,
         api.to_le_bytes()[0],
         api.to_le_bytes()[1],
@@ -6642,7 +6659,7 @@ fn ffi_callt_string_result_can_setitem_into_live_array_after_cat() {
 
 #[test]
 fn ffi_callt_retains_consumed_mutations_before_later_setitem() {
-    let script = vec![
+    let script = [
         0x57, 0x00, 0x01, // INITSLOT 0 locals, 1 arg
         0x78, // LDARG0
         0x10, // PUSH0
@@ -6709,7 +6726,7 @@ fn ffi_callt_retains_consumed_mutations_before_later_setitem() {
 
 #[test]
 fn callt_array_result_round_trips_with_live_args_in_ffi_host_runtime() {
-    let script = vec![
+    let script = [
         0x57, 0x02, 0x04, // INITSLOT 2 locals, 4 args
         0x37, 0x00, 0x00, // CALLT 0
         0x70, // STLOC0
@@ -6990,7 +7007,7 @@ fn oracle_on_response_success_path_executes_in_host_runtime() {
 
 #[test]
 fn oracle_on_response_success_path_executes_in_ffi_host_runtime() {
-    let script = vec![
+    let script = [
         0x57, 0x02, 0x04, 0x41, 0x39, 0x53, 0x6e, 0x3c, 0x0c, 0x14, 0x58, 0x87, 0x17, 0x11, 0x7e,
         0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71, 0xd2, 0xdd, 0x89, 0xfe, 0x7c, 0x4b, 0x92, 0xfe,
         0x98, 0x26, 0x16, 0x0c, 0x11, 0x4e, 0x6f, 0x20, 0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x69,
@@ -8756,10 +8773,13 @@ fn gas_exhaustion_through_polkavm() {
     );
 
     match result {
-        Err(e) => assert!(
-            e.contains("Insufficient GAS") || e.contains("gas") || e.contains("charge"),
-            "error should mention gas exhaustion: {e}"
-        ),
+        Err(e) => {
+            let e = e.to_string();
+            assert!(
+                e.contains("Insufficient GAS") || e.contains("gas") || e.contains("charge"),
+                "error should mention gas exhaustion: {e}"
+            );
+        }
         Ok(r) => assert_eq!(
             r.state,
             VmState::Fault,
@@ -8926,7 +8946,7 @@ fn block_78538_contract_deploy_does_not_trap() {
     // PUSH2 + PACK → Array([nef, manifest])
     script.push(0x12); // PUSH2
     script.push(0xc1); // PACK
-                       // PUSH15 (callFlags)
+    // PUSH15 (callFlags)
     script.push(0x1f);
     // PUSHDATA1 "deploy"
     script.push(0x0c);

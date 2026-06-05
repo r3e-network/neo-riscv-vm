@@ -1,7 +1,7 @@
 use core::slice;
 use std::sync::{Mutex, OnceLock};
 
-use neo_riscv_abi::{callback_codec, StackValue};
+use neo_riscv_abi::{StackValue, callback_codec};
 use neo_riscv_devpack::native::{
     contract_management, crypto_lib, gas_token, ledger, neo_token, oracle, policy, role_management,
     std_lib,
@@ -39,7 +39,7 @@ fn take_invocations() -> Vec<Invocation> {
     std::mem::take(&mut state.invocations)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn host_call(
     api: u32,
     _ip: u32,

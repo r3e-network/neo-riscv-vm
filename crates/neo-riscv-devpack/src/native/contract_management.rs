@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use neo_riscv_abi::{stack_value_as_fixed_bytes, StackValue};
+use neo_riscv_abi::{StackValue, stack_value_as_fixed_bytes};
 
 use super::{call_native, call_native_read_only, std_lib::stdlib_serialize_stack_item};
 

@@ -1,5 +1,5 @@
 use alloc::{format, string::String, vec, vec::Vec};
-use neo_riscv_abi::{callback_codec, StackValue};
+use neo_riscv_abi::{StackValue, callback_codec};
 
 unsafe extern "C" {
     fn host_call(

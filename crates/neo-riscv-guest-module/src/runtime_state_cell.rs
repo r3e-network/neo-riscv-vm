@@ -12,6 +12,8 @@ impl RuntimeStateCell {
     }
 
     pub(crate) unsafe fn get_mut(&self) -> &'static mut RuntimeState {
-        &mut *self.0.get()
+        // SAFETY: caller guarantees no aliasing &mut to the cell's contents is
+        // live (single-threaded guest; see this type's Sync impl).
+        unsafe { &mut *self.0.get() }
     }
 }

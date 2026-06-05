@@ -3,7 +3,7 @@ use core::{
     ptr::NonNull,
 };
 
-use super::{arena_ptr, runtime_state, ALLOC_ARENA_SIZE, ALLOC_BASE_OFFSET};
+use super::{ALLOC_ARENA_SIZE, ALLOC_BASE_OFFSET, arena_ptr, runtime_state};
 
 pub(crate) struct ResettableBumpAllocator;
 
@@ -15,7 +15,8 @@ impl ResettableBumpAllocator {
     }
 
     pub(crate) unsafe fn reset(&self) {
-        let state = &mut runtime_state().bump;
+        // SAFETY: caller upholds runtime_state()'s single-aliasing contract.
+        let state = &mut unsafe { runtime_state() }.bump;
         state.clear();
     }
 
@@ -24,8 +25,9 @@ impl ResettableBumpAllocator {
             return NonNull::<u8>::dangling().as_ptr();
         }
 
-        let state = &mut runtime_state().bump;
-        let base = arena_ptr(ALLOC_BASE_OFFSET) as usize;
+        // SAFETY: caller upholds runtime_state()/arena_ptr() contracts.
+        let state = &mut unsafe { runtime_state() }.bump;
+        let base = unsafe { arena_ptr(ALLOC_BASE_OFFSET) } as usize;
         let align_mask = layout.align() - 1;
         // Use checked arithmetic to prevent 32-bit integer overflow when
         // base + offset + align_mask wraps around on riscv32.
@@ -61,25 +63,36 @@ impl ResettableBumpAllocator {
     }
 
     pub(crate) unsafe fn peak_bytes(&self) -> u32 {
-        runtime_state().bump.peak.min(u32::MAX as usize) as u32
+        // SAFETY: caller upholds runtime_state()'s single-aliasing contract.
+        unsafe { runtime_state() }.bump.peak.min(u32::MAX as usize) as u32
     }
 
     pub(crate) unsafe fn fail_count(&self) -> u32 {
-        runtime_state().bump.fail_count
+        // SAFETY: caller upholds runtime_state()'s single-aliasing contract.
+        unsafe { runtime_state() }.bump.fail_count
     }
 
     pub(crate) unsafe fn fail_size(&self) -> u32 {
-        runtime_state().bump.fail_size.min(u32::MAX as usize) as u32
+        // SAFETY: caller upholds runtime_state()'s single-aliasing contract.
+        unsafe { runtime_state() }
+            .bump
+            .fail_size
+            .min(u32::MAX as usize) as u32
     }
 
     pub(crate) unsafe fn fail_align(&self) -> u32 {
-        runtime_state().bump.fail_align.min(u32::MAX as usize) as u32
+        // SAFETY: caller upholds runtime_state()'s single-aliasing contract.
+        unsafe { runtime_state() }
+            .bump
+            .fail_align
+            .min(u32::MAX as usize) as u32
     }
 }
 
 unsafe impl GlobalAlloc for ResettableBumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.alloc_from_arena(layout)
+        // SAFETY: forwards to alloc_from_arena under the same contract.
+        unsafe { self.alloc_from_arena(layout) }
     }
 
     // SAFETY: dealloc is intentionally a no-op. This allocator uses a bump-pointer

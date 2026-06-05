@@ -74,7 +74,7 @@ mod tests {
     use alloc::vec;
     use neo_riscv_abi::StackValue;
 
-    use super::{build_contract_call_stack, CALL_FLAGS_ALL};
+    use super::{CALL_FLAGS_ALL, build_contract_call_stack};
 
     #[test]
     fn build_contract_call_stack_matches_bridge_shape() {

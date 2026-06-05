@@ -1,5 +1,5 @@
 use neo_riscv_guest::contract_rt::{Context, StackValue};
-use neo_riscv_guest::{runtime::ops, VmState};
+use neo_riscv_guest::{VmState, runtime::ops};
 
 #[test]
 fn contract_runtime_context_executes_shared_vm_runtime_ops() {

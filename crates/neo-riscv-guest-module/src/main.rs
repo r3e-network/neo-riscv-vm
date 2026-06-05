@@ -65,7 +65,7 @@ polkavm_derive::min_stack_size!(1048576);
 use aligned_arena::AlignedArena;
 #[cfg(target_arch = "riscv32")]
 use buf_writer::BufWriter;
-use neo_riscv_abi::{fast_codec, ExecutionResult, StackValue};
+use neo_riscv_abi::{ExecutionResult, StackValue, fast_codec};
 use polkavm_syscall_provider::PolkaVmSyscallProvider;
 use resettable_bump_allocator::ResettableBumpAllocator;
 use runtime_state::RuntimeState;
@@ -98,20 +98,29 @@ const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
 static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
 
 unsafe fn runtime_state() -> &'static mut RuntimeState {
-    RUNTIME_STATE.get_mut()
+    // SAFETY: caller upholds RuntimeStateCell::get_mut's single-aliasing contract.
+    unsafe { RUNTIME_STATE.get_mut() }
 }
 
 unsafe fn arena_ptr(offset: usize) -> *mut u8 {
-    ARENA.as_mut_ptr().add(offset)
+    // SAFETY: caller upholds AlignedArena::as_mut_ptr's contract; offset is
+    // bounds-checked at the const asserts above.
+    unsafe { ARENA.as_mut_ptr().add(offset) }
 }
 
 unsafe fn arena_slice(offset: usize, len: usize) -> &'static mut [u8] {
-    core::slice::from_raw_parts_mut(arena_ptr(offset), len)
+    // SAFETY: caller guarantees [offset, offset+len) is within the arena and
+    // not aliased; arena_ptr yields a valid pointer into ARENA.
+    unsafe { core::slice::from_raw_parts_mut(arena_ptr(offset), len) }
 }
 
 unsafe fn pretouch_alloc_arena() {
     if ALLOC_PRETOUCH_SIZE > 0 {
-        core::ptr::write_volatile(arena_ptr(ALLOC_BASE_OFFSET + ALLOC_PRETOUCH_SIZE - 1), 0);
+        // SAFETY: the offset is within the arena (const-asserted) and the write
+        // targets a single byte we own exclusively during init.
+        unsafe {
+            core::ptr::write_volatile(arena_ptr(ALLOC_BASE_OFFSET + ALLOC_PRETOUCH_SIZE - 1), 0);
+        }
     }
 }
 
@@ -136,17 +145,17 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[cfg(target_arch = "riscv32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() {}
 
 #[cfg(target_arch = "riscv32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn main() {}
 
 #[cfg(not(target_arch = "riscv32"))]
 fn main() {}
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn alloc(size: u32) -> *mut u8 {
     let mut buf = Vec::with_capacity(size as usize);
@@ -170,7 +179,7 @@ extern "C" {
 }
 
 #[cfg(test)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn host_call(
     _api: u32,
     _ip: u32,
@@ -183,126 +192,126 @@ unsafe extern "C" fn host_call(
 }
 
 #[cfg(test)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn host_on_instruction(_opcode: u32) -> u32 {
     1
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_ptr() -> *const u8 {
     unsafe { runtime_state().result_ptr as *const u8 }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_len() -> u32 {
     unsafe { runtime_state().result_len }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_ptr() -> *const u8 {
     unsafe { runtime_state().panic_buf.as_ptr() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_len() -> u32 {
     unsafe { runtime_state().panic_len }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_len() -> u32 {
     unsafe { runtime_state().trace_res_len }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_head_ptr() -> *const u8 {
     unsafe { runtime_state().trace_res_head.as_ptr() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_stage() -> u32 {
     unsafe { runtime_state().trace_syscall_stage }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_api() -> u32 {
     unsafe { runtime_state().trace_syscall_api }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_ip() -> u32 {
     unsafe { runtime_state().trace_syscall_ip }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_interpreter_ip() -> u32 {
     neo_riscv_guest::last_interpreter_ip()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_stage() -> u32 {
     neo_riscv_guest::last_result_stage()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_stack_len() -> u32 {
     neo_riscv_guest::last_result_stack_len()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_limit() -> u32 {
     neo_riscv_guest::last_result_limit()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_req_len() -> u32 {
     unsafe { runtime_state().trace_req_len }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_stack_items() -> u32 {
     unsafe { runtime_state().trace_stack_items }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_peak() -> u32 {
     unsafe { ALLOCATOR.peak_bytes() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_count() -> u32 {
     unsafe { ALLOCATOR.fail_count() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_size() -> u32 {
     unsafe { ALLOCATOR.fail_size() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_align() -> u32 {
     unsafe { ALLOCATOR.fail_align() }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute(
     script_ptr: u32,
@@ -323,7 +332,7 @@ pub extern "C" fn execute(
     store_result(result, u32::MAX);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute_with_result_limit(
     script_ptr: u32,
@@ -347,7 +356,7 @@ pub extern "C" fn execute_with_result_limit(
 
 static NEXT_RESULT_LIMIT: AtomicU32 = AtomicU32::new(u32::MAX);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn set_result_limit(result_limit: u32) {
     NEXT_RESULT_LIMIT.store(result_limit, Ordering::Relaxed);
@@ -357,7 +366,7 @@ fn take_result_limit() -> u32 {
     NEXT_RESULT_LIMIT.swap(u32::MAX, Ordering::Relaxed)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute_with_initializer(
     script_ptr: u32,
@@ -381,17 +390,16 @@ pub extern "C" fn execute_with_initializer(
 }
 
 fn store_result(mut result: Result<ExecutionResult, alloc::string::String>, result_limit: u32) {
-    if let Ok(ref mut execution_result) = result {
-        if matches!(execution_result.state, neo_riscv_abi::VmState::Halt)
-            && result_limit != u32::MAX
-        {
-            let keep = result_limit as usize;
-            if keep == 0 {
-                execution_result.stack.clear();
-            } else if execution_result.stack.len() > keep {
-                let start = execution_result.stack.len() - keep;
-                execution_result.stack.drain(0..start);
-            }
+    if let Ok(ref mut execution_result) = result
+        && matches!(execution_result.state, neo_riscv_abi::VmState::Halt)
+        && result_limit != u32::MAX
+    {
+        let keep = result_limit as usize;
+        if keep == 0 {
+            execution_result.stack.clear();
+        } else if execution_result.stack.len() > keep {
+            let start = execution_result.stack.len() - keep;
+            execution_result.stack.drain(0..start);
         }
     }
 

@@ -10,7 +10,7 @@
 // - Type conversion
 
 use neo_riscv_abi::{StackValue, VmState};
-use neo_riscv_guest::{interpret, interpret_with_syscalls, SyscallProvider};
+use neo_riscv_guest::{SyscallProvider, interpret, interpret_with_syscalls};
 
 /// Simple syscall provider that handles standard Neo syscalls
 struct TestSyscallProvider;

@@ -9,7 +9,7 @@
 /// 6. Type conversion opcodes
 /// 7. Compound type operations
 /// 8. Resource limit enforcement
-use neo_riscv_abi::{callback_codec, fast_codec, StackValue};
+use neo_riscv_abi::{StackValue, callback_codec, fast_codec};
 use neo_riscv_host::execute_script;
 use proptest::prelude::*;
 

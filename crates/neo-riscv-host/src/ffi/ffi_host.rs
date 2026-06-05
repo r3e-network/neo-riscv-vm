@@ -1,11 +1,11 @@
 use std::{ffi::c_void, ptr};
 
-use crate::{pricing::charge_opcode, RuntimeContext};
+use crate::{RuntimeContext, pricing::charge_opcode};
 use neo_riscv_guest::SyscallProvider;
 
 use super::{
-    copy_native_host_result, serialize_stack_items_fast, NativeHostCallback,
-    NativeHostFreeCallback, NativeHostResult,
+    NativeHostCallback, NativeHostFreeCallback, NativeHostResult, copy_native_host_result,
+    serialize_stack_items_fast,
 };
 
 pub(super) struct FfiHost {

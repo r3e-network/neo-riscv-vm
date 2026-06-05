@@ -1,4 +1,4 @@
-use neo_riscv_guest::{interpret, StackValue, VmState};
+use neo_riscv_guest::{StackValue, VmState, interpret};
 use neo_vm_rs::OpCode;
 
 #[test]

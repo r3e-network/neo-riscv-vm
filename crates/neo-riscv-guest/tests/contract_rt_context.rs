@@ -1,5 +1,5 @@
 use neo_riscv_guest::contract_rt::{Context, StackValue};
-use neo_riscv_guest::{runtime::ops, VmState};
+use neo_riscv_guest::{VmState, runtime::ops};
 
 fn empty_ctx() -> Context {
     Context::from_abi_stack(vec![])

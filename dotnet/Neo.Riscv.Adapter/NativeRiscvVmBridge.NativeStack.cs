@@ -508,13 +508,13 @@ namespace Neo.SmartContract.RiscV
         private Neo.VM.Types.Array ReadArray(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
         {
             var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope, decodeStorageContextTokens: true);
-            return new Neo.VM.Types.Array(referenceCounter, children);
+            return new Neo.VM.Types.Array(children);
         }
 
         private Neo.VM.Types.Struct ReadStruct(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
         {
             var children = ReadStack(nativeItem.BytesPtr, (nuint)nativeItem.BytesLen, referenceCounter, scope, decodeStorageContextTokens: true);
-            return new Neo.VM.Types.Struct(referenceCounter, children);
+            return new Neo.VM.Types.Struct(children);
         }
 
         private Neo.VM.Types.Map ReadMap(NativeStackItem nativeItem, IReferenceCounter? referenceCounter, ExecutionScope scope)
@@ -523,7 +523,7 @@ namespace Neo.SmartContract.RiscV
             if (children.Length % 2 != 0)
                 throw new InvalidOperationException("Native map stack item contains an odd number of entries.");
 
-            var map = new Neo.VM.Types.Map(referenceCounter);
+            var map = new Neo.VM.Types.Map();
             for (var index = 0; index < children.Length; index += 2)
             {
                 if (children[index] is not PrimitiveType key)

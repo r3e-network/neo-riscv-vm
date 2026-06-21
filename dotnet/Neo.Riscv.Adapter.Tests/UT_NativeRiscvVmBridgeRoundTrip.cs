@@ -230,7 +230,7 @@ public class UT_NativeRiscvVmBridgeRoundTrip
         var contract = NativeContract.ContractManagement.GetContract(snapshot, NativeContract.NEO.Hash);
         Assert.IsNotNull(contract);
 
-        var roundTripped = RoundTripSingleItem(bridge, scope, contract!.ToStackItem(null));
+        var roundTripped = RoundTripSingleItem(bridge, scope, contract!.ToStackItem());
 
         var restored = (ContractState)RuntimeHelpers.GetUninitializedObject(typeof(ContractState));
         ((IInteroperable)restored).FromStackItem(roundTripped);
@@ -322,7 +322,7 @@ public class UT_NativeRiscvVmBridgeRoundTrip
 
                 var expected = NativeContract.ContractManagement.GetContract(snapshot, contract.Hash);
                 Assert.IsNotNull(expected, contract.Name);
-                AssertStackItemEquivalent(expected!.ToStackItem(null), result, contract.Name);
+                AssertStackItemEquivalent(expected!.ToStackItem(), result, contract.Name);
 
                 var restored = (ContractState)RuntimeHelpers.GetUninitializedObject(typeof(ContractState));
                 ((IInteroperable)restored).FromStackItem(result);

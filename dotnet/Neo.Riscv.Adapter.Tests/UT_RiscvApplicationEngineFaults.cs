@@ -146,7 +146,7 @@ public class UT_RiscvApplicationEngineFaults
         {
             RuntimeNotifyMethod.Invoke(
                 request.Engine,
-                [Encoding.UTF8.GetBytes("evt"), new Neo.VM.Types.Array(request.Engine.ReferenceCounter)]);
+                [Encoding.UTF8.GetBytes("evt"), new Neo.VM.Types.Array()]);
             return new RiscvExecutionResult(VMState.FAULT, [], new InvalidOperationException("fault"));
         }
 

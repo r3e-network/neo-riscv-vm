@@ -291,7 +291,7 @@ namespace Neo.SmartContract.RiscV
             {
                 System.Array.Copy(inputStack, next, inputStack.Length - 1);
             }
-            next[^1] = iterator.Value(request.Engine.ReferenceCounter);
+            next[^1] = iterator.Value();
             return next;
         }
 

@@ -90,21 +90,21 @@ namespace Neo.SmartContract.RiscV
                 case TagArray:
                 {
                     var count = (int)ReadUInt32(bytes, ref pos);
-                    var array = new Array(referenceCounter);
+                    var array = new Array();
                     for (var i = 0; i < count; i++) array.Add(DecodeValue(bytes, ref pos, referenceCounter));
                     return array;
                 }
                 case TagStruct:
                 {
                     var count = (int)ReadUInt32(bytes, ref pos);
-                    var s = new Struct(referenceCounter);
+                    var s = new Struct();
                     for (var i = 0; i < count; i++) s.Add(DecodeValue(bytes, ref pos, referenceCounter));
                     return s;
                 }
                 case TagMap:
                 {
                     var count = (int)ReadUInt32(bytes, ref pos);
-                    var map = new Map(referenceCounter);
+                    var map = new Map();
                     for (var i = 0; i < count; i++)
                     {
                         var k = DecodeValue(bytes, ref pos, referenceCounter);

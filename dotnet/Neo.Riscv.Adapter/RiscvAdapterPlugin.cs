@@ -23,7 +23,7 @@ namespace Neo.SmartContract.RiscV
         public RiscvAdapterPlugin()
         {
             ApplicationEngine.Provider = RiscvApplicationEngineProviderResolver.ResolveRequiredProvider();
-            Log($"RISC-V adapter initialized, provider registered.");
+            Logs.RuntimeLogger.Information("RISC-V adapter initialized, provider registered.");
         }
 
         public override void Dispose()

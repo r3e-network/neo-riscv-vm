@@ -84,6 +84,18 @@ impl SerializedStack {
     }
 }
 
+/// C# host callback invoked for every `System.*` syscall raised by the guest.
+///
+/// The .NET adapter registers one such function pointer; when the guest raises
+/// an interop, the host marshals the current stack into `input_stack_*`, calls
+/// this callback, and reads back the result from `output`. Return `true` on
+/// success or `false` to signal a fault (the error is conveyed via
+/// `output->error_*`).
+///
+/// # Safety
+/// This is an `unsafe extern "C" fn` type — the caller (the host runtime)
+/// guarantees `user_data`, `input_stack_ptr`, and `output` are valid and
+/// properly aligned for the duration of the call.
 pub type NativeHostCallback = unsafe extern "C" fn(
     user_data: *mut c_void,
     api: u32,
@@ -98,12 +110,105 @@ pub type NativeHostCallback = unsafe extern "C" fn(
     output: *mut NativeHostResult,
 ) -> bool;
 
+/// C# host callback that frees a [`NativeHostResult`] previously produced by a
+/// [`NativeHostCallback`].
+///
+/// The stack array inside the result is owned by the C# side; this callback
+/// lets the adapter reclaim that memory after the host has copied out the
+/// values it needs.
+///
+/// # Safety
+/// `result` must point to a valid `NativeHostResult` that was produced by a
+/// `NativeHostCallback` and not already freed.
 pub type NativeHostFreeCallback =
     unsafe extern "C" fn(user_data: *mut c_void, result: *mut NativeHostResult);
 
 /// Maximum nesting depth for `NativeStackItem` structures to prevent stack
 /// overflow from maliciously nested arrays/structs/maps.
 const MAX_STACK_ITEM_DEPTH: u32 = 64;
+
+/// Copy the byte payload from a single [`NativeStackItem`] into an owned `Vec`.
+///
+/// Returns an empty vec when the item has no payload (null pointer or zero
+/// length). Used by all byte-carrying stack-item variants (BigInteger,
+/// ByteString, Buffer) to avoid repeating the null-check + `from_raw_parts`
+/// pattern at every call site.
+///
+/// # Safety
+/// When the item is non-empty, `item.bytes_ptr` must point to at least
+/// `item.bytes_len` readable bytes for the duration of the copy.
+fn copy_bytes_from_item(item: &NativeStackItem) -> Vec<u8> {
+    if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: caller (the FFI boundary) guarantees bytes_ptr is valid for
+        // bytes_len bytes; the slice is immediately copied and not held beyond
+        // the call.
+        unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
+    }
+}
+
+/// Read a nested child array from a container item's `bytes_ptr`/`bytes_len`,
+/// which (for Array/Struct/Map variants) holds a contiguous `NativeStackItem`
+/// array rather than raw bytes. Returns an empty vec when the container is
+/// empty.
+fn copy_children_from_item(
+    item: &NativeStackItem,
+    depth: u32,
+) -> Result<Vec<neo_riscv_abi::StackValue>, String> {
+    if item.bytes_ptr.is_null() || item.bytes_len == 0 {
+        Ok(Vec::new())
+    } else {
+        copy_native_stack_items_with_depth(
+            item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+            item.bytes_len,
+            depth + 1,
+        )
+    }
+}
+
+/// Convert a single [`NativeStackItem`] into a [`StackValue`], recursing into
+/// container variants with depth tracking.
+///
+/// This is the unified conversion used by both the array-loop
+/// ([`copy_native_stack_items_with_depth`]) and the single-item path
+/// ([`copy_single_native_stack_item`]), eliminating the duplicated
+/// `match item.kind` logic that previously existed in both.
+fn convert_native_item(
+    item: &NativeStackItem,
+    depth: u32,
+) -> Result<neo_riscv_abi::StackValue, String> {
+    use neo_riscv_abi::StackValue;
+    Ok(match item.kind {
+        0 => StackValue::Integer(item.integer_value),
+        1 => StackValue::ByteString(copy_bytes_from_item(item)),
+        2 => StackValue::Null,
+        3 => StackValue::Boolean(item.integer_value != 0),
+        4 => StackValue::Array(copy_children_from_item(item, depth)?),
+        5 => StackValue::BigInteger(copy_bytes_from_item(item)),
+        6 => StackValue::Iterator(item.integer_value as u64),
+        7 => StackValue::Struct(copy_children_from_item(item, depth)?),
+        8 => {
+            let items = copy_children_from_item(item, depth)?;
+            if items.len() % 2 != 0 {
+                return Err("map stack item contains an odd number of entries".to_string());
+            }
+            let mut pairs = Vec::with_capacity(items.len() / 2);
+            let mut iter = items.into_iter();
+            while let Some(key) = iter.next() {
+                let value = iter.next().ok_or_else(|| {
+                    "map stack item contains an incomplete key/value pair".to_string()
+                })?;
+                pairs.push((key, value));
+            }
+            StackValue::Map(pairs)
+        }
+        9 => StackValue::Interop(item.integer_value as u64),
+        10 => StackValue::Pointer(item.integer_value),
+        11 => StackValue::Buffer(copy_bytes_from_item(item)),
+        other => return Err(format!("unsupported native stack item kind {other}")),
+    })
+}
 
 fn copy_native_stack_items(
     stack_ptr: *mut NativeStackItem,
@@ -137,90 +242,7 @@ fn copy_native_stack_items_with_depth(
         // by the loop bound.
         let item_ptr = unsafe { stack_ptr.add(index) };
         let item = unsafe { &*item_ptr };
-        match item.kind {
-            0 => stack.push(neo_riscv_abi::StackValue::Integer(item.integer_value)),
-            5 => {
-                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-                };
-                stack.push(neo_riscv_abi::StackValue::BigInteger(bytes));
-            }
-            9 => stack.push(neo_riscv_abi::StackValue::Interop(
-                item.integer_value as u64,
-            )),
-            6 => stack.push(neo_riscv_abi::StackValue::Iterator(
-                item.integer_value as u64,
-            )),
-            1 => {
-                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-                };
-                stack.push(neo_riscv_abi::StackValue::ByteString(bytes));
-            }
-            11 => {
-                let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-                };
-                stack.push(neo_riscv_abi::StackValue::Buffer(bytes));
-            }
-            3 => stack.push(neo_riscv_abi::StackValue::Boolean(item.integer_value != 0)),
-            4 => {
-                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                        item.bytes_len,
-                        depth + 1,
-                    )?
-                };
-                stack.push(neo_riscv_abi::StackValue::Array(items));
-            }
-            7 => {
-                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                        item.bytes_len,
-                        depth + 1,
-                    )?
-                };
-                stack.push(neo_riscv_abi::StackValue::Struct(items));
-            }
-            8 => {
-                let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                    Vec::new()
-                } else {
-                    copy_native_stack_items_with_depth(
-                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                        item.bytes_len,
-                        depth + 1,
-                    )?
-                };
-                if items.len() % 2 != 0 {
-                    return Err("map stack item contains an odd number of entries".to_string());
-                }
-                let mut pairs = Vec::with_capacity(items.len() / 2);
-                let mut iter = items.into_iter();
-                while let Some(key) = iter.next() {
-                    let value = iter.next().ok_or_else(|| {
-                        "map stack item contains an incomplete key/value pair".to_string()
-                    })?;
-                    pairs.push((key, value));
-                }
-                stack.push(neo_riscv_abi::StackValue::Map(pairs));
-            }
-            2 => stack.push(neo_riscv_abi::StackValue::Null),
-            10 => stack.push(neo_riscv_abi::StackValue::Pointer(item.integer_value)),
-            other => return Err(format!("unsupported native stack item kind {other}")),
-        }
+        stack.push(convert_native_item(item, depth)?);
     }
 
     Ok(stack)
@@ -451,7 +473,18 @@ fn serialize_stack_items_borrowed(stack: &[neo_riscv_abi::StackValue]) -> Option
     Some(SerializedStack::Borrowed(ptr, len))
 }
 
+/// Recursively free a `NativeStackItem` tree produced by [`serialize_stack_items`].
+///
+/// Mirrors the depth guard of [`copy_native_stack_items_with_depth`]
+/// (`MAX_STACK_ITEM_DEPTH`): a maliciously deeply-nested tree cannot stack-overflow
+/// the free path, which would turn a recoverable FAULT into a process crash.
+/// When the cap is exceeded the offending subtree is leaked (the bump arena or
+/// process exit reclaims it) rather than crashing.
 fn free_native_stack_items(stack_ptr: *mut NativeStackItem, stack_len: usize) {
+    free_native_stack_items_with_depth(stack_ptr, stack_len, 0);
+}
+
+fn free_native_stack_items_with_depth(stack_ptr: *mut NativeStackItem, stack_len: usize, depth: u32) {
     if stack_ptr.is_null() {
         return;
     }
@@ -461,10 +494,16 @@ fn free_native_stack_items(stack_ptr: *mut NativeStackItem, stack_len: usize) {
         let item = unsafe { &mut *item_ptr };
         if !item.bytes_ptr.is_null() {
             if item.kind == 4 || item.kind == 7 || item.kind == 8 {
-                free_native_stack_items(
-                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                    item.bytes_len,
-                );
+                // Cap recursion to avoid stack overflow on adversarial nesting.
+                // Beyond the cap, leave the subtree allocated (it lives in the
+                // process heap and is reclaimed at exit) rather than crashing.
+                if depth < MAX_STACK_ITEM_DEPTH {
+                    free_native_stack_items_with_depth(
+                        item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
+                        item.bytes_len,
+                        depth + 1,
+                    );
+                }
             } else {
                 let bytes =
                     ptr::slice_from_raw_parts_mut(item.bytes_ptr.cast_mut(), item.bytes_len);
@@ -519,87 +558,7 @@ fn copy_native_host_result(result: &NativeHostResult) -> Result<HostCallbackResu
 fn copy_single_native_stack_item(
     item: &NativeStackItem,
 ) -> Result<neo_riscv_abi::StackValue, String> {
-    match item.kind {
-        0 => Ok(neo_riscv_abi::StackValue::Integer(item.integer_value)),
-        5 => {
-            let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-            };
-            Ok(neo_riscv_abi::StackValue::BigInteger(bytes))
-        }
-        9 => Ok(neo_riscv_abi::StackValue::Interop(
-            item.integer_value as u64,
-        )),
-        6 => Ok(neo_riscv_abi::StackValue::Iterator(
-            item.integer_value as u64,
-        )),
-        1 => {
-            let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-            };
-            Ok(neo_riscv_abi::StackValue::ByteString(bytes))
-        }
-        11 => {
-            let bytes = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                unsafe { slice::from_raw_parts(item.bytes_ptr, item.bytes_len) }.to_vec()
-            };
-            Ok(neo_riscv_abi::StackValue::Buffer(bytes))
-        }
-        3 => Ok(neo_riscv_abi::StackValue::Boolean(item.integer_value != 0)),
-        2 => Ok(neo_riscv_abi::StackValue::Null),
-        10 => Ok(neo_riscv_abi::StackValue::Pointer(item.integer_value)),
-        4 => {
-            let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                copy_native_stack_items(
-                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                    item.bytes_len,
-                )?
-            };
-            Ok(neo_riscv_abi::StackValue::Array(items))
-        }
-        7 => {
-            let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                copy_native_stack_items(
-                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                    item.bytes_len,
-                )?
-            };
-            Ok(neo_riscv_abi::StackValue::Struct(items))
-        }
-        8 => {
-            let items = if item.bytes_ptr.is_null() || item.bytes_len == 0 {
-                Vec::new()
-            } else {
-                copy_native_stack_items(
-                    item.bytes_ptr.cast_mut().cast::<NativeStackItem>(),
-                    item.bytes_len,
-                )?
-            };
-            if items.len() % 2 != 0 {
-                return Err("map stack item contains an odd number of entries".to_string());
-            }
-            let mut pairs = Vec::with_capacity(items.len() / 2);
-            let mut iter = items.into_iter();
-            while let Some(key) = iter.next() {
-                let value = iter.next().ok_or_else(|| {
-                    "map stack item contains an incomplete key/value pair".to_string()
-                })?;
-                pairs.push((key, value));
-            }
-            Ok(neo_riscv_abi::StackValue::Map(pairs))
-        }
-        other => Err(format!("unsupported native stack item kind {other}")),
-    }
+    convert_native_item(item, 0)
 }
 
 fn write_ok_result(

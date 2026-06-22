@@ -1,3 +1,10 @@
+//! Raw PolkaVM `host_call` FFI shim used by the syscall wrappers.
+//!
+//! This is the lowest layer of the devpack: it encodes a `StackValue` stack
+//! into the callback codec, invokes the PolkaVM `host_call` host-import, and
+//! decodes the response back into a `Vec<StackValue>`. All higher-level
+//! syscall wrappers in [`crate::syscalls`] route through [`invoke_host_call`].
+
 use alloc::{format, string::String, vec, vec::Vec};
 use neo_riscv_abi::{StackValue, callback_codec};
 
@@ -12,6 +19,14 @@ unsafe extern "C" {
     ) -> usize;
 }
 
+/// Invoke a `System.*` syscall on the host via the PolkaVM `host_call` import.
+///
+/// Encodes `stack` into the callback codec, calls `host_call` with the given
+/// `api` id, and decodes the host's response into a new evaluation stack.
+///
+/// # Returns
+/// `Ok(stack)` on success, or `Err` if the host call failed (returned 0) or the
+/// response could not be decoded.
 pub fn invoke_host_call(api: u32, stack: &[StackValue]) -> Result<Vec<StackValue>, String> {
     let encoded = callback_codec::encode_stack_result(&Ok(stack.to_vec()));
     let mut result_buf = vec![0u8; 65536];

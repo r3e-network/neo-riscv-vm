@@ -1,19 +1,41 @@
+//! Typed bindings to NEO native contracts.
+//!
+//! Each submodule (`neo_token`, `gas_token`, `policy`, `ledger`, `oracle`,
+//! `notary`, `role_management`, `std_lib`, `treasury`, `crypto_lib`,
+//! `contract_management`) wraps a NEO native contract, exposing its public
+//! methods as typed Rust functions. Calls are routed through
+//! [`call_native_with_flags`] → `System.Contract.Call`.
+//!
+//! Native contract hashes are 20-byte fixed arrays (`&[u8; 20]`), enforced at
+//! compile time by [`build_contract_call_stack`].
+
 use alloc::{vec, vec::Vec};
 
 use neo_riscv_abi::StackValue;
 
 use crate::{api_ids, ffi, syscalls::CALL_FLAGS_ALL};
 
+/// Bindings to the `ContractManagement` native contract.
 pub mod contract_management;
+/// Bindings to the `CryptoLib` native contract (hash functions, ECDSA).
 pub mod crypto_lib;
+/// Bindings to the `GasToken` native (GAS) contract.
 pub mod gas_token;
+/// Bindings to the `Ledger` native contract (blocks, transactions).
 pub mod ledger;
+/// Bindings to the `NeoToken` native (NEO) contract.
 pub mod neo_token;
+/// Bindings to the `Notary` native contract.
 pub mod notary;
+/// Bindings to the `Oracle` native contract.
 pub mod oracle;
+/// Bindings to the `Policy` native contract (fees, block config).
 pub mod policy;
+/// Bindings to the `RoleManagement` native contract.
 pub mod role_management;
+/// Bindings to the `StdLib` native contract (string/conversion helpers).
 pub mod std_lib;
+/// Bindings to the `GasToken` treasury / committee native contract.
 pub mod treasury;
 
 pub(crate) const CALL_FLAGS_READ_ONLY: u8 = 0x05;

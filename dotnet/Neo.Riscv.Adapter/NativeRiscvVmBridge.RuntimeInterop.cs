@@ -77,17 +77,25 @@ namespace Neo.SmartContract.RiscV
 
         private StackItem[] HandleGetInvocationCounter(RiscvExecutionRequest request, StackItem[] inputStack)
         {
-            var count = request.ScriptHashes.Count(scriptHash => scriptHash.Equals(request.ScriptHashes[^1]));
+            // The engine's invocationCounter dictionary is the canonical source
+            // (maintained by IncrementInvocationCounter on each call). Use it
+            // when available; fall back to the O(n) ScriptHashes.Count only if
+            // the contract is missing (cannot enter native context).
             var contract = NativeContract.ContractManagement.GetContract(request.Engine.SnapshotCache, request.ScriptHashes[^1]);
+            int count;
             if (contract is not null)
             {
-                var engineCount = request.Engine.ExecuteInNativeContractContext(
+                count = request.Engine.ExecuteInNativeContractContext(
                     request.ScriptHashes[^1],
                     request.ScriptHashes.Count > 1 ? request.ScriptHashes[^2] : null,
                     contract,
                     request.CurrentCallFlags,
                     () => request.Engine.GetInvocationCounter());
-                count = Math.Max(count, engineCount);
+            }
+            else
+            {
+                // Fallback when the contract is not in native storage.
+                count = request.ScriptHashes.Count(scriptHash => scriptHash.Equals(request.ScriptHashes[^1]));
             }
             return Append(inputStack, new Integer(count));
         }
@@ -187,14 +195,13 @@ namespace Neo.SmartContract.RiscV
             return BuildDynamicCallReturnStack(inputStack, 3, nestedResult.ResultStack);
         }
 
-        private static bool IsPolkaVmBinary(byte[] script)
-        {
-            return script.Length >= 4
-                && script[0] == 0x50
-                && script[1] == 0x56
-                && script[2] == 0x4D
-                && script[3] == 0x00;
-        }
+        /// <summary>
+        /// Detect whether a script payload is a PolkaVM binary.
+        /// </summary>
+        /// <remarks>Delegates to the single canonical <see cref="RiscvExecutionDispatcher.IsPvmBinary"/>
+        /// to avoid duplicating the <c>"PVM\0"</c> magic-byte comparison.</remarks>
+        private static bool IsPolkaVmBinary(byte[] script) =>
+            RiscvExecutionDispatcher.IsPvmBinary(script);
 
         private static StackItem[] HandleGetNotifications(RiscvExecutionRequest request, StackItem[] inputStack)
         {

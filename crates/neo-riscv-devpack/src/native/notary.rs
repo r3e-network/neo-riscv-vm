@@ -1,3 +1,6 @@
+//! Bindings to the `Notary` native contract.
+//!
+//! Wraps notary deposit, lock, and expiration queries.
 use neo_riscv_abi::{StackValue, stack_value_as_bool, stack_value_as_i64, stack_value_as_u32};
 
 use super::{call_native, call_native_read_only};
@@ -6,11 +9,13 @@ use super::{call_native, call_native_read_only};
 //
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`NOTARY_HASH`).
 pub const NOTARY_HASH: [u8; 20] = [
     0x3b, 0xec, 0x35, 0x31, 0x11, 0x9b, 0xba, 0xd7, 0x6d, 0xd0, 0x44, 0x92, 0x0b, 0x0d, 0xe6, 0xc3,
     0x19, 0x4f, 0xe1, 0xc1,
 ];
 
+/// Return the token balance of an account.
 pub fn notary_balance_of(account: &[u8; 20]) -> i64 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NOTARY_HASH, "balanceOf", &args)
@@ -18,6 +23,7 @@ pub fn notary_balance_of(account: &[u8; 20]) -> i64 {
         .unwrap_or(0)
 }
 
+/// Invoke the native contract `notary_expiration_of` method.
 pub fn notary_expiration_of(account: &[u8; 20]) -> u32 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NOTARY_HASH, "expirationOf", &args)
@@ -25,12 +31,14 @@ pub fn notary_expiration_of(account: &[u8; 20]) -> u32 {
         .unwrap_or(0)
 }
 
+/// Return the max not-valid-before delta for notary.
 pub fn notary_get_max_not_valid_before_delta() -> u32 {
     call_native_read_only(&NOTARY_HASH, "getMaxNotValidBeforeDelta", &[])
         .and_then(|v| stack_value_as_u32(&v))
         .unwrap_or(0)
 }
 
+/// Invoke the native contract `notary_lock_deposit_until` method.
 pub fn notary_lock_deposit_until(account: &[u8; 20], till: u32) -> bool {
     let args = [
         StackValue::ByteString(account.to_vec()),
@@ -41,6 +49,7 @@ pub fn notary_lock_deposit_until(account: &[u8; 20], till: u32) -> bool {
         .unwrap_or(false)
 }
 
+/// Invoke the native contract `notary_withdraw` method.
 pub fn notary_withdraw(from: &[u8; 20], to: &[u8; 20]) -> bool {
     let args = [
         StackValue::ByteString(from.to_vec()),
@@ -51,6 +60,7 @@ pub fn notary_withdraw(from: &[u8; 20], to: &[u8; 20]) -> bool {
         .unwrap_or(false)
 }
 
+/// Verify a signature.
 pub fn notary_verify(signature: &[u8]) -> bool {
     let args = [StackValue::ByteString(signature.to_vec())];
     call_native_read_only(&NOTARY_HASH, "verify", &args)
@@ -58,6 +68,7 @@ pub fn notary_verify(signature: &[u8]) -> bool {
         .unwrap_or(false)
 }
 
+/// Invoke the native contract `notary_set_max_not_valid_before_delta` method.
 pub fn notary_set_max_not_valid_before_delta(value: u32) {
     let args = [StackValue::Integer(i64::from(value))];
     let _ = call_native(&NOTARY_HASH, "setMaxNotValidBeforeDelta", &args);

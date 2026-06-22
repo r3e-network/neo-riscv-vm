@@ -88,6 +88,16 @@ namespace Neo.SmartContract.RiscV
             int? initializerInstructionPointer = null,
             int? resultStackLimit = null)
         {
+            // Guard against unbounded native allocation: the script payload may
+            // originate from Runtime.LoadScript (attacker-influenced) rather than
+            // a deployed NEF (consensus-governed). Cap at 2 MiB (well above the
+            // canonical ExecutionEngineLimits.Default.MaxItemSize of 1 MiB, with
+            // headroom for the initial stack + method name).
+            const int MaxScriptAllocationBytes = 2 * 1024 * 1024;
+            if (script.Length > MaxScriptAllocationBytes)
+                throw new InvalidOperationException(
+                    $"Script payload too large for native execution: {script.Length} bytes (max {MaxScriptAllocationBytes}).");
+
             var scriptPtr = Marshal.AllocHGlobal(script.Length);
             NativeExecutionResult nativeResult = default;
             var callbackState = new HostCallbackState { Bridge = this, Request = request, Scope = scope };

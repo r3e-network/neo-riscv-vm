@@ -1,3 +1,6 @@
+//! Bindings to the `Oracle` native contract.
+//!
+//! Wraps oracle request/callback queries.
 use neo_riscv_abi::StackValue;
 
 use super::call_native;
@@ -6,12 +9,14 @@ use super::call_native;
 //
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`ORACLE_CONTRACT_HASH`).
 pub const ORACLE_CONTRACT_HASH: [u8; 20] = [
     0x58, 0x87, 0x17, 0x11, 0x7e, 0x0a, 0xa8, 0x10, 0x72, 0xaf, 0xab, 0x71, 0xd2, 0xdd, 0x89, 0xfe,
     0x7c, 0x4b, 0x92, 0xfe,
 ];
 
 // Oracle native contract bindings
+/// Submit an oracle request.
 pub fn oracle_request(
     url: &str,
     filter: &str,

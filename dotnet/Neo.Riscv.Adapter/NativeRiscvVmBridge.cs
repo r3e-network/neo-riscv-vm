@@ -26,6 +26,42 @@ using System.Threading;
 
 namespace Neo.SmartContract.RiscV
 {
+    /// <summary>
+    /// The concrete <see cref="IRiscvVmBridge"/> that drives the Rust
+    /// <c>neo-riscv-host</c> native library (<c>libneo_riscv_host</c>) via
+    /// P/Invoke.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This is the central FFI boundary of the neovm→riscvvm
+    /// replacement.</b> Every contract execution the <see cref="RiscvApplicationEngine"/>
+    /// dispatches flows through here: the bridge marshals the NeoVM script and
+    /// initial stack into the native call, invokes the Rust host, and unmarshals
+    /// the resulting evaluation stack, gas consumed, and fault diagnostics back
+    /// into .NET types.</para>
+    /// <para><b>Dual payload modes:</b> The bridge transparently handles both
+    /// execution kinds (see <see cref="RiscvExecutionKind"/>):
+    /// <list type="bullet">
+    /// <item><description>NeoVM-compatibility contracts — the script is NeoVM
+    /// bytecode run through the in-guest <c>neo-vm-rs</c> interpreter; every
+    /// <c>System.*</c> syscall is forwarded back across the FFI boundary to the
+    /// .NET <see cref="NativeHostCallback"/> for canonical handling.</description></item>
+    /// <item><description>Native RISC-V contracts — the script is a PolkaVM
+    /// binary executed directly; syscalls are handled by the Rust host's builtin
+    /// or callback path.</description></item>
+    /// </list></para>
+    /// <para><b>Native library location:</b> The host library path can be
+    /// overridden via the <see cref="LibraryPathEnvironmentVariable"/>
+    /// (<c>NEO_RISCV_HOST_LIB</c>) environment variable; otherwise a
+    /// platform-appropriate default (<c>libneo_riscv_host.dylib/.so/.dll</c>)
+    /// is resolved from the adapter directory.</para>
+    /// <para><b>Partial classes:</b> This type is split across several partial
+    /// files by responsibility: <c>NativeRiscvVmBridge.Execution.cs</c> (script
+    /// execution), <c>.Callback.cs</c> (syscall callback dispatch),
+    /// <c>.StorageInterop.cs</c> / <c>.ContractInterop.cs</c> / <c>.RuntimeInterop.cs</c>
+    /// (canonical interop handlers), <c>.NativeStack.cs</c> (stack-item
+    /// marshaling), <c>.Diagnostics.cs</c> (fault/trace), and
+    /// <c>.Profiling.cs</c>.</para>
+    /// </remarks>
     public sealed partial class NativeRiscvVmBridge : IRiscvVmBridge, IDisposable
     {
         public const string LibraryPathEnvironmentVariable = "NEO_RISCV_HOST_LIB";

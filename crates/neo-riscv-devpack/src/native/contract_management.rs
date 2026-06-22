@@ -1,3 +1,6 @@
+//! Bindings to the `ContractManagement` native contract.
+//!
+//! Wraps contract deploy, destroy, and metadata queries.
 use alloc::vec::Vec;
 
 use neo_riscv_abi::{StackValue, stack_value_as_fixed_bytes};
@@ -8,11 +11,13 @@ use super::{call_native, call_native_read_only, std_lib::stdlib_serialize_stack_
 //
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`CONTRACT_MANAGEMENT_HASH`).
 pub const CONTRACT_MANAGEMENT_HASH: [u8; 20] = [
     0xfd, 0xa3, 0xfa, 0x43, 0x46, 0xea, 0x53, 0x2a, 0x25, 0x8f, 0xc4, 0x97, 0xdd, 0xad, 0xdb, 0x64,
     0x37, 0xc9, 0xfd, 0xff,
 ];
 
+/// Deploy a new contract.
 pub fn contract_deploy(nef: &[u8], manifest: &[u8]) -> [u8; 20] {
     let args = [
         StackValue::ByteString(nef.to_vec()),
@@ -31,6 +36,7 @@ pub fn contract_deploy(nef: &[u8], manifest: &[u8]) -> [u8; 20] {
     }
 }
 
+/// Update an existing contract with new NEF bytecode and manifest.
 pub fn contract_update(nef: &[u8], manifest: &[u8]) {
     let args = [
         StackValue::ByteString(nef.to_vec()),
@@ -39,10 +45,12 @@ pub fn contract_update(nef: &[u8], manifest: &[u8]) {
     let _ = call_native(&CONTRACT_MANAGEMENT_HASH, "update", &args);
 }
 
+/// Destroy the calling contract.
 pub fn contract_destroy() {
     let _ = call_native(&CONTRACT_MANAGEMENT_HASH, "destroy", &[]);
 }
 
+/// Return a contract's state by hash.
 pub fn contract_get_contract(hash: &[u8; 20]) -> Option<Vec<u8>> {
     let args = [StackValue::ByteString(hash.to_vec())];
     call_native_read_only(&CONTRACT_MANAGEMENT_HASH, "getContract", &args)

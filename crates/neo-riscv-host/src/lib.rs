@@ -3,7 +3,12 @@
 //! Provides the host-side VM runtime using PolkaVM, FFI bindings for C# interop,
 //! and execution context management.
 
+// Require every public item to carry rustdoc. This prevents documentation debt
+// from silently accumulating on the host's public API surface.
+#![deny(missing_docs)]
+
 mod bridge;
+/// Typed error variants returned by the host runtime ([`HostError`]).
 pub mod error;
 mod ffi;
 mod pricing;
@@ -65,6 +70,18 @@ pub(crate) fn set_last_fault_locals(bytes: &Option<Vec<u8>>) {
 
 pub(crate) fn reset_last_native_fee_consumed_pico() {
     LAST_NATIVE_FEE_CONSUMED_PICO.with(|cell| cell.set(0));
+}
+
+/// Reset all execution thread-local side-channels at the start of an execution.
+///
+/// This must be called at the top of every `execute_*` entry point so that a
+/// HALT following a previous FAULT on the same thread does not leak the prior
+/// fault's IP/locals, and so the native-fee counter starts from zero. Without
+/// this, `neo_riscv_last_fault_ip()` could return a stale IP from an unrelated
+/// earlier execution.
+pub(crate) fn reset_execution_sidechannels() {
+    reset_last_fault_ip();
+    reset_last_native_fee_consumed_pico();
 }
 
 pub(crate) fn set_last_native_fee_consumed_pico(value: i64) {
@@ -160,12 +177,21 @@ pub use ffi::{
 pub use profiling::{get_current_memory, get_peak_memory, reset as reset_profiling};
 pub use types::{HostCallbackResult, RuntimeContext};
 
-/// PolkaVM runtime instance.
+/// A handle to the cached PolkaVM execution backend.
+///
+/// Wraps the lazily-initialized PolkaVM module cache. Construct once with
+/// [`PolkaVmRuntime::new`] and reuse for many executions; the underlying guest
+/// module is compiled and cached on first use.
 pub struct PolkaVmRuntime {
     backend_kind: BackendKind,
 }
 
 impl PolkaVmRuntime {
+    /// Create a new runtime, initializing the PolkaVM module cache if needed.
+    ///
+    /// # Errors
+    /// Returns an error string if the PolkaVM guest module cannot be loaded or
+    /// compiled (e.g. missing built-in binary, allocation failure).
     pub fn new() -> Result<Self, String> {
         runtime_cache::ensure_runtime_ready()?;
 
@@ -174,6 +200,8 @@ impl PolkaVmRuntime {
         })
     }
 
+    /// Return which PolkaVM backend kind is active (currently always
+    /// [`BackendKind::Interpreter`]).
     #[must_use]
     pub fn backend_kind(&self) -> BackendKind {
         self.backend_kind
@@ -182,6 +210,12 @@ impl PolkaVmRuntime {
 
 use error::HostError;
 
+/// Execute a NeoVM script with a default `Application` trigger and zeroed
+/// context fields.
+///
+/// Convenience wrapper around [`execute_script_with_context`] for the common
+/// case of running a script standalone. Syscalls are served by the built-in
+/// [`builtin_host_callback`].
 pub fn execute_script(script: &[u8]) -> Result<ExecutionResult, HostError> {
     execute_script_with_context(
         script,
@@ -196,6 +230,11 @@ pub fn execute_script(script: &[u8]) -> Result<ExecutionResult, HostError> {
     )
 }
 
+/// Execute a NeoVM script with a custom trigger type (e.g. verification).
+///
+/// Like [`execute_script`] but lets the caller specify the trigger byte
+/// (`0x40` Application, `0x20` Verification, etc.), which native contracts use
+/// to decide whether an invocation is permitted.
 pub fn execute_script_with_trigger(
     script: &[u8],
     trigger: u8,
@@ -213,6 +252,13 @@ pub fn execute_script_with_trigger(
     )
 }
 
+/// Execute a NeoVM script with a full runtime context (trigger, network,
+/// address version, timestamp, gas, fee factor).
+///
+/// Syscalls (`System.*` interops) are dispatched to the built-in
+/// [`builtin_host_callback`]. Use [`execute_script_with_host_and_stack`] when
+/// you need to supply your own syscall handler (e.g. the C# adapter does, to
+/// route syscalls back across the FFI boundary).
 pub fn execute_script_with_context(
     script: &[u8],
     context: RuntimeContext,
@@ -227,6 +273,12 @@ pub fn execute_script_with_context(
     .map_err(HostError::from)
 }
 
+/// Execute a NeoVM script with a caller-supplied syscall callback.
+///
+/// This is the primary entry point used by the C# adapter: every `System.*`
+/// interop raised by the interpreter is forwarded to `callback`, which marshals
+/// it back across the FFI boundary to the .NET host for canonical handling.
+/// The initial evaluation stack and instruction pointer start empty/zero.
 pub fn execute_script_with_host_and_stack<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
@@ -259,7 +311,7 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    reset_last_native_fee_consumed_pico();
+    reset_execution_sidechannels();
     let script_len: u32 = script
         .len()
         .try_into()
@@ -393,6 +445,11 @@ where
     }
 }
 
+/// Execute a NeoVM script from a non-zero instruction pointer.
+///
+/// Like [`execute_script_with_host_and_stack`] but starts interpretation at
+/// `initial_ip` instead of offset 0 — used when resuming a partially-executed
+/// script or entering at a specific method offset within a NEF script.
 pub fn execute_script_with_host_and_stack_and_ip<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
@@ -419,6 +476,11 @@ where
     )
 }
 
+/// Execute a NeoVM script, running an `_initialize` routine first.
+///
+/// The interpreter runs the script from `initializer_ip` to completion first
+/// (the legacy deploy-time initializer), then continues from `initial_ip`.
+/// Syscalls go through the caller-supplied `callback`.
 pub fn execute_script_with_host_and_stack_and_ip_and_initializer<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
@@ -446,6 +508,10 @@ where
     )
 }
 
+/// Execute a NeoVM script, capping the returned stack to `result_limit` items.
+///
+/// When only the top of the result stack is needed (e.g. verification), this
+/// avoids serializing the full stack back across the host/guest boundary.
 pub fn execute_script_with_host_and_stack_and_ip_with_result_limit<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
@@ -473,6 +539,12 @@ where
     )
 }
 
+/// Execute a NeoVM script with both an `_initialize` routine and a result cap.
+///
+/// Combination of
+/// [`execute_script_with_host_and_stack_and_ip_and_initializer`] and
+/// [`execute_script_with_host_and_stack_and_ip_with_result_limit`]: runs the
+/// initializer first, then the main entry, and caps the returned stack.
 pub fn execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit<F>(
     script: &[u8],
     initial_stack: Vec<neo_riscv_abi::StackValue>,
@@ -518,7 +590,7 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    reset_last_native_fee_consumed_pico();
+    reset_execution_sidechannels();
     let script_len: u32 = script
         .len()
         .try_into()
@@ -753,16 +825,17 @@ where
         &[neo_riscv_abi::StackValue],
     ) -> Result<HostCallbackResult, String>,
 {
-    reset_last_native_fee_consumed_pico();
+    reset_execution_sidechannels();
     let stack_bytes = fast_codec::encode_stack(&initial_stack);
-    let mut fallback_full_stack = Vec::with_capacity(1 + initial_stack.len());
-    fallback_full_stack.push(neo_riscv_abi::StackValue::ByteString(
-        method.as_bytes().to_vec(),
-    ));
-    fallback_full_stack.extend(initial_stack.iter().cloned());
-    let fallback_stack_bytes = fast_codec::encode_stack(&fallback_full_stack);
 
-    let max_stack_len = stack_bytes.len().max(fallback_stack_bytes.len());
+    // The fallback stack (method name + cloned initial stack) is only needed when
+    // the module lacks an `execute_method` export. To size `aux_size` without
+    // eagerly cloning the whole stack, compute a conservative upper bound on the
+    // fallback encoding length: the encoded method name cannot exceed
+    // method.len() + a few tag/length bytes, plus the already-known
+    // stack_bytes length.
+    let fallback_len_upper_bound = stack_bytes.len() + method.len() + 16;
+    let max_stack_len = stack_bytes.len().max(fallback_len_upper_bound);
     let aux_size = if max_stack_len == 0 {
         0
     } else {
@@ -816,6 +889,17 @@ where
     ) {
         Ok(()) => Ok(()),
         Err(_) if !has_execute_method => {
+            // Lazily build the fallback stack (method name + cloned initial
+            // stack) only when the legacy `execute` export path is needed. This
+            // avoids cloning every StackValue in the common case where the
+            // module exports `execute_method`.
+            let mut fallback_full_stack = Vec::with_capacity(1 + initial_stack.len());
+            fallback_full_stack.push(neo_riscv_abi::StackValue::ByteString(
+                method.as_bytes().to_vec(),
+            ));
+            fallback_full_stack.extend(initial_stack.iter().cloned());
+            let fallback_stack_bytes = fast_codec::encode_stack(&fallback_full_stack);
+
             let full_stack_len: u32 = fallback_stack_bytes
                 .len()
                 .try_into()
@@ -958,6 +1042,11 @@ fn native_method_id(method: &str) -> u32 {
     hash
 }
 
+/// Execute a NeoVM script with a caller-supplied syscall callback and an empty
+/// initial stack.
+///
+/// Shorthand for [`execute_script_with_host_and_stack`] with an empty initial
+/// stack — the common case when the script builds its own stack from scratch.
 pub fn execute_script_with_host<F>(
     script: &[u8],
     context: RuntimeContext,
@@ -974,6 +1063,12 @@ where
     execute_script_with_host_and_stack(script, Vec::new(), context, callback)
 }
 
+/// Execute a native RISC-V contract binary's method by name, using the built-in
+/// storage/syscall backend.
+///
+/// Resolves `method` to a stable id via [`native_method_id`], then delegates to
+/// [`execute_native_contract_builtin_by_id`]. Syscalls and storage are served by
+/// the in-process `BuiltinStorage` cache (no host callback required).
 pub fn execute_native_contract_builtin(
     binary: &[u8],
     method: &str,
@@ -983,13 +1078,19 @@ pub fn execute_native_contract_builtin(
     execute_native_contract_builtin_by_id(binary, native_method_id(method), initial_stack, context)
 }
 
+/// Execute a native RISC-V contract binary's method by pre-computed method id,
+/// using the built-in storage/syscall backend.
+///
+/// Like [`execute_native_contract_builtin`] but takes the method id directly,
+/// avoiding the per-call FNV-1a hash. Used in hot paths where the id is already
+/// known.
 pub fn execute_native_contract_builtin_by_id(
     binary: &[u8],
     method_id: u32,
     initial_stack: Vec<neo_riscv_abi::StackValue>,
     context: RuntimeContext,
 ) -> Result<ExecutionResult, String> {
-    reset_last_native_fee_consumed_pico();
+    reset_execution_sidechannels();
     let stack_bytes = fast_codec::encode_stack(&initial_stack);
     let max_stack_len = stack_bytes.len();
     let aux_size = if max_stack_len == 0 {

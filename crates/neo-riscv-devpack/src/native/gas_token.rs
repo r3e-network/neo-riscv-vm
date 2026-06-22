@@ -1,3 +1,6 @@
+//! Bindings to the `GasToken` native (GAS) contract.
+//!
+//! Wraps balance, transfer, and supply queries for GAS.
 use alloc::string::String;
 
 use neo_riscv_abi::{
@@ -10,11 +13,13 @@ use super::{call_native, call_native_read_only};
 //
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`GAS_TOKEN_HASH`).
 pub const GAS_TOKEN_HASH: [u8; 20] = [
     0xcf, 0x76, 0xe2, 0x8b, 0xd0, 0x06, 0x2c, 0x4a, 0x47, 0x8e, 0xe3, 0x55, 0x61, 0x01, 0x13, 0x19,
     0xf3, 0xcf, 0xa4, 0xd2,
 ];
 
+/// Return the token balance of an account.
 pub fn gas_balance_of(account: &[u8; 20]) -> i64 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&GAS_TOKEN_HASH, "balanceOf", &args)
@@ -22,6 +27,7 @@ pub fn gas_balance_of(account: &[u8; 20]) -> i64 {
         .unwrap_or(0)
 }
 
+/// Transfer tokens from one account to another.
 pub fn gas_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
     let args = [
         StackValue::ByteString(from.to_vec()),
@@ -34,6 +40,7 @@ pub fn gas_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
         .unwrap_or(false)
 }
 
+/// Return the token symbol string.
 pub fn gas_symbol() -> String {
     const DEFAULT: &str = "GAS";
     call_native_read_only(&GAS_TOKEN_HASH, "symbol", &[])
@@ -41,12 +48,14 @@ pub fn gas_symbol() -> String {
         .unwrap_or_else(|| String::from(DEFAULT))
 }
 
+/// Return the number of token decimals.
 pub fn gas_decimals() -> u8 {
     call_native_read_only(&GAS_TOKEN_HASH, "decimals", &[])
         .and_then(|v| stack_value_as_u8(&v))
         .unwrap_or(8)
 }
 
+/// Return the total token supply.
 pub fn gas_total_supply() -> i64 {
     call_native_read_only(&GAS_TOKEN_HASH, "totalSupply", &[])
         .and_then(|v| stack_value_as_i64(&v))

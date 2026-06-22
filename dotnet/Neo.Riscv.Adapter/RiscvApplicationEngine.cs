@@ -16,6 +16,28 @@ using System.Linq;
 
 namespace Neo.SmartContract.RiscV
 {
+    /// <summary>
+    /// The RISC-V-backed <see cref="ApplicationEngine"/> used to execute smart
+    /// contracts through the PolkaVM runtime.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Role in the neovm→riscvvm replacement:</b> This engine is the
+    /// .NET-side execution entry point. When the node's
+    /// <see cref="IRiscvApplicationEngineProvider"/> creates an engine, it
+    /// produces a <see cref="RiscvApplicationEngine"/> whose <see cref="Execute"/>
+    /// override forwards the contract script to the native
+    /// <see cref="IRiscvVmBridge"/> (a <see cref="NativeRiscvVmBridge"/> backed
+    /// by the Rust <c>neo-riscv-host</c> via P/Invoke).</para>
+    /// <para><b>Two execution paths:</b> Depending on
+    /// <see cref="RiscvExecutionDispatcher"/>, the contract is either run
+    /// through the NeoVM-compatibility interpreter (legacy contracts) or
+    /// executed directly as a PolkaVM binary (true RISC-V contracts). Both
+    /// paths return through this engine so that gas accounting, fault
+    /// reporting, and the result stack are unified.</para>
+    /// <para><b>Location:</b> This class lives in <c>Neo.Riscv.Adapter.dll</c>,
+    /// the native-dependency adapter loaded by the node and devpack test
+    /// framework.</para>
+    /// </remarks>
     public sealed class RiscvApplicationEngine : ApplicationEngine, IRiscvApplicationEngine
     {
         private const string TraceEnvironmentVariable = "NEO_RISCV_TRACE_ENGINE";
@@ -299,12 +321,8 @@ namespace Neo.SmartContract.RiscV
             if (context.GetState<ExecutionContextState>().Contract?.Type == ContractType.RiscV)
                 return true;
 
-            var script = ((ReadOnlyMemory<byte>)context.Script).Span;
-            return script.Length >= 4
-                && script[0] == 0x50
-                && script[1] == 0x56
-                && script[2] == 0x4D
-                && script[3] == 0x00;
+            // Delegate to the single canonical PVM magic-byte check to avoid drift.
+            return RiscvExecutionDispatcher.IsPvmBinary(context.Script);
         }
 
         private static string DescribeContext(ExecutionContext? context)

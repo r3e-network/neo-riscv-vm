@@ -1,3 +1,43 @@
+//! NeoVM-compatibility syscall bridge between the PolkaVM guest and the Rust host.
+//!
+//! This module is the heart of the neovm→riscvvm replacement. When a legacy
+//! NeoVM contract runs inside the RISC-V guest, every `System.*` interop it
+//! raises must be dispatched to a canonical handler that behaves exactly like
+//! upstream NeoVM — otherwise the resulting state root would diverge from the
+//! mainnet chain. This bridge wires that dispatch.
+//!
+//! # Two execution modes
+//!
+//! 1. **Callback mode** (used by the C# node adapter): the guest forwards each
+//!    syscall across the PolkaVM host-import boundary via [`host_call`]; the
+//!    host marshals the stack into a [`NativeHostCallback`] function pointer
+//!    supplied by .NET, which performs the canonical NEO interop handling and
+//!    returns the replacement stack.
+//! 2. **Builtin mode** (used for standalone/host tests): the same syscalls are
+//!    served in-process by [`builtin_host_callback`] backed by the
+//!    [`BuiltinStorage`] cache, with no external callback required.
+//!
+//! # What it registers
+//!
+//! [`register_host_functions`] installs the PolkaVM host-imports the guest
+//! binary links against:
+//! - `host_on_instruction` — per-opcode gas metering tick.
+//! - `host_call` — the general syscall entry point (encodes the stack, dispatches
+//!   by API id, decodes the reply).
+//! - `host_storage_get` / `host_storage_contains` / `host_storage_put` / etc.
+//!   — direct storage shortcuts used by builtin mode.
+//!
+//! [`ClosureHost`] adapts a Rust closure into the `SyscallProvider` trait the
+//! `neo-vm-rs` interpreter calls, bridging interpreter callbacks back to either
+//! the C# callback or the builtin handler.
+//!
+//! [`host_call`]: ../fn.execute_script.html (see the guest's `polkavm_syscall_provider`)
+//! [`NativeHostCallback`]: ../type.NativeHostCallback.html
+//! [`builtin_host_callback`]: ../fn.builtin_host_callback.html (in lib.rs)
+//! [`BuiltinStorage`]: builtin_storage/struct.BuiltinStorage.html
+//! [`register_host_functions`]: fn.register_host_functions.html
+//! [`ClosureHost`]: struct.ClosureHost.html
+
 mod builtin_storage;
 
 use crate::{HostCallbackResult, RuntimeContext, pricing::charge_opcode};

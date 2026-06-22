@@ -36,7 +36,19 @@ namespace Neo.SmartContract.RiscV
             }
         }
 
-        private static void FreeNativeStackItems(IntPtr stackPtr, int stackLen)
+        /// <summary>
+        /// Maximum nesting depth when freeing native stack-item trees. Mirrors the
+        /// Rust side (<c>MAX_STACK_ITEM_DEPTH</c>) and the decode depth cap in
+        /// <see cref="FastCodecReader"/>. Prevents a stack overflow from adversarial
+        /// nesting in the native→managed free path (a recoverable FAULT must not
+        /// become a process crash).
+        /// </summary>
+        private const int MaxFreeStackItemDepth = 64;
+
+        private static void FreeNativeStackItems(IntPtr stackPtr, int stackLen) =>
+            FreeNativeStackItems(stackPtr, stackLen, depth: 0);
+
+        private static void FreeNativeStackItems(IntPtr stackPtr, int stackLen, int depth)
         {
             if (stackPtr == IntPtr.Zero) return;
             if (stackPtr == CachedNullStackPtr ||
@@ -52,14 +64,17 @@ namespace Neo.SmartContract.RiscV
                 var item = Marshal.PtrToStructure<NativeStackItem>(itemPtr);
                 if (item.BytesPtr != IntPtr.Zero)
                 {
-                    if (item.Kind == 4 || item.Kind == 7 || item.Kind == 8)
+                    if ((item.Kind == 4 || item.Kind == 7 || item.Kind == 8) &&
+                        depth < MaxFreeStackItemDepth)
                     {
-                        FreeNativeStackItems(item.BytesPtr, (int)item.BytesLen);
+                        FreeNativeStackItems(item.BytesPtr, (int)item.BytesLen, depth + 1);
                     }
-                    else
+                    else if (item.Kind != 4 && item.Kind != 7 && item.Kind != 8)
                     {
                         Marshal.FreeHGlobal(item.BytesPtr);
                     }
+                    // Beyond the depth cap, leave the subtree allocated (process
+                    // heap, reclaimed at exit) rather than overflowing the stack.
                 }
             }
             Marshal.FreeHGlobal(stackPtr);

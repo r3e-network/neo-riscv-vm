@@ -27,6 +27,40 @@ pub(crate) fn check_instruction_ceiling(count: u64) -> Result<(), String> {
     }
 }
 
+/// Add `delta` pico-fee units to `fee_consumed_pico`, convert the increment to
+/// datoshi (ceiling division by 10_000), and deduct that datoshi amount from
+/// `context.gas_left`.
+///
+/// This is the single implementation of the pico→datoshi rounding + gas
+/// deduction sequence shared by [`charge_opcode`] and
+/// [`charge_native_instructions`]. Both previously duplicated the
+/// `previous_datoshi → add → current_datoshi → consumed_delta → subtract`
+/// arithmetic, which must stay exactly in sync for consensus.
+fn apply_pico_fee_and_charge(
+    context: &mut RuntimeContext,
+    fee_consumed_pico: &mut i64,
+    delta: i64,
+) -> Result<(), String> {
+    // Ceiling-division of the running pico total to datoshi (1 datoshi = 10_000 pico).
+    // By snapshotting the pre-delta datoshi and comparing to the post-delta value,
+    // we charge only the quantum that actually crossed a 10_000 boundary.
+    let previous_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
+    *fee_consumed_pico = fee_consumed_pico
+        .checked_add(delta)
+        .ok_or_else(|| "fee overflow".to_string())?;
+    let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
+    let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
+
+    context.gas_left = context
+        .gas_left
+        .checked_sub(consumed_delta)
+        .ok_or_else(|| "Insufficient GAS.".to_string())?;
+    if context.gas_left < 0 {
+        return Err("Insufficient GAS.".to_string());
+    }
+    Ok(())
+}
+
 #[inline]
 pub(crate) fn charge_opcode(
     context: &mut RuntimeContext,
@@ -40,21 +74,7 @@ pub(crate) fn charge_opcode(
     let delta = opcode_price(opcode)
         .checked_mul(context.exec_fee_factor_pico)
         .ok_or_else(|| "opcode fee overflow".to_string())?;
-    let previous_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
-    *fee_consumed_pico = fee_consumed_pico
-        .checked_add(delta)
-        .ok_or_else(|| "opcode fee overflow".to_string())?;
-    let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
-    let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
-
-    context.gas_left = context
-        .gas_left
-        .checked_sub(consumed_delta)
-        .ok_or_else(|| "Insufficient GAS.".to_string())?;
-    if context.gas_left < 0 {
-        return Err("Insufficient GAS.".to_string());
-    }
-    Ok(())
+    apply_pico_fee_and_charge(context, fee_consumed_pico, delta)
 }
 
 pub(crate) fn native_instruction_limit(context: &RuntimeContext) -> i64 {
@@ -90,30 +110,26 @@ pub(crate) fn charge_native_instructions(
     let delta = instruction_count
         .checked_mul(context.exec_fee_factor_pico)
         .ok_or_else(|| "native instruction fee overflow".to_string())?;
-    let previous_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
-    *fee_consumed_pico = fee_consumed_pico
-        .checked_add(delta)
-        .ok_or_else(|| "native instruction fee overflow".to_string())?;
-    let current_datoshi = fee_consumed_pico.saturating_add(9_999) / 10_000;
-    let consumed_delta = current_datoshi.saturating_sub(previous_datoshi);
-
-    context.gas_left = context
-        .gas_left
-        .checked_sub(consumed_delta)
-        .ok_or_else(|| "Insufficient GAS.".to_string())?;
-    if context.gas_left < 0 {
-        return Err("Insufficient GAS.".to_string());
-    }
-    Ok(())
+    apply_pico_fee_and_charge(context, fee_consumed_pico, delta)
 }
 
 /// Price an opcode in pico fee units. Unknown opcodes default to 65_536
 /// (~2× the most expensive known opcode). This default is a gas-modeling
 /// choice — unknown opcodes consume outsized gas so fuzzed bytecode can't
 /// execute cheaply. Aligns with Neo N3's pricing convention.
+///
+/// This is on the hottest path in the runtime (one call per NeoVM instruction
+/// via the `host_on_instruction` PolkaVM import). The `#[inline]` plus the
+/// exhaustive `match` below let LLVM compile it to a jump table, avoiding the
+/// dynamic `OpCode::try_from` enum conversion on every opcode.
 #[inline]
 pub(crate) fn opcode_price(opcode: u8) -> i64 {
-    OpCode::try_from(opcode).map_or(65_536, opcode_price_for)
+    // Map the byte to an OpCode. `OpCode::from_u8` is `try_from(value).ok()`;
+    // unknown bytes fall through to the 65_536 default.
+    match OpCode::from_u8(opcode) {
+        Some(op) => opcode_price_for(op),
+        None => 65_536,
+    }
 }
 
 fn opcode_price_for(opcode: OpCode) -> i64 {

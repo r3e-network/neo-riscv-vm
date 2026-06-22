@@ -91,107 +91,76 @@ impl BuiltinStorage {
         self.heap.get(key).map(Vec::as_slice)
     }
 
-    pub(super) fn insert(&mut self, key: &[u8], value: &[u8]) {
-        self.refresh_hot_small(key, value);
-
-        if let Some(index) = self.find_small_index(key) {
-            if self.small[index]
-                .as_mut()
-                .is_some_and(|entry| entry.overwrite_value(value))
-            {
-                self.remove_from_inline_only(key);
-                self.heap.remove(key);
+        pub(super) fn insert(&mut self, key: &[u8], value: &[u8]) {
+            if self.put_small_inline(key, value) {
                 return;
             }
-            self.small[index] = None;
-        }
 
-        if let Some(entry) = SmallStorageEntry::new(key, value)
-            && let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(entry);
-            self.remove_from_inline_only(key);
-            self.heap.remove(key);
-            return;
-        }
-
-        if let Some(index) = self.find_inline_index(key) {
-            if self.inline[index]
-                .as_mut()
-                .is_some_and(|entry| entry.overwrite_value(value))
+            // Did not fit in small/inline — store in the heap.
+            // Check if we've reached the maximum heap entries limit.
+            // Evict the first key in sorted (BTreeMap) order to maintain deterministic
+            // behavior across nodes — critical for blockchain consensus.
+            if !self.heap.contains_key(key)
+                && self.heap.len() >= MAX_HEAP_ENTRIES
+                && let Some(first_key) = self.heap.keys().next()
             {
-                self.heap.remove(key);
-                return;
+                let key_to_remove = first_key.clone();
+                self.heap.remove(&key_to_remove);
             }
-            self.inline[index] = None;
+
+            self.heap.insert(key.to_vec(), value.to_vec());
         }
 
-        if let Some(entry) = InlineStorageEntry::new(key, value)
-            && let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(entry);
-            self.heap.remove(key);
-            return;
-        }
+        /// Try to store `key`/`value` in the small or inline slots.
+        ///
+        /// Returns `true` if it fit (and was stored), `false` if neither slot
+        /// tier could hold it (caller should fall back to the heap). This is the
+        /// single implementation of the small/inline insertion logic shared with
+        /// [`insert`], which previously duplicated the same ~45 lines.
+        pub(super) fn put_small_inline(&mut self, key: &[u8], value: &[u8]) -> bool {
+            self.refresh_hot_small(key, value);
 
-        // Check if we've reached the maximum heap entries limit.
-        // Evict the first key in sorted (BTreeMap) order to maintain deterministic
-        // behavior across nodes — critical for blockchain consensus.
-        if !self.heap.contains_key(key)
-            && self.heap.len() >= MAX_HEAP_ENTRIES
-            && let Some(first_key) = self.heap.keys().next()
-        {
-            let key_to_remove = first_key.clone();
-            self.heap.remove(&key_to_remove);
-        }
+            if let Some(index) = self.find_small_index(key) {
+                if self.small[index]
+                    .as_mut()
+                    .is_some_and(|entry| entry.overwrite_value(value))
+                {
+                    self.remove_from_inline_only(key);
+                    self.heap.remove(key);
+                    return true;
+                }
+                self.small[index] = None;
+            }
 
-        self.heap.insert(key.to_vec(), value.to_vec());
-    }
-
-    pub(super) fn put_small_inline(&mut self, key: &[u8], value: &[u8]) -> bool {
-        self.refresh_hot_small(key, value);
-
-        if let Some(index) = self.find_small_index(key) {
-            if self.small[index]
-                .as_mut()
-                .is_some_and(|entry| entry.overwrite_value(value))
+            if let Some(entry) = SmallStorageEntry::new(key, value)
+                && let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none())
             {
+                *slot = Some(entry);
                 self.remove_from_inline_only(key);
                 self.heap.remove(key);
                 return true;
             }
-            self.small[index] = None;
-        }
 
-        if let Some(entry) = SmallStorageEntry::new(key, value)
-            && let Some(slot) = self.small.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(entry);
-            self.remove_from_inline_only(key);
-            self.heap.remove(key);
-            return true;
-        }
+            if let Some(index) = self.find_inline_index(key) {
+                if self.inline[index]
+                    .as_mut()
+                    .is_some_and(|entry| entry.overwrite_value(value))
+                {
+                    self.heap.remove(key);
+                    return true;
+                }
+                self.inline[index] = None;
+            }
 
-        if let Some(index) = self.find_inline_index(key) {
-            if self.inline[index]
-                .as_mut()
-                .is_some_and(|entry| entry.overwrite_value(value))
+            if let Some(entry) = InlineStorageEntry::new(key, value)
+                && let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none())
             {
+                *slot = Some(entry);
                 self.heap.remove(key);
                 return true;
             }
-            self.inline[index] = None;
+            false
         }
-
-        if let Some(entry) = InlineStorageEntry::new(key, value)
-            && let Some(slot) = self.inline.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(entry);
-            self.heap.remove(key);
-            return true;
-        }
-        false
-    }
 
     fn find_small_index(&self, key: &[u8]) -> Option<usize> {
         self.small

@@ -50,9 +50,9 @@ pub struct EntryResult {
 pub fn decode_entry(stack_data: &[u8]) -> EntryResult {
     let abi_stack = match fast_codec::decode_stack(stack_data) {
         Ok(s) => s,
-        Err(_) => {
+        Err(e) => {
             let mut ctx = Context::from_abi_stack(Vec::new());
-            ctx.fault("failed to decode stack");
+            ctx.fault(alloc::format!("failed to decode stack: {e:?}").as_str());
             return EntryResult {
                 method_name: Vec::new(),
                 ctx,
@@ -83,9 +83,9 @@ pub fn decode_entry(stack_data: &[u8]) -> EntryResult {
 pub fn decode_context(stack_data: &[u8]) -> Context {
     match fast_codec::decode_stack(stack_data) {
         Ok(stack) => Context::from_abi_stack(stack),
-        Err(_) => {
+        Err(e) => {
             let mut ctx = Context::from_abi_stack(Vec::new());
-            ctx.fault("failed to decode stack");
+            ctx.fault(alloc::format!("failed to decode stack: {e:?}").as_str());
             ctx
         }
     }

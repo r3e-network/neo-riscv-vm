@@ -1,3 +1,6 @@
+//! Bindings to the `NeoToken` native (NEO) contract.
+//!
+//! Wraps balance, transfer, candidate registration, voting, and supply queries.
 use alloc::{string::String, vec::Vec};
 
 use neo_riscv_abi::{
@@ -11,11 +14,13 @@ use super::{call_native, call_native_read_only};
 //
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`NEO_TOKEN_HASH`).
 pub const NEO_TOKEN_HASH: [u8; 20] = [
     0xf5, 0x63, 0xea, 0x40, 0xbc, 0x28, 0x3d, 0x4d, 0x0e, 0x05, 0xc4, 0x8e, 0xa3, 0x05, 0xb3, 0xf2,
     0xa0, 0x73, 0x40, 0xef,
 ];
 
+/// Return the token balance of an account.
 pub fn neo_balance_of(account: &[u8; 20]) -> i64 {
     let args = [StackValue::ByteString(account.to_vec())];
     call_native_read_only(&NEO_TOKEN_HASH, "balanceOf", &args)
@@ -23,6 +28,7 @@ pub fn neo_balance_of(account: &[u8; 20]) -> i64 {
         .unwrap_or(0)
 }
 
+/// Transfer tokens from one account to another.
 pub fn neo_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
     let args = [
         StackValue::ByteString(from.to_vec()),
@@ -35,6 +41,7 @@ pub fn neo_transfer(from: &[u8; 20], to: &[u8; 20], amount: i64) -> bool {
         .unwrap_or(false)
 }
 
+/// Return the list of validator candidates with their vote counts.
 pub fn neo_get_candidates() -> Vec<([u8; 33], i64)> {
     let value = match call_native_read_only(&NEO_TOKEN_HASH, "getCandidates", &[]) {
         Some(value) => value,
@@ -59,6 +66,7 @@ pub fn neo_get_candidates() -> Vec<([u8; 33], i64)> {
         .collect()
 }
 
+/// Register a public key as a validator candidate.
 pub fn neo_register_candidate(pubkey: &[u8; 33]) -> bool {
     let args = [StackValue::ByteString(pubkey.to_vec())];
     call_native(&NEO_TOKEN_HASH, "registerCandidate", &args)
@@ -66,6 +74,7 @@ pub fn neo_register_candidate(pubkey: &[u8; 33]) -> bool {
         .unwrap_or(false)
 }
 
+/// Vote for a validator candidate.
 pub fn neo_vote(account: &[u8; 20], pubkey: &[u8; 33]) -> bool {
     let args = [
         StackValue::ByteString(account.to_vec()),
@@ -76,6 +85,7 @@ pub fn neo_vote(account: &[u8; 20], pubkey: &[u8; 33]) -> bool {
         .unwrap_or(false)
 }
 
+/// Return the unclaimed GAS for an account up to a block index.
 pub fn neo_unclaimed_gas(account: &[u8; 20], end: u32) -> i64 {
     let args = [
         StackValue::ByteString(account.to_vec()),
@@ -86,6 +96,7 @@ pub fn neo_unclaimed_gas(account: &[u8; 20], end: u32) -> i64 {
         .unwrap_or(0)
 }
 
+/// Return the token symbol string.
 pub fn neo_symbol() -> String {
     const DEFAULT: &str = "NEO";
     call_native_read_only(&NEO_TOKEN_HASH, "symbol", &[])
@@ -93,12 +104,14 @@ pub fn neo_symbol() -> String {
         .unwrap_or_else(|| String::from(DEFAULT))
 }
 
+/// Return the number of token decimals.
 pub fn neo_decimals() -> u8 {
     call_native_read_only(&NEO_TOKEN_HASH, "decimals", &[])
         .and_then(|v| stack_value_as_u8(&v))
         .unwrap_or(0)
 }
 
+/// Return the total token supply.
 pub fn neo_total_supply() -> i64 {
     call_native_read_only(&NEO_TOKEN_HASH, "totalSupply", &[])
         .and_then(|v| stack_value_as_i64(&v))

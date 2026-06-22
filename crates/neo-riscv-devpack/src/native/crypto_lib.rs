@@ -1,9 +1,13 @@
+//! Bindings to the `CryptoLib` native contract.
+//!
+//! Wraps hash functions (sha256, ripemd160) and ECDSA verification.
 use neo_riscv_abi::{StackValue, stack_value_as_bool, stack_value_as_fixed_bytes};
 
 use super::call_native_read_only;
 
 // Canonical hash from Neo UnitTests (UT_NativeContract.cs), byte order as used on the VM stack
 // (UInt160.ToArray() little-endian).
+/// Native contract script hash for this contract (`CRYPTO_LIB_HASH`).
 pub const CRYPTO_LIB_HASH: [u8; 20] = [
     0x1b, 0xf5, 0x75, 0xab, 0x11, 0x89, 0x68, 0x84, 0x13, 0x61, 0x0a, 0x35, 0xa1, 0x28, 0x86, 0xcd,
     0xe0, 0xb6, 0x6c, 0x72,
@@ -12,6 +16,7 @@ pub const CRYPTO_LIB_HASH: [u8; 20] = [
 const DEFAULT_ECDSA_CURVE_HASH_SECP256R1_SHA256: i64 = 23;
 
 // CryptoLib native contract bindings
+/// Compute the SHA-256 hash of a byte buffer.
 pub fn crypto_sha256(data: &[u8]) -> [u8; 32] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "sha256", &args)
@@ -19,6 +24,7 @@ pub fn crypto_sha256(data: &[u8]) -> [u8; 32] {
         .unwrap_or([0; 32])
 }
 
+/// Compute the RIPEMD-160 hash of a byte buffer.
 pub fn crypto_ripemd160(data: &[u8]) -> [u8; 20] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "ripemd160", &args)
@@ -26,6 +32,7 @@ pub fn crypto_ripemd160(data: &[u8]) -> [u8; 20] {
         .unwrap_or([0; 20])
 }
 
+/// Verify an ECDSA signature (secp256r1 or secp256k1).
 pub fn crypto_verify_with_ecdsa(message: &[u8], pubkey: &[u8], signature: &[u8]) -> bool {
     // The native contract API requires a `curveHash` parameter. The current Rust wrapper keeps the
     // preexisting signature and defaults to secp256r1+SHA256 (the common Neo key curve).
@@ -40,6 +47,7 @@ pub fn crypto_verify_with_ecdsa(message: &[u8], pubkey: &[u8], signature: &[u8])
         .unwrap_or(false)
 }
 
+/// Invoke the native contract `crypto_murmur32` method.
 pub fn crypto_murmur32(data: &[u8], seed: u32) -> [u8; 4] {
     let args = [
         StackValue::ByteString(data.to_vec()),
@@ -50,6 +58,7 @@ pub fn crypto_murmur32(data: &[u8], seed: u32) -> [u8; 4] {
         .unwrap_or([0; 4])
 }
 
+/// Invoke the native contract `crypto_keccak256` method.
 pub fn crypto_keccak256(data: &[u8]) -> [u8; 32] {
     let args = [StackValue::ByteString(data.to_vec())];
     call_native_read_only(&CRYPTO_LIB_HASH, "keccak256", &args)
@@ -57,6 +66,7 @@ pub fn crypto_keccak256(data: &[u8]) -> [u8; 32] {
         .unwrap_or([0; 32])
 }
 
+/// Verify a signature.
 pub fn crypto_verify_with_ed25519(message: &[u8], pubkey: &[u8], signature: &[u8]) -> bool {
     let args = [
         StackValue::ByteString(message.to_vec()),

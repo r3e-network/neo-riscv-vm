@@ -515,7 +515,12 @@ public class UT_NativeRiscvVmBridgeRoundTrip
 
         if (stackPtr != IntPtr.Zero)
         {
-            var freeMethod = typeof(NativeRiscvVmBridge).GetMethod("FreeNativeStackItems", BindingFlags.Static | BindingFlags.NonPublic);
+            var freeMethod = typeof(NativeRiscvVmBridge).GetMethod(
+                "FreeNativeStackItems",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: [typeof(IntPtr), typeof(int)],
+                modifiers: null);
             Assert.IsNotNull(freeMethod);
             freeMethod!.Invoke(null, [stackPtr, checked((int)stackLen)]);
         }

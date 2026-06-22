@@ -27,6 +27,12 @@ pub type SyscallBridgeFn = fn(&mut Context, u32);
 ///
 /// SAFETY: Written once at startup before any syscall fires. The PolkaVM guest
 /// is single-threaded, so there is no data race.
+///
+/// TODO(2024-edition): `core::sync::OnceLock` does not yet compile cleanly for
+/// the `riscv32emac-unknown-none-polkavm` target (missing atomic intrinsics in
+/// `core`), so this remains a `static mut` rather than an `OnceLock`. When the
+/// toolchain supports `OnceLock` on this target, migrate to eliminate the
+/// `dangerous_use_of_static_mut` lint.
 static mut SYSCALL_BRIDGE: Option<SyscallBridgeFn> = None;
 
 /// Register a syscall bridge that `Context::syscall()` delegates to.

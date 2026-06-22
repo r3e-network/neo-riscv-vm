@@ -3,6 +3,8 @@
 /// Result of a host callback into managed code: the returned VM stack.
 #[derive(Debug)]
 pub struct HostCallbackResult {
+    /// The replacement evaluation stack returned by the callback, replacing the
+    /// guest's stack at the syscall site.
     pub stack: Vec<neo_riscv_abi::StackValue>,
 }
 

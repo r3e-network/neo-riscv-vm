@@ -1,3 +1,35 @@
+//! Guest-side syscall bridge between the `neo-vm-rs` interpreter and the PolkaVM host.
+//!
+//! This module implements [`SyscallProvider`] for the PolkaVM guest. The NeoVM
+//! compatibility interpreter (`neo_riscv_guest`) calls back into this provider
+//! on every opcode metering tick (`on_instruction`) and on every interop
+//! syscall (`syscall`). Both are forwarded across the PolkaVM host-import
+//! boundary to the Rust host (`neo-riscv-host::bridge`), which dispatches them
+//! to the canonical NEO `System.*` interop handlers.
+//!
+//! # Syscall protocol (5 stages)
+//!
+//! A single [`SyscallProvider::syscall`](neo_riscv_guest::SyscallProvider::syscall)
+//! call proceeds through five traceable stages, each recorded in
+//! [`RuntimeState::trace_syscall_stage`](../runtime_state/struct.RuntimeState.html)
+//! for post-mortem diagnostics:
+//!
+//! 1. **Record metadata** — store the `api` id, instruction pointer `ip`, and
+//!    current stack depth so a fault can be attributed to the right call.
+//! 2. **Encode request** — serialize the evaluation stack into the request
+//!    arena (`REQ_BUF_OFFSET`) using the `fast_codec`.
+//! 3. **Dispatch** — call the `host_call` host-import with the api id, request
+//!    pointer/length, and the response arena (`RES_BUF_OFFSET`).
+//! 4. **Receive** — the host returns the response byte count (`success`); zero
+//!    means the syscall failed.
+//! 5. **Decode response** — decode the response arena via `callback_codec`,
+//!    replace the stack, and copy the first `TRACE_HEAD_SIZE` response bytes
+//!    into the trace head for cheap inspection.
+//!
+//! `initializer_complete` reuses the same path with the
+//! [`INITIALIZER_COMPLETE_MARKER`](neo_riscv_guest::INITIALIZER_COMPLETE_MARKER)
+//! pseudo-api to signal that a `_initialize` routine finished.
+
 use alloc::vec::Vec;
 
 use neo_riscv_abi::{StackValue, callback_codec, fast_codec};
@@ -60,6 +92,15 @@ impl SyscallProvider for PolkaVmSyscallProvider {
         }
 
         if success == 0 {
+            // Reset the response trace fields so a diagnostic dump after this
+            // failure does not show stale data from a previous successful
+            // syscall. `trace_syscall_stage` is intentionally left at the
+            // failure stage (3) so the failure is still attributable.
+            unsafe {
+                let state = runtime_state();
+                state.trace_res_len = 0;
+                state.trace_res_head.fill(0);
+            }
             return Err("host syscall failed".into());
         }
 

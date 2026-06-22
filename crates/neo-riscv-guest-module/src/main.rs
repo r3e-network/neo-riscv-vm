@@ -93,6 +93,10 @@ const RES_BUF_OFFSET: usize = REQ_BUF_OFFSET + SCRATCH_BUF_SIZE;
 const _: () = assert!(ALLOC_BASE_OFFSET + ALLOC_ARENA_SIZE <= ARENA_SIZE);
 const _: () = assert!(ALLOC_PRETOUCH_SIZE <= ALLOC_ARENA_SIZE);
 const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
+// Guarantee the panic buffer is large enough to hold the truncation marker.
+// If PANIC_BUF_SIZE were ever reduced below the marker length (~14 bytes),
+// BufWriter's truncation logic would clobber already-written panic data.
+const _: () = assert!(PANIC_BUF_SIZE >= 16);
 
 #[cfg_attr(target_arch = "riscv32", link_section = ".data.neo_riscv_state")]
 static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
@@ -144,17 +148,40 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+/// PolkaVM program entry point (no-op).
+///
+/// Required by the PolkaVM linker on `riscv32` so the guest module has a valid
+/// ELF entry symbol. The actual work begins when the host invokes one of the
+/// [`execute`](fn.execute.html) exports; this symbol is never called directly.
 #[cfg(target_arch = "riscv32")]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {}
 
+/// Secondary entry point kept for PolkaVM tooling compatibility (no-op).
+///
+/// Mirrors the canonical `main` symbol some PolkaVM loaders probe for. Like
+/// [`_start`](fn._start.html) it performs no work; all execution is driven
+/// through the `execute*` exports.
 #[cfg(target_arch = "riscv32")]
 #[unsafe(no_mangle)]
 pub extern "C" fn main() {}
 
+/// Host-only `main` used so the crate links as a normal binary on non-RISC-V
+/// targets (used by `cargo test` and host-side tooling).
 #[cfg(not(target_arch = "riscv32"))]
 fn main() {}
 
+/// Allocate `size` bytes of guest heap memory and return a raw pointer.
+///
+/// This is the PolkaVM host-import contract for dynamic allocation: the host
+/// (or compiled RISC-V code) calls `alloc` to obtain writable guest memory,
+/// then writes payloads (e.g. a NeoVM script or initial stack) at the returned
+/// address before invoking [`execute`](fn.execute.html).
+///
+/// The returned buffer is owned by the caller until the next allocator reset.
+/// Memory is not freed individually — the bump allocator is bulk-reset at the
+/// start of every `execute_inner` call, which is sound because the guest is
+/// single-threaded and each execution reuses the whole arena.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn alloc(size: u32) -> *mut u8 {
@@ -197,120 +224,187 @@ unsafe extern "C" fn host_on_instruction(_opcode: u32) -> u32 {
     1
 }
 
+/// Return the pointer to the encoded [`ExecutionResult`] produced by the last
+/// [`execute`](fn.execute.html) call.
+///
+/// After execution the host reads [`get_result_len`](fn.get_result_len.html)
+/// bytes starting at this pointer to obtain the result-codec-encoded outcome
+/// (halt/fault state, gas consumed, and the resulting evaluation stack).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_ptr() -> *const u8 {
     unsafe { runtime_state().result_ptr as *const u8 }
 }
 
+/// Return the length in bytes of the encoded result at
+/// [`get_result_ptr`](fn.get_result_ptr.html).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_result_len() -> u32 {
     unsafe { runtime_state().result_len }
 }
 
+/// Return the pointer to the panic message buffer.
+///
+/// If the guest panicked (see the [`panic`](fn.panic.html) handler), the
+/// human-readable `core::panic::PanicInfo` text is captured here for
+/// host-side diagnostics. [`get_panic_len`](fn.get_panic_len.html) gives the
+/// valid byte count; zero means no panic occurred.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_ptr() -> *const u8 {
     unsafe { runtime_state().panic_buf.as_ptr() }
 }
 
+/// Return the length in bytes of the captured panic message.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_panic_len() -> u32 {
     unsafe { runtime_state().panic_len }
 }
 
+/// Return the byte length of the last syscall *response* payload (trace field).
+///
+/// Part of the guest↔host syscall trace used for compatibility diagnostics:
+/// records how many bytes the host wrote back as the syscall reply.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_len() -> u32 {
     unsafe { runtime_state().trace_res_len }
 }
 
+/// Return a pointer to the first [`TRACE_HEAD_SIZE`] bytes of the last syscall
+/// response payload (trace field), for cheap head inspection without a full copy.
+///
+/// [`TRACE_HEAD_SIZE`]: const.TRACE_HEAD_SIZE.html
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_res_head_ptr() -> *const u8 {
     unsafe { runtime_state().trace_res_head.as_ptr() }
 }
 
+/// Return the protocol *stage* of the last syscall (trace field).
+///
+/// The syscall protocol advances through numbered stages (request encode →
+/// host dispatch → response decode); this records which stage was active when
+/// the last syscall completed or faulted.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_stage() -> u32 {
     unsafe { runtime_state().trace_syscall_stage }
 }
 
+/// Return the API id of the last invoked syscall (trace field).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_api() -> u32 {
     unsafe { runtime_state().trace_syscall_api }
 }
 
+/// Return the interpreter instruction-pointer at which the last syscall was
+/// issued (trace field).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_syscall_ip() -> u32 {
     unsafe { runtime_state().trace_syscall_ip }
 }
 
+/// Return the NeoVM interpreter instruction-pointer at the end of the last
+/// execution (forwarded from [`neo_riscv_guest`]).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_interpreter_ip() -> u32 {
     neo_riscv_guest::last_interpreter_ip()
 }
 
+/// Return the protocol stage reached at the end of the last execution
+/// (forwarded from [`neo_riscv_guest`]).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_stage() -> u32 {
     neo_riscv_guest::last_result_stage()
 }
 
+/// Return the evaluation-stack depth at the end of the last execution
+/// (forwarded from [`neo_riscv_guest`]).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_stack_len() -> u32 {
     neo_riscv_guest::last_result_stack_len()
 }
 
+/// Return the result-stack cap applied to the last execution, or `u32::MAX`
+/// when none was set (forwarded from [`neo_riscv_guest`]).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_last_result_limit() -> u32 {
     neo_riscv_guest::last_result_limit()
 }
 
+/// Return the byte length of the last syscall *request* payload (trace field).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_req_len() -> u32 {
     unsafe { runtime_state().trace_req_len }
 }
 
+/// Return the number of stack items encoded in the last syscall request
+/// (trace field).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_trace_stack_items() -> u32 {
     unsafe { runtime_state().trace_stack_items }
 }
 
+/// Return the peak number of bytes allocated by the guest bump allocator across
+/// the last execution (diagnostic for arena sizing).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_peak() -> u32 {
     unsafe { ALLOCATOR.peak_bytes() }
 }
 
+/// Return how many allocations failed since the last reset (diagnostic).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_count() -> u32 {
     unsafe { ALLOCATOR.fail_count() }
 }
 
+/// Return the size in bytes of the most recent failed allocation (diagnostic).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_size() -> u32 {
     unsafe { ALLOCATOR.fail_size() }
 }
 
+/// Return the alignment in bytes of the most recent failed allocation
+/// (diagnostic).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn get_allocator_fail_align() -> u32 {
     unsafe { ALLOCATOR.fail_align() }
 }
 
+/// Execute a NeoVM script through the compatibility interpreter.
+///
+/// This is the primary guest/host ABI entry point. The host writes a NeoVM
+/// script and (optionally) a fast-codec-encoded initial stack into guest memory
+/// via [`alloc`](fn.alloc.html), then invokes `execute` with pointers/lengths to
+/// those buffers plus the `initial_ip` at which interpretation should begin.
+///
+/// The script is run through the cached `neo-vm-rs` interpreter (the NeoVM
+/// compatibility path), with every syscall (`System.*` interop) forwarded to the
+/// host via [`PolkaVmSyscallProvider`]. The encoded result is afterwards readable
+/// through [`get_result_ptr`](fn.get_result_ptr.html)/[`get_result_len`](fn.get_result_len.html).
+///
+/// # Arguments
+/// * `script_ptr` / `script_len` — NeoVM bytecode to interpret.
+/// * `stack_ptr` / `stack_len` — fast-codec-encoded initial evaluation stack
+///   (may be empty / null when `stack_len == 0`).
+/// * `initial_ip` — instruction pointer within the script to start at.
+///
+/// [`PolkaVmSyscallProvider`]: polkavm_syscall_provider/struct.PolkavmSyscallProvider.html
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute(
@@ -332,6 +426,12 @@ pub extern "C" fn execute(
     store_result(result, u32::MAX);
 }
 
+/// Like [`execute`](fn.execute.html) but caps the returned evaluation stack to
+/// the last `result_limit` items.
+///
+/// Used by the host when only the top of the result stack is needed (e.g.
+/// verification calls), avoiding the cost of encoding a large full stack back
+/// across the FFI boundary.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute_with_result_limit(
@@ -354,8 +454,18 @@ pub extern "C" fn execute_with_result_limit(
     store_result(result, result_limit);
 }
 
+/// Statically-queued result-stack cap consumed by the next
+/// [`execute_with_initializer`](fn.execute_with_initializer.html) call.
+///
+/// `execute_with_initializer` does not take a result-limit argument directly;
+/// instead the host sets it here first. This two-step protocol keeps the
+/// initializer entry point's arity small.
 static NEXT_RESULT_LIMIT: AtomicU32 = AtomicU32::new(u32::MAX);
 
+/// Set the result-stack cap that the next
+/// [`execute_with_initializer`](fn.execute_with_initializer.html) call will apply.
+///
+/// See [`NEXT_RESULT_LIMIT`](static.NEXT_RESULT_LIMIT.html) for the rationale.
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn set_result_limit(result_limit: u32) {
@@ -366,6 +476,15 @@ fn take_result_limit() -> u32 {
     NEXT_RESULT_LIMIT.swap(u32::MAX, Ordering::Relaxed)
 }
 
+/// Like [`execute`](fn.execute.html) but additionally runs an *initializer*
+/// script snippet first.
+///
+/// The NeoVM compatibility path needs to execute a one-time `_initialize`
+/// routine (deployed by some legacy contracts) before the main entry method.
+/// `initializer_ip` is the instruction pointer of that routine within the same
+/// script; the interpreter runs it to completion, then continues at
+/// `initial_ip`. The result-stack cap is taken from the most recent
+/// [`set_result_limit`](fn.set_result_limit.html).
 #[unsafe(no_mangle)]
 #[polkavm_derive::polkavm_export]
 pub extern "C" fn execute_with_initializer(

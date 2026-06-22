@@ -1,6 +1,17 @@
+//! Cache key and pooled PolkaVM execution-instance wrappers used by the runtime cache.
+
 use polkavm::Module;
 
-use super::{CachedInstancePre, EXECUTION_INSTANCES, ExecutionInstance, MAX_POOL_SIZE_PER_AUX};
+use super::{
+    CachedInstancePre, EXECUTION_INSTANCES, ExecutionInstance, MAX_POOL_SIZE_PER_AUX,
+    NATIVE_EXECUTION_INSTANCES,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) struct NativeCacheKey {
+    pub(super) binary_hash: [u8; 32],
+    pub(super) aux_size: u32,
+}
 
 pub(crate) struct CachedExecutionInstance {
     pub(super) aux_size: u32,
@@ -41,6 +52,41 @@ impl Drop for CachedExecutionInstance {
                 instances.push(instance);
             }
             // else: pool is full, just drop the instance
+        }
+    }
+}
+
+pub(crate) struct CachedNativeExecutionInstance {
+    pub(super) key: NativeCacheKey,
+    pub(super) instance_pre: CachedInstancePre,
+    pub(super) instance: Option<ExecutionInstance>,
+}
+
+impl CachedNativeExecutionInstance {
+    pub(crate) fn module(&self) -> &Module {
+        self.instance_pre.module()
+    }
+
+    pub(crate) fn instance_mut(&mut self) -> &mut ExecutionInstance {
+        self.instance
+            .as_mut()
+            .expect("cached native execution instance should be present")
+    }
+}
+
+impl Drop for CachedNativeExecutionInstance {
+    fn drop(&mut self) {
+        let Some(instance) = self.instance.take() else {
+            return;
+        };
+
+        if let Some(pool) = NATIVE_EXECUTION_INSTANCES.get()
+            && let Ok(mut guard) = pool.lock()
+        {
+            let instances = guard.entry(self.key).or_default();
+            if instances.len() < MAX_POOL_SIZE_PER_AUX {
+                instances.push(instance);
+            }
         }
     }
 }

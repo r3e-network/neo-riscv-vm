@@ -1,6 +1,4 @@
 mod builtin_storage;
-mod inline_storage_entry;
-mod small_storage_entry;
 
 use crate::{HostCallbackResult, RuntimeContext, pricing::charge_opcode};
 use builtin_storage::BuiltinStorage;

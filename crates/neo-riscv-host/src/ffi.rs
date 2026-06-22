@@ -12,16 +12,12 @@ use std::{ffi::c_void, ptr, slice};
 use crate::reset_last_fault_ip;
 
 mod ffi_host;
-mod native_execution_result;
-mod native_host_result;
-mod native_integer_execution_result;
-mod native_stack_item;
+mod native_types;
 
 use ffi_host::FfiHost;
-pub use native_execution_result::NativeExecutionResult;
-pub use native_host_result::NativeHostResult;
-pub use native_integer_execution_result::NativeIntegerExecutionResult;
-pub use native_stack_item::NativeStackItem;
+pub use native_types::{
+    NativeExecutionResult, NativeHostResult, NativeIntegerExecutionResult, NativeStackItem,
+};
 
 /// Returns the instruction pointer of the most recent FAULT on the calling thread,
 /// or `u32::MAX` if no IP was attributed (HALT, or the FAULT path did not carry one).

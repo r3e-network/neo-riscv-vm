@@ -6,11 +6,10 @@
 mod bridge;
 pub mod error;
 mod ffi;
-mod host_callback_result;
 mod pricing;
 mod profiling;
 mod runtime_cache;
-mod runtime_context;
+mod types;
 
 use bridge::{
     ClosureHost, GuestTrace, read_guest_debug, read_guest_last_interpreter_ip, read_guest_panic,
@@ -158,9 +157,8 @@ pub use ffi::{
     neo_riscv_execute_script_with_host_and_initializer_and_result_limit,
     neo_riscv_execute_script_with_host_and_result_limit, neo_riscv_free_execution_result,
 };
-pub use host_callback_result::HostCallbackResult;
 pub use profiling::{get_current_memory, get_peak_memory, reset as reset_profiling};
-pub use runtime_context::RuntimeContext;
+pub use types::{HostCallbackResult, RuntimeContext};
 
 /// PolkaVM runtime instance.
 pub struct PolkaVmRuntime {

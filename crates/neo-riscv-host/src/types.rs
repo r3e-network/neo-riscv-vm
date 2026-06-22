@@ -1,3 +1,11 @@
+//! Small shared value types used across the host crate.
+
+/// Result of a host callback into managed code: the returned VM stack.
+#[derive(Debug)]
+pub struct HostCallbackResult {
+    pub stack: Vec<neo_riscv_abi::StackValue>,
+}
+
 /// Runtime execution context for VM scripts.
 #[derive(Clone, Copy, Debug)]
 pub struct RuntimeContext {

@@ -1,11 +1,8 @@
 use crate::bridge::{ClosureHost, register_host_functions};
-mod cached_execution_instance;
-mod cached_native_execution_instance;
-mod native_cache_key;
+mod instances;
 
-pub(crate) use cached_execution_instance::CachedExecutionInstance;
-pub(crate) use cached_native_execution_instance::CachedNativeExecutionInstance;
-use native_cache_key::NativeCacheKey;
+pub(crate) use instances::{CachedExecutionInstance, CachedNativeExecutionInstance};
+use instances::NativeCacheKey;
 use polkavm::{
     BackendKind as PolkaBackendKind, Config, Engine, GasMeteringKind, Instance, InstancePre,
     Linker, Module, ModuleConfig, ProgramBlob,

@@ -98,7 +98,7 @@ const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
 // BufWriter's truncation logic would clobber already-written panic data.
 const _: () = assert!(PANIC_BUF_SIZE >= 16);
 
-#[cfg_attr(target_arch = "riscv32", link_section = ".data.neo_riscv_state")]
+#[cfg_attr(target_arch = "riscv32", unsafe(link_section = ".data.neo_riscv_state"))]
 static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
 
 unsafe fn runtime_state() -> &'static mut RuntimeState {

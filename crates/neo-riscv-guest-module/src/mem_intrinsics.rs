@@ -3,55 +3,75 @@
 //! The riscv32 PolkaVM target can emit calls to these symbols, while
 //! `compiler_builtins` does not export them as C ABI functions.
 //!
-//! These implementations delegate to [`core::ptr`] primitives
-//! (`copy_nonoverlapping`, `copy`, `write_bytes`) so LLVM can lower them to
-//! word-stride loops instead of the byte-at-a-time loops a naive translation
-//! would produce — important because the PolkaVM guest counts instructions.
+//! These are written as explicit element loops rather than delegating to
+//! `core::ptr::{copy, copy_nonoverlapping, write_bytes}`. Those helpers lower
+//! to `memcpy`/`memset`/`memmove` libcalls for runtime-sized lengths, and
+//! because this module *defines* those very symbols the call would recurse
+//! into itself and overflow the guest stack. An explicit loop in the body of
+//! the `memcpy` definition is not re-synthesized by LLVM into a self-call on
+//! this target, so the loop form is the safe one.
+//!
+//! Unsafe pointer operations are wrapped in explicit `unsafe {}` blocks
+//! (required under edition 2024's `unsafe_op_in_unsafe_fn`).
 
-use core::ptr;
-
-/// Copy `n` bytes from `src` to `dest` (non-overlapping).
-///
-/// Equivalent to C `memcpy`. Uses [`ptr::copy_nonoverlapping`].
+/// Copy `n` bytes from `src` to `dest` (non-overlapping). C `memcpy`.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY: caller guarantees [src, src+n) and [dest, dest+n) are valid and
-    // non-overlapping (C memcpy contract).
-    unsafe { ptr::copy_nonoverlapping(src, dest, n) };
+    let mut i = 0;
+    while i < n {
+        // SAFETY: caller guarantees [src,src+n) and [dest,dest+n) are valid
+        // and non-overlapping (C memcpy contract).
+        unsafe { dest.add(i).write(src.add(i).read()) };
+        i += 1;
+    }
     dest
 }
 
-/// Fill `n` bytes at `s` with byte value `c`.
-///
-/// Equivalent to C `memset`. Uses [`ptr::write_bytes`].
+/// Fill `n` bytes at `s` with byte value `c`. C `memset`.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
-    // SAFETY: caller guarantees [s, s+n) is valid for writes.
-    unsafe { ptr::write_bytes(s, c as u8, n) };
+    let mut i = 0;
+    while i < n {
+        // SAFETY: caller guarantees [s,s+n) is valid for writes.
+        unsafe { s.add(i).write(c as u8) };
+        i += 1;
+    }
     s
 }
 
-/// Copy `n` bytes from `src` to `dest` (may overlap).
+/// Copy `n` bytes from `src` to `dest` (may overlap). C `memmove`.
 ///
-/// Equivalent to C `memmove`. Uses [`ptr::copy`], which handles overlapping
-/// regions correctly (LLVM picks the direction).
+/// Copies back-to-front when the regions overlap with `src < dest`, otherwise
+/// front-to-back, so overlapping ranges are handled correctly.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY: caller guarantees both ranges are valid; ptr::copy handles overlap.
-    unsafe { ptr::copy(src, dest, n) };
+    if (src as usize) < (dest as usize) {
+        let mut i = n;
+        while i > 0 {
+            i -= 1;
+            // SAFETY: caller guarantees both ranges are valid for n bytes.
+            unsafe { dest.add(i).write(src.add(i).read()) };
+        }
+    } else {
+        let mut i = 0;
+        while i < n {
+            // SAFETY: caller guarantees both ranges are valid for n bytes.
+            unsafe { dest.add(i).write(src.add(i).read()) };
+            i += 1;
+        }
+    }
     dest
 }
 
-/// Compare `n` bytes at `s1` and `s2`.
+/// Compare `n` bytes at `s1` and `s2`. C `memcmp`.
 ///
-/// Equivalent to C `memcmp`. Returns the difference of the first differing
-/// pair as `i32`, or 0 if all bytes match. Kept as a byte loop because the
-/// early-return-on-mismatch semantics don't benefit from bulk copy.
+/// Returns the signed difference of the first differing byte pair, or 0 if all
+/// `n` bytes match.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
     let mut i = 0;
     while i < n {
-        // SAFETY: caller guarantees both ranges valid for reads of n bytes.
+        // SAFETY: caller guarantees both ranges are valid for reads of n bytes.
         let a = unsafe { s1.add(i).read() };
         let b = unsafe { s2.add(i).read() };
         if a != b {

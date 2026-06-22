@@ -27,6 +27,27 @@ type NativeExecutionInstancePool = HashMap<NativeCacheKey, Vec<ExecutionInstance
 /// Maximum number of cached instances per aux_size in the pool.
 const MAX_POOL_SIZE_PER_AUX: usize = 16;
 
+/// Maximum distinct keys retained in each module / instance-pre cache.
+const MAX_CACHED_MODULES: usize = 256;
+
+/// Insert into a bounded module/instance-pre cache, evicting one entry when at
+/// capacity. The caches are pure performance optimizations — on a miss the
+/// artifact is deterministically recompiled/re-linked to the identical result —
+/// so the eviction policy is irrelevant to consensus and this only bounds memory
+/// against a contract that deploys many distinct aux sizes / binaries (DoS).
+fn bounded_cache_insert<K, V>(map: &mut HashMap<K, V>, key: K, make: impl FnOnce() -> V) -> V
+where
+    K: Eq + std::hash::Hash + Clone,
+    V: Clone,
+{
+    if !map.contains_key(&key) && map.len() >= MAX_CACHED_MODULES {
+        if let Some(victim) = map.keys().next().cloned() {
+            map.remove(&victim);
+        }
+    }
+    map.entry(key).or_insert_with(make).clone()
+}
+
 static INSTANCE_PRES: OnceLock<Mutex<InstancePreMap>> = OnceLock::new();
 static EXECUTION_INSTANCES: OnceLock<Mutex<ExecutionInstancePool>> = OnceLock::new();
 static NATIVE_INSTANCE_PRES: OnceLock<Mutex<NativeInstancePreMap>> = OnceLock::new();
@@ -83,10 +104,7 @@ pub(crate) fn cached_module(aux_size: u32) -> Result<Module, String> {
     let mut guard = modules
         .lock()
         .map_err(|_| "polkavm module cache poisoned".to_string())?;
-    Ok(guard
-        .entry(aux_size)
-        .or_insert_with(|| module.clone())
-        .clone())
+    Ok(bounded_cache_insert(&mut guard, aux_size, || module.clone()))
 }
 
 pub(crate) fn cached_instance_pre(aux_size: u32) -> Result<CachedInstancePre, String> {
@@ -108,10 +126,7 @@ pub(crate) fn cached_instance_pre(aux_size: u32) -> Result<CachedInstancePre, St
     let mut guard = instance_pres
         .lock()
         .map_err(|_| "polkavm instance-pre cache poisoned".to_string())?;
-    Ok(guard
-        .entry(aux_size)
-        .or_insert_with(|| instance_pre.clone())
-        .clone())
+    Ok(bounded_cache_insert(&mut guard, aux_size, || instance_pre.clone()))
 }
 
 pub(crate) fn cached_execution_instance(aux_size: u32) -> Result<CachedExecutionInstance, String> {
@@ -199,10 +214,7 @@ fn cached_native_instance_pre(
     let mut guard = instance_pres
         .lock()
         .map_err(|_| "native instance-pre cache poisoned".to_string())?;
-    Ok(guard
-        .entry(key)
-        .or_insert_with(|| instance_pre.clone())
-        .clone())
+    Ok(bounded_cache_insert(&mut guard, key, || instance_pre.clone()))
 }
 
 fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, String> {
@@ -221,7 +233,7 @@ fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, St
     let mut guard = modules
         .lock()
         .map_err(|_| "native module cache poisoned".to_string())?;
-    Ok(guard.entry(key).or_insert_with(|| module.clone()).clone())
+    Ok(bounded_cache_insert(&mut guard, key, || module.clone()))
 }
 
 fn hash_binary(binary: &[u8]) -> [u8; 32] {

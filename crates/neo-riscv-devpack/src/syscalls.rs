@@ -141,8 +141,12 @@ pub fn contract_native_post_persist() {
 
 /// Emit a `Runtime.Notify` event with the given name and state items.
 pub fn runtime_notify(event: &str, state: &[StackValue]) {
-    let mut stack = vec![StackValue::ByteString(event.as_bytes().to_vec())];
-    stack.extend_from_slice(state);
+    // The host's Runtime.Notify expects exactly [eventName, Array(state)] — the state
+    // items must be wrapped in a single Array, not flattened onto the stack.
+    let stack = vec![
+        StackValue::ByteString(event.as_bytes().to_vec()),
+        StackValue::Array(state.to_vec()),
+    ];
     let _ = ffi::invoke_host_call(api_ids::RUNTIME_NOTIFY, &stack);
 }
 

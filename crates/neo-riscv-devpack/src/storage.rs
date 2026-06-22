@@ -38,7 +38,7 @@ pub fn as_read_only(context: &StackValue) -> StackValue {
 /// Returns `Some(value)` if found, `None` if not found, silently returns `None` on host error.
 /// Prefer `try_get` to distinguish "key not found" from "host error".
 pub fn get(key: &[u8]) -> Option<Vec<u8>> {
-    let stack = vec![StackValue::ByteString(key.to_vec())];
+    let stack = vec![get_readonly_context(), StackValue::ByteString(key.to_vec())];
     let result = ffi::invoke_host_call(api_ids::STORAGE_GET, &stack).ok()?;
     match result.first()? {
         StackValue::ByteString(data) => Some(data.clone()),
@@ -51,7 +51,7 @@ pub fn get(key: &[u8]) -> Option<Vec<u8>> {
 /// Returns `Ok(Some(value))` on success, `Ok(None)` if key not found,
 /// `Err(...)` if the host call itself fails.
 pub fn try_get(key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-    let stack = vec![StackValue::ByteString(key.to_vec())];
+    let stack = vec![get_readonly_context(), StackValue::ByteString(key.to_vec())];
     let result = ffi::invoke_host_call(api_ids::STORAGE_GET, &stack)?;
     match result.first() {
         Some(StackValue::ByteString(data)) => Ok(Some(data.clone())),
@@ -62,6 +62,7 @@ pub fn try_get(key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 /// Write a key/value pair to storage (`System.Storage.Put`).
 pub fn put(key: &[u8], value: &[u8]) {
     let stack = vec![
+        get_context(),
         StackValue::ByteString(key.to_vec()),
         StackValue::ByteString(value.to_vec()),
     ];
@@ -72,6 +73,7 @@ pub fn put(key: &[u8], value: &[u8]) {
 /// Returns `Ok(())` on success, `Err(...)` if the host call fails.
 pub fn try_put(key: &[u8], value: &[u8]) -> Result<(), String> {
     let stack = vec![
+        get_context(),
         StackValue::ByteString(key.to_vec()),
         StackValue::ByteString(value.to_vec()),
     ];
@@ -80,13 +82,13 @@ pub fn try_put(key: &[u8], value: &[u8]) -> Result<(), String> {
 
 /// Delete a key from storage (`System.Storage.Delete`).
 pub fn delete(key: &[u8]) {
-    let stack = vec![StackValue::ByteString(key.to_vec())];
+    let stack = vec![get_context(), StackValue::ByteString(key.to_vec())];
     let _ = ffi::invoke_host_call(api_ids::STORAGE_DELETE, &stack);
 }
 
 /// Delete a key from storage with explicit error propagation.
 pub fn try_delete(key: &[u8]) -> Result<(), String> {
-    let stack = vec![StackValue::ByteString(key.to_vec())];
+    let stack = vec![get_context(), StackValue::ByteString(key.to_vec())];
     ffi::invoke_host_call(api_ids::STORAGE_DELETE, &stack).map(|_| ())
 }
 
@@ -96,6 +98,7 @@ pub fn try_delete(key: &[u8]) -> Result<(), String> {
 /// Returns an iterator handle, or [`StackValue::Null`] on failure.
 pub fn find(prefix: &[u8], options: i64) -> StackValue {
     let stack = vec![
+        get_readonly_context(),
         StackValue::ByteString(prefix.to_vec()),
         StackValue::Integer(options),
     ];

@@ -522,7 +522,10 @@ namespace Neo.SmartContract.RiscV
 
             var currentContract = NativeContract.GetContract(request.ScriptHashes[^1])
                 ?? throw new InvalidOperationException("It is not allowed to use \"System.Contract.CallNative\" directly.");
-            if (!currentContract.IsActive(request.Engine.ProtocolSettings, ResolveNativeContractSnapshotIndex(request.Engine)))
+            // Match canonical ApplicationEngine.CallNativeContract: the contract-level IsActive
+            // gate uses Ledger.CurrentIndex (= N-1 during block N execution), NOT PersistingBlock.Index (= N).
+            // Using PersistingBlock.Index diverges at a native contract's exact hardfork-activation block.
+            if (!currentContract.IsActive(request.Engine.ProtocolSettings, NativeContract.Ledger.CurrentIndex(request.Engine.SnapshotCache)))
                 throw new InvalidOperationException($"The native contract {currentContract.Name} is not active.");
 
             var versionRaw = versionItem.GetInteger();

@@ -49,22 +49,29 @@ namespace Neo.SmartContract.RiscV
         private const byte TagPointer = 0x0B;
         private const byte TagBuffer = 0x0C;
 
+        // Mirror the Rust encoder limits (crates/neo-riscv-abi/src/fast_codec.rs) so this
+        // best-effort fault-locals decoder cannot be driven to OOM (unbounded nested counts)
+        // or an uncatchable StackOverflow (deep nesting) by a malicious guest.
+        private const int MaxCollectionLen = 4096;
+        private const int MaxDecodeDepth = 64;
+
         internal static StackItem[] DecodeStack(ReadOnlySpan<byte> bytes, IReferenceCounter referenceCounter)
         {
             if (bytes.Length < 4) return System.Array.Empty<StackItem>();
             int pos = 0;
-            var count = (int)ReadUInt32(bytes, ref pos);
-            if (count < 0 || count > 4096) return System.Array.Empty<StackItem>();
+            var count = ReadCollectionCount(bytes, ref pos);
+            if (count < 0) return System.Array.Empty<StackItem>();
             var items = new StackItem[count];
             for (var i = 0; i < count; i++)
             {
-                items[i] = DecodeValue(bytes, ref pos, referenceCounter);
+                items[i] = DecodeValue(bytes, ref pos, referenceCounter, 0);
             }
             return items;
         }
 
-        private static StackItem DecodeValue(ReadOnlySpan<byte> bytes, ref int pos, IReferenceCounter referenceCounter)
+        private static StackItem DecodeValue(ReadOnlySpan<byte> bytes, ref int pos, IReferenceCounter referenceCounter, int depth)
         {
+            if (depth > MaxDecodeDepth) return StackItem.Null;
             if (pos >= bytes.Length) return StackItem.Null;
             var tag = bytes[pos++];
             switch (tag)
@@ -73,14 +80,16 @@ namespace Neo.SmartContract.RiscV
                     return new Integer(ReadInt64(bytes, ref pos));
                 case TagBigInteger:
                 {
-                    var len = (int)ReadUInt32(bytes, ref pos);
+                    var len = ReadLength(bytes, ref pos);
+                    if (len < 0) return StackItem.Null;
                     var slice = bytes.Slice(pos, len);
                     pos += len;
                     return new Integer(new BigInteger(slice, isUnsigned: false, isBigEndian: false));
                 }
                 case TagByteString:
                 {
-                    var len = (int)ReadUInt32(bytes, ref pos);
+                    var len = ReadLength(bytes, ref pos);
+                    if (len < 0) return StackItem.Null;
                     var buf = bytes.Slice(pos, len).ToArray();
                     pos += len;
                     return new ByteString(buf);
@@ -89,26 +98,29 @@ namespace Neo.SmartContract.RiscV
                     return bytes[pos++] != 0 ? StackItem.True : StackItem.False;
                 case TagArray:
                 {
-                    var count = (int)ReadUInt32(bytes, ref pos);
+                    var count = ReadCollectionCount(bytes, ref pos);
+                    if (count < 0) return StackItem.Null;
                     var array = new Array();
-                    for (var i = 0; i < count; i++) array.Add(DecodeValue(bytes, ref pos, referenceCounter));
+                    for (var i = 0; i < count; i++) array.Add(DecodeValue(bytes, ref pos, referenceCounter, depth + 1));
                     return array;
                 }
                 case TagStruct:
                 {
-                    var count = (int)ReadUInt32(bytes, ref pos);
+                    var count = ReadCollectionCount(bytes, ref pos);
+                    if (count < 0) return StackItem.Null;
                     var s = new Struct();
-                    for (var i = 0; i < count; i++) s.Add(DecodeValue(bytes, ref pos, referenceCounter));
+                    for (var i = 0; i < count; i++) s.Add(DecodeValue(bytes, ref pos, referenceCounter, depth + 1));
                     return s;
                 }
                 case TagMap:
                 {
-                    var count = (int)ReadUInt32(bytes, ref pos);
+                    var count = ReadCollectionCount(bytes, ref pos);
+                    if (count < 0) return StackItem.Null;
                     var map = new Map();
                     for (var i = 0; i < count; i++)
                     {
-                        var k = DecodeValue(bytes, ref pos, referenceCounter);
-                        var v = DecodeValue(bytes, ref pos, referenceCounter);
+                        var k = DecodeValue(bytes, ref pos, referenceCounter, depth + 1);
+                        var v = DecodeValue(bytes, ref pos, referenceCounter, depth + 1);
                         if (k is PrimitiveType p) map[p] = v;
                     }
                     return map;
@@ -124,7 +136,8 @@ namespace Neo.SmartContract.RiscV
                     return StackItem.Null;   // pointers have no meaningful StackItem equivalent out of context
                 case TagBuffer:
                 {
-                    var len = (int)ReadUInt32(bytes, ref pos);
+                    var len = ReadLength(bytes, ref pos);
+                    if (len < 0) return StackItem.Null;
                     var buf = bytes.Slice(pos, len).ToArray();
                     pos += len;
                     return new Buffer(buf);
@@ -132,6 +145,25 @@ namespace Neo.SmartContract.RiscV
                 default:
                     return StackItem.Null;
             }
+        }
+
+        // Reads a u32 collection count; returns -1 if it is missing, exceeds MaxCollectionLen,
+        // or would not fit the remaining buffer.
+        private static int ReadCollectionCount(ReadOnlySpan<byte> bytes, ref int pos)
+        {
+            if (pos + 4 > bytes.Length) return -1;
+            var raw = ReadUInt32(bytes, ref pos);
+            if (raw > MaxCollectionLen) return -1;
+            return (int)raw;
+        }
+
+        // Reads a u32 byte-length; returns -1 if it is missing or would overrun the buffer.
+        private static int ReadLength(ReadOnlySpan<byte> bytes, ref int pos)
+        {
+            if (pos + 4 > bytes.Length) return -1;
+            var raw = ReadUInt32(bytes, ref pos);
+            if (raw > (uint)(bytes.Length - pos)) return -1;
+            return (int)raw;
         }
 
         private static uint ReadUInt32(ReadOnlySpan<byte> bytes, ref int pos)

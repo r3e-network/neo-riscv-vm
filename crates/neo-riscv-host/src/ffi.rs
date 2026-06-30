@@ -484,7 +484,11 @@ fn free_native_stack_items(stack_ptr: *mut NativeStackItem, stack_len: usize) {
     free_native_stack_items_with_depth(stack_ptr, stack_len, 0);
 }
 
-fn free_native_stack_items_with_depth(stack_ptr: *mut NativeStackItem, stack_len: usize, depth: u32) {
+fn free_native_stack_items_with_depth(
+    stack_ptr: *mut NativeStackItem,
+    stack_len: usize,
+    depth: u32,
+) {
     if stack_ptr.is_null() {
         return;
     }
@@ -613,6 +617,96 @@ fn write_err_result(error: String, fee_consumed_pico: i64, output: *mut NativeEx
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+unsafe fn execute_with_host_guard<F>(
+    script_ptr: *const u8,
+    script_len: usize,
+    trigger: u8,
+    network: u32,
+    address_version: u8,
+    timestamp: u64,
+    gas_left: i64,
+    exec_fee_factor_pico: i64,
+    initial_stack_ptr: *const NativeStackItem,
+    initial_stack_len: usize,
+    user_data: *mut c_void,
+    callback: NativeHostCallback,
+    free_callback: NativeHostFreeCallback,
+    output: *mut NativeExecutionResult,
+    fn_name: &str,
+    run: F,
+) -> bool
+where
+    F: FnOnce(
+        &[u8],
+        Vec<neo_riscv_abi::StackValue>,
+        RuntimeContext,
+        &mut FfiHost,
+    ) -> Result<ExecutionResult, String>,
+{
+    unsafe {
+        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
+            return false;
+        }
+        reset_last_fault_ip();
+        crate::reset_last_native_fee_consumed_pico();
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let script = slice::from_raw_parts(script_ptr, script_len);
+            let context = RuntimeContext {
+                trigger,
+                network,
+                address_version,
+                timestamp: if timestamp == 0 {
+                    None
+                } else {
+                    Some(timestamp)
+                },
+                gas_left,
+                exec_fee_factor_pico,
+            };
+            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
+                Vec::new()
+            } else {
+                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
+                    Ok(stack) => stack,
+                    Err(error) => {
+                        write_err_result(error.to_string(), 0, output);
+                        return true;
+                    }
+                }
+            };
+            let mut host = FfiHost {
+                context,
+                fee_consumed_pico: 0,
+                user_data,
+                callback,
+                free_callback,
+            };
+            match run(script, initial_stack, context, &mut host) {
+                Ok(result) => {
+                    let fee_consumed_pico = result.fee_consumed_pico;
+                    write_ok_result(result, fee_consumed_pico, output);
+                    true
+                }
+                Err(error) => {
+                    write_err_result(
+                        error,
+                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
+                        output,
+                    );
+                    true
+                }
+            }
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                write_err_result(format!("internal panic in {fn_name}"), 0, output);
+                true
+            }
+        }
+    }
+}
+
 /// # Safety
 ///
 /// - `script_ptr` must point to a valid byte buffer of `script_len` bytes.
@@ -702,81 +796,36 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host(
     output: *mut NativeExecutionResult,
 ) -> bool {
     unsafe {
-        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
-            return false;
-        }
-        reset_last_fault_ip();
-        crate::reset_last_native_fee_consumed_pico();
-
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let script = slice::from_raw_parts(script_ptr, script_len);
-            let context = RuntimeContext {
-                trigger,
-                network,
-                address_version,
-                timestamp: if timestamp == 0 {
-                    None
-                } else {
-                    Some(timestamp)
-                },
-                gas_left,
-                exec_fee_factor_pico,
-            };
-            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-                Vec::new()
-            } else {
-                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                    Ok(stack) => stack,
-                    Err(error) => {
-                        write_err_result(error.to_string(), 0, output);
-                        return true;
-                    }
-                }
-            };
-            let mut host = FfiHost {
-                context,
-                fee_consumed_pico: 0,
-                user_data,
-                callback,
-                free_callback,
-            };
-
-            match execute_script_with_host_and_stack_and_ip(
-                script,
-                initial_stack,
-                initial_ip,
-                context,
-                |api, ip, runtime_context, stack| {
-                    host.context = runtime_context;
-                    let stack_vec = host.syscall_host(api, ip, stack)?;
-                    Ok(HostCallbackResult { stack: stack_vec })
-                },
-            ) {
-                Ok(result) => {
-                    let fee_consumed_pico = result.fee_consumed_pico;
-                    write_ok_result(result, fee_consumed_pico, output);
-                    true
-                }
-                Err(error) => {
-                    write_err_result(
-                        error,
-                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
-                        output,
-                    );
-                    true
-                }
-            }
-        })) {
-            Ok(result) => result,
-            Err(_) => {
-                write_err_result(
-                    "internal panic in neo_riscv_execute_script_with_host".to_string(),
-                    0,
-                    output,
-                );
-                true
-            }
-        }
+        execute_with_host_guard(
+            script_ptr,
+            script_len,
+            trigger,
+            network,
+            address_version,
+            timestamp,
+            gas_left,
+            exec_fee_factor_pico,
+            initial_stack_ptr,
+            initial_stack_len,
+            user_data,
+            callback,
+            free_callback,
+            output,
+            "neo_riscv_execute_script_with_host",
+            |script, initial_stack, context, host| {
+                execute_script_with_host_and_stack_and_ip(
+                    script,
+                    initial_stack,
+                    initial_ip,
+                    context,
+                    |api, ip, runtime_context, stack| {
+                        host.context = runtime_context;
+                        let stack_vec = host.syscall_host(api, ip, stack)?;
+                        Ok(HostCallbackResult { stack: stack_vec })
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -805,83 +854,37 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_result_limit(
     output: *mut NativeExecutionResult,
 ) -> bool {
     unsafe {
-        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
-            return false;
-        }
-        reset_last_fault_ip();
-        crate::reset_last_native_fee_consumed_pico();
-
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let script = slice::from_raw_parts(script_ptr, script_len);
-            let context = RuntimeContext {
-                trigger,
-                network,
-                address_version,
-                timestamp: if timestamp == 0 {
-                    None
-                } else {
-                    Some(timestamp)
-                },
-                gas_left,
-                exec_fee_factor_pico,
-            };
-            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-                Vec::new()
-            } else {
-                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                    Ok(stack) => stack,
-                    Err(error) => {
-                        write_err_result(error.to_string(), 0, output);
-                        return true;
-                    }
-                }
-            };
-            let mut host = FfiHost {
-                context,
-                fee_consumed_pico: 0,
-                user_data,
-                callback,
-                free_callback,
-            };
-
-            match execute_script_with_host_and_stack_and_ip_with_result_limit(
-                script,
-                initial_stack,
-                initial_ip,
-                result_limit,
-                context,
-                |api, ip, runtime_context, stack| {
-                    host.context = runtime_context;
-                    let stack_vec = host.syscall_host(api, ip, stack)?;
-                    Ok(HostCallbackResult { stack: stack_vec })
-                },
-            ) {
-                Ok(result) => {
-                    let fee_consumed_pico = result.fee_consumed_pico;
-                    write_ok_result(result, fee_consumed_pico, output);
-                    true
-                }
-                Err(error) => {
-                    write_err_result(
-                        error,
-                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
-                        output,
-                    );
-                    true
-                }
-            }
-        })) {
-            Ok(result) => result,
-            Err(_) => {
-                write_err_result(
-                    "internal panic in neo_riscv_execute_script_with_host_and_result_limit"
-                        .to_string(),
-                    0,
-                    output,
-                );
-                true
-            }
-        }
+        execute_with_host_guard(
+            script_ptr,
+            script_len,
+            trigger,
+            network,
+            address_version,
+            timestamp,
+            gas_left,
+            exec_fee_factor_pico,
+            initial_stack_ptr,
+            initial_stack_len,
+            user_data,
+            callback,
+            free_callback,
+            output,
+            "neo_riscv_execute_script_with_host_and_result_limit",
+            |script, initial_stack, context, host| {
+                execute_script_with_host_and_stack_and_ip_with_result_limit(
+                    script,
+                    initial_stack,
+                    initial_ip,
+                    result_limit,
+                    context,
+                    |api, ip, runtime_context, stack| {
+                        host.context = runtime_context;
+                        let stack_vec = host.syscall_host(api, ip, stack)?;
+                        Ok(HostCallbackResult { stack: stack_vec })
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -914,83 +917,37 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer(
     output: *mut NativeExecutionResult,
 ) -> bool {
     unsafe {
-        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
-            return false;
-        }
-        reset_last_fault_ip();
-        crate::reset_last_native_fee_consumed_pico();
-
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let script = slice::from_raw_parts(script_ptr, script_len);
-            let context = RuntimeContext {
-                trigger,
-                network,
-                address_version,
-                timestamp: if timestamp == 0 {
-                    None
-                } else {
-                    Some(timestamp)
-                },
-                gas_left,
-                exec_fee_factor_pico,
-            };
-            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-                Vec::new()
-            } else {
-                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                    Ok(stack) => stack,
-                    Err(error) => {
-                        write_err_result(error.to_string(), 0, output);
-                        return true;
-                    }
-                }
-            };
-            let mut host = FfiHost {
-                context,
-                fee_consumed_pico: 0,
-                user_data,
-                callback,
-                free_callback,
-            };
-
-            match execute_script_with_host_and_stack_and_ip_and_initializer(
-                script,
-                initial_stack,
-                initial_ip,
-                initializer_ip,
-                context,
-                |api, ip, runtime_context, stack| {
-                    host.context = runtime_context;
-                    let stack_vec = host.syscall_host(api, ip, stack)?;
-                    Ok(HostCallbackResult { stack: stack_vec })
-                },
-            ) {
-                Ok(result) => {
-                    let fee_consumed_pico = result.fee_consumed_pico;
-                    write_ok_result(result, fee_consumed_pico, output);
-                    true
-                }
-                Err(error) => {
-                    write_err_result(
-                        error,
-                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
-                        output,
-                    );
-                    true
-                }
-            }
-        })) {
-            Ok(result) => result,
-            Err(_) => {
-                write_err_result(
-                    "internal panic in neo_riscv_execute_script_with_host_and_initializer"
-                        .to_string(),
-                    0,
-                    output,
-                );
-                true
-            }
-        }
+        execute_with_host_guard(
+            script_ptr,
+            script_len,
+            trigger,
+            network,
+            address_version,
+            timestamp,
+            gas_left,
+            exec_fee_factor_pico,
+            initial_stack_ptr,
+            initial_stack_len,
+            user_data,
+            callback,
+            free_callback,
+            output,
+            "neo_riscv_execute_script_with_host_and_initializer",
+            |script, initial_stack, context, host| {
+                execute_script_with_host_and_stack_and_ip_and_initializer(
+                    script,
+                    initial_stack,
+                    initial_ip,
+                    initializer_ip,
+                    context,
+                    |api, ip, runtime_context, stack| {
+                        host.context = runtime_context;
+                        let stack_vec = host.syscall_host(api, ip, stack)?;
+                        Ok(HostCallbackResult { stack: stack_vec })
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -1019,83 +976,38 @@ pub unsafe extern "C" fn neo_riscv_execute_script_with_host_and_initializer_and_
     output: *mut NativeExecutionResult,
 ) -> bool {
     unsafe {
-        if output.is_null() || (script_ptr.is_null() && script_len > 0) {
-            return false;
-        }
-        reset_last_fault_ip();
-        crate::reset_last_native_fee_consumed_pico();
-
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let script = slice::from_raw_parts(script_ptr, script_len);
-            let context = RuntimeContext {
-                trigger,
-                network,
-                address_version,
-                timestamp: if timestamp == 0 {
-                    None
-                } else {
-                    Some(timestamp)
-                },
-                gas_left,
-                exec_fee_factor_pico,
-            };
-            let initial_stack = if initial_stack_ptr.is_null() || initial_stack_len == 0 {
-                Vec::new()
-            } else {
-                match copy_native_stack_items(initial_stack_ptr.cast_mut(), initial_stack_len) {
-                    Ok(stack) => stack,
-                    Err(error) => {
-                        write_err_result(error.to_string(), 0, output);
-                        return true;
-                    }
-                }
-            };
-            let mut host = FfiHost {
-                context,
-                fee_consumed_pico: 0,
-                user_data,
-                callback,
-                free_callback,
-            };
-
-            match execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit(
-                script,
-                initial_stack,
-                initial_ip,
-                initializer_ip,
-                result_limit,
-                context,
-                |api, ip, runtime_context, stack| {
-                    host.context = runtime_context;
-                    let stack_vec = host.syscall_host(api, ip, stack)?;
-                    Ok(HostCallbackResult { stack: stack_vec })
-                },
-            ) {
-                Ok(result) => {
-                    let fee_consumed_pico = result.fee_consumed_pico;
-                    write_ok_result(result, fee_consumed_pico, output);
-                    true
-                }
-                Err(error) => {
-                    write_err_result(
-                        error,
-                        host.fee_consumed_pico + crate::last_native_fee_consumed_pico(),
-                        output,
-                    );
-                    true
-                }
-            }
-        })) {
-            Ok(result) => result,
-            Err(_) => {
-                write_err_result(
-                "internal panic in neo_riscv_execute_script_with_host_and_initializer_and_result_limit".to_string(),
-                0,
-                output,
-            );
-                true
-            }
-        }
+        execute_with_host_guard(
+            script_ptr,
+            script_len,
+            trigger,
+            network,
+            address_version,
+            timestamp,
+            gas_left,
+            exec_fee_factor_pico,
+            initial_stack_ptr,
+            initial_stack_len,
+            user_data,
+            callback,
+            free_callback,
+            output,
+            "neo_riscv_execute_script_with_host_and_initializer_and_result_limit",
+            |script, initial_stack, context, host| {
+                execute_script_with_host_and_stack_and_ip_and_initializer_with_result_limit(
+                    script,
+                    initial_stack,
+                    initial_ip,
+                    initializer_ip,
+                    result_limit,
+                    context,
+                    |api, ip, runtime_context, stack| {
+                        host.context = runtime_context;
+                        let stack_vec = host.syscall_host(api, ip, stack)?;
+                        Ok(HostCallbackResult { stack: stack_vec })
+                    },
+                )
+            },
+        )
     }
 }
 

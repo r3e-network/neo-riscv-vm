@@ -9,17 +9,23 @@
 /// This is the C-ABI representation of a `neo-vm-rs` [`StackValue`]. The `kind`
 /// field is a discriminant that selects which of the payload fields is valid:
 ///
+/// The discriminant must match `convert_native_item` (ffi.rs) and the C# side
+/// (`NativeRiscvVmBridge.cs`) exactly:
+///
 /// | `kind` | Variant | Payload field |
 /// |--------|---------|---------------|
 /// | 0 | Integer | `integer_value` |
 /// | 1 | ByteString | `bytes_ptr`/`bytes_len` |
 /// | 2 | Null | (none) |
 /// | 3 | Boolean | `integer_value` (0/1) |
-/// | 4 | Buffer | `bytes_ptr`/`bytes_len` |
-/// | 5 | Pointer | `integer_value` |
-/// | 6 | Array | `bytes_ptr`/`bytes_len` (encoded children) |
+/// | 4 | Array | `bytes_ptr`/`bytes_len` (encoded children) |
+/// | 5 | BigInteger | `bytes_ptr`/`bytes_len` (LE two's-complement) |
+/// | 6 | Iterator | `integer_value` (handle) |
 /// | 7 | Struct | `bytes_ptr`/`bytes_len` (encoded children) |
 /// | 8 | Map | `bytes_ptr`/`bytes_len` (encoded entries) |
+/// | 9 | InteropInterface | `integer_value` (handle) |
+/// | 10 | Pointer | `integer_value` |
+/// | 11 | Buffer | `bytes_ptr`/`bytes_len` |
 ///
 /// [`StackValue`]: neo_riscv_abi::StackValue
 #[repr(C)]

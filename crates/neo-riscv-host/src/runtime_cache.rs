@@ -1,8 +1,8 @@
 use crate::bridge::{ClosureHost, register_host_functions};
 mod instances;
 
-pub(crate) use instances::{CachedExecutionInstance, CachedNativeExecutionInstance};
 use instances::NativeCacheKey;
+pub(crate) use instances::{CachedExecutionInstance, CachedNativeExecutionInstance};
 use polkavm::{
     BackendKind as PolkaBackendKind, Config, Engine, GasMeteringKind, Instance, InstancePre,
     Linker, Module, ModuleConfig, ProgramBlob,
@@ -104,7 +104,9 @@ pub(crate) fn cached_module(aux_size: u32) -> Result<Module, String> {
     let mut guard = modules
         .lock()
         .map_err(|_| "polkavm module cache poisoned".to_string())?;
-    Ok(bounded_cache_insert(&mut guard, aux_size, || module.clone()))
+    Ok(bounded_cache_insert(&mut guard, aux_size, || {
+        module.clone()
+    }))
 }
 
 pub(crate) fn cached_instance_pre(aux_size: u32) -> Result<CachedInstancePre, String> {
@@ -126,7 +128,9 @@ pub(crate) fn cached_instance_pre(aux_size: u32) -> Result<CachedInstancePre, St
     let mut guard = instance_pres
         .lock()
         .map_err(|_| "polkavm instance-pre cache poisoned".to_string())?;
-    Ok(bounded_cache_insert(&mut guard, aux_size, || instance_pre.clone()))
+    Ok(bounded_cache_insert(&mut guard, aux_size, || {
+        instance_pre.clone()
+    }))
 }
 
 pub(crate) fn cached_execution_instance(aux_size: u32) -> Result<CachedExecutionInstance, String> {
@@ -214,7 +218,9 @@ fn cached_native_instance_pre(
     let mut guard = instance_pres
         .lock()
         .map_err(|_| "native instance-pre cache poisoned".to_string())?;
-    Ok(bounded_cache_insert(&mut guard, key, || instance_pre.clone()))
+    Ok(bounded_cache_insert(&mut guard, key, || {
+        instance_pre.clone()
+    }))
 }
 
 fn cached_native_module(binary: &[u8], key: NativeCacheKey) -> Result<Module, String> {

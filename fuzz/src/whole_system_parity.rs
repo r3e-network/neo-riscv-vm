@@ -3,8 +3,11 @@
 
 extern crate libfuzzer_sys;
 
+#[path = "whole_system_parity/deterministic_model.rs"]
 mod deterministic_model;
+#[path = "whole_system_parity/guest_parity_provider.rs"]
 mod guest_parity_provider;
+#[path = "whole_system_parity/parity_run.rs"]
 mod parity_run;
 #[path = "whole_system_parity/scenario.rs"]
 mod scenario;

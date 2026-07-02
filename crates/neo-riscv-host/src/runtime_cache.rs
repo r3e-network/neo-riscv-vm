@@ -40,10 +40,11 @@ where
     K: Eq + std::hash::Hash + Clone,
     V: Clone,
 {
-    if !map.contains_key(&key) && map.len() >= MAX_CACHED_MODULES {
-        if let Some(victim) = map.keys().next().cloned() {
-            map.remove(&victim);
-        }
+    if !map.contains_key(&key)
+        && map.len() >= MAX_CACHED_MODULES
+        && let Some(victim) = map.keys().next().cloned()
+    {
+        map.remove(&victim);
     }
     map.entry(key).or_insert_with(make).clone()
 }

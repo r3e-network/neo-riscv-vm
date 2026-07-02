@@ -25,7 +25,7 @@ pub use neo_vm_rs::{
     STACK_VALUE_CODEC_TAG_ITERATOR, STACK_VALUE_CODEC_TAG_MAP, STACK_VALUE_CODEC_TAG_NULL,
     STACK_VALUE_CODEC_TAG_POINTER, STACK_VALUE_CODEC_TAG_STRUCT, StackValue, VmContext, VmState,
     byte_sequence_bytes, byte_sequence_len, concat_splice_values, default_value_for_type_tag,
-    encode_integer, interop_hash, new_array_default_value_for_type_tag,
+    interop_hash, new_array_default_value_for_type_tag,
     normalize_stack_item_type_tag, slice_splice_value, stack_value_as_bool, stack_value_as_bytes,
     stack_value_as_fixed_bytes, stack_value_as_i64, stack_value_as_string, stack_value_as_u8,
     stack_value_as_u32, stack_value_into_items, stack_value_span_bytes, syscall_arg_count,

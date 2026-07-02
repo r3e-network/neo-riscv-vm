@@ -23,7 +23,6 @@
 //! - [`codec`] / [`parser`] — encode/decode and parse results to/from
 //!   [`StackValue`]s.
 //! - [`api_ids`] — numeric ids identifying each `System.*` interop.
-//! - [`types`] — small shared types (`Hash256`, `PublicKey`).
 //! - [`ffi`] — the raw `host_call` FFI shim.
 //!
 //! [`StackValue`]: neo_riscv_abi::StackValue
@@ -50,8 +49,6 @@ pub mod signing;
 pub mod storage;
 /// Low-level `System.*` syscall wrappers (contract calls, runtime, etc.).
 pub mod syscalls;
-/// Small shared SDK types.
-pub mod types;
 
 /// Re-exported codec encode/decode helpers for fast-codec payloads.
 pub use codec::{

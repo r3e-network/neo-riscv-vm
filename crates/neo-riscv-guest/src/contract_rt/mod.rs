@@ -60,12 +60,6 @@ impl Context {
         }
     }
 
-    /// Consumes this wrapper and returns the shared VM context.
-    #[must_use]
-    pub fn into_vm_context(self) -> VmContext {
-        self.vm
-    }
-
     /// Converts the current VM state into an ABI execution result.
     #[must_use]
     pub fn to_execution_result(self, fee_consumed_pico: i64) -> ExecutionResult {
@@ -78,21 +72,6 @@ impl Context {
         if let Some(function) = bridge {
             function(self, hash);
         }
-    }
-
-    /// Stub: call a token-referenced method.
-    ///
-    /// Cross-contract invocation is provided by the host bridge, not by the
-    /// guest runtime itself.
-    pub fn call_token(&mut self, _token: u16) {
-        self.vm
-            .fault("CALLT: not yet implemented (requires host bridge)");
-    }
-
-    /// Stub: call the address on top of the stack.
-    pub fn calla(&mut self) {
-        self.vm
-            .fault("CALLA: not yet implemented (requires host bridge)");
     }
 }
 
@@ -167,18 +146,5 @@ mod tests {
         ops::arithmetic::sub(&mut context);
 
         assert_eq!(context.pop(), StackValue::Integer(7));
-    }
-
-    #[test]
-    fn riscv_syscall_stubs_fault_through_shared_vm_context() {
-        let mut context = Context::from_abi_stack(vec![]);
-
-        context.call_token(0);
-
-        assert_eq!(context.state, VmState::Fault);
-        assert_eq!(
-            context.fault_message.as_deref(),
-            Some("CALLT: not yet implemented (requires host bridge)")
-        );
     }
 }

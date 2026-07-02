@@ -8,9 +8,10 @@
 
 extern crate alloc;
 
-pub mod callback_codec;
-pub mod fast_codec;
-pub mod result_codec;
+// The boundary codecs live in neo-vm-rs; re-export the modules directly instead
+// of via one-line stub files (paths `neo_riscv_abi::{callback_codec, fast_codec,
+// result_codec}::*` are unchanged).
+pub use neo_vm_rs::{callback_codec, fast_codec, result_codec};
 
 pub use neo_vm_rs::{
     BackendKind, COMPACT_TAG_ARRAY as TAG_ARRAY, COMPACT_TAG_BIG_INTEGER as TAG_BIG_INTEGER,

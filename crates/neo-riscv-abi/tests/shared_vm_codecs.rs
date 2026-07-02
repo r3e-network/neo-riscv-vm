@@ -1,24 +1,28 @@
 use std::fs;
 use std::path::PathBuf;
 
-fn abi_src_path(file_name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+/// Compile-time proof the boundary codec modules are re-exported: this crate has
+/// no such modules of its own, so a successful import means they resolve through
+/// the `pub use neo_vm_rs::{...}` re-export in lib.rs.
+#[allow(unused_imports)]
+use neo_riscv_abi::{callback_codec, fast_codec, result_codec};
+
+fn abi_lib_source() -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
-        .join(file_name)
+        .join("lib.rs");
+    fs::read_to_string(path).expect("abi lib.rs should be readable")
 }
 
+/// Guard: the boundary codecs must come from neo-vm-rs, not be re-implemented in
+/// this crate. They are re-exported as modules directly in lib.rs (previously via
+/// one-line stub files). Keeping this structural check prevents a future edit
+/// from reintroducing a second, drifting codec implementation here.
 #[test]
-fn callback_codec_is_reexported_from_shared_vm_crate() {
-    let source = fs::read_to_string(abi_src_path("callback_codec.rs"))
-        .expect("callback codec source should be readable");
-
-    assert!(source.contains("pub use neo_vm_rs::callback_codec::*;"));
-}
-
-#[test]
-fn result_codec_is_reexported_from_shared_vm_crate() {
-    let source = fs::read_to_string(abi_src_path("result_codec.rs"))
-        .expect("result codec source should be readable");
-
-    assert!(source.contains("pub use neo_vm_rs::result_codec::*;"));
+fn codecs_are_reexported_from_shared_vm_crate() {
+    let source = abi_lib_source();
+    assert!(
+        source.contains("pub use neo_vm_rs::{callback_codec, fast_codec, result_codec};"),
+        "the three boundary codec modules must be re-exported directly from neo-vm-rs"
+    );
 }

@@ -94,7 +94,7 @@ const _: () = assert!(ALLOC_BASE_OFFSET + ALLOC_ARENA_SIZE <= ARENA_SIZE);
 const _: () = assert!(ALLOC_PRETOUCH_SIZE <= ALLOC_ARENA_SIZE);
 const _: () = assert!(RES_BUF_OFFSET + SCRATCH_BUF_SIZE <= ARENA_SIZE);
 
-#[cfg_attr(target_arch = "riscv32", link_section = ".data.neo_riscv_state")]
+#[cfg_attr(target_arch = "riscv32", unsafe(link_section = ".data.neo_riscv_state"))]
 static RUNTIME_STATE: RuntimeStateCell = RuntimeStateCell::new();
 
 unsafe fn runtime_state() -> &'static mut RuntimeState {

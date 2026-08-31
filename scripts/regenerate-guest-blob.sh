@@ -45,6 +45,15 @@ else
   ' "${ORIGINAL_TARGET_JSON}" > "${GUEST_TARGET_JSON}"
 fi
 
+# Audit H14: the guest target has no unwinder, so the blob keeps abort
+# semantics explicitly — the host profiles no longer carry panic="abort" for it.
+# -Z location-detail=none strips absolute build paths (cargo/rustup/toolchain
+# directories) that #[track_caller] panic locations otherwise embed into the
+# blob's rodata: without it, blob bytes depend on the build machine's
+# directories and OS, so a blob produced on one machine can never byte-match
+# another machine's regeneration (proven red by the freshness gate's CI run).
+export RUSTFLAGS="-C panic=abort -Z location-detail=none"
+
 "${CARGO_NIGHTLY_CMD[@]}" build \
   --manifest-path "${GUEST_MANIFEST}" \
   --release \
